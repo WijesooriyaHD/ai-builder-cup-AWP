@@ -1,0 +1,52 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local"]
+    }
+  ],
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "ai-wellness-pal-8f537",
+          "appId": "1:850061163183:android:65a4311b3dd6bc9796f25a",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "ai-wellness-pal-8f537",
+          "appId": "1:850061163183:ios:2f946028b3a0d18596f25a",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "ai-wellness-pal-8f537",
+          "appId": "1:850061163183:ios:2f946028b3a0d18596f25a",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ai-wellness-pal-8f537",
+          "configurations": {
+            "android": "1:850061163183:android:65a4311b3dd6bc9796f25a",
+            "ios": "1:850061163183:ios:2f946028b3a0d18596f25a",
+            "macos": "1:850061163183:ios:2f946028b3a0d18596f25a",
+            "web": "1:850061163183:web:052deaf89f10e61296f25a",
+            "windows": "1:850061163183:web:a7eae85a80804a7796f25a"
+          }
+        }
+      }
+    }
+  }
+}

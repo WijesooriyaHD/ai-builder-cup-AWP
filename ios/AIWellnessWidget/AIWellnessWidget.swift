@@ -1,0 +1,256 @@
+import WidgetKit
+import SwiftUI
+#if canImport(AppIntents)
+import AppIntents
+#endif
+
+// MARK: - Shared Constants
+
+private let kAppGroup = "group.com.aiwellnesspal.app"
+
+// MARK: - Timeline Entry
+
+struct WellnessTaskRow {
+    let text: String
+    let id: String
+    let checked: Bool
+    var hasTask: Bool { !text.isEmpty }
+}
+
+struct WellnessEntry: TimelineEntry {
+    let date: Date
+    let planId: String
+    let focus: String
+    let task1: WellnessTaskRow
+    let task2: WellnessTaskRow
+    let nextTask: String
+    let allDone: Bool
+    let completed: Int
+    let total: Int
+    let progress: Int // 0..100
+    let isPlaceholder: Bool
+}
+
+// MARK: - Timeline Provider
+
+struct WellnessTimelineProvider: TimelineProvider {
+    private let sharedDefaults = UserDefaults(suiteName: kAppGroup)
+
+    func placeholder(in context: Context) -> WellnessEntry {
+        WellnessEntry(
+            date: Date(),
+            planId: "",
+            focus: "Today's Focus",
+            task1: WellnessTaskRow(text: "Morning Stretch", id: "1", checked: false),
+            task2: WellnessTaskRow(text: "Breathwork", id: "2", checked: false),
+            nextTask: "Hydrate",
+            allDone: false, completed: 1, total: 4, progress: 25,
+            isPlaceholder: false
+        )
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (WellnessEntry) -> Void) {
+        completion(loadEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<WellnessEntry>) -> Void) {
+        let entry = loadEntry()
+        // Refresh every 30 minutes (matches the Dart-side 30-min cap).
+        let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        let timeline = Timeline(entries: [entry], policy: .after(nextRefresh))
+        completion(timeline)
+    }
+
+    private func loadEntry() -> WellnessEntry {
+        guard let defaults = sharedDefaults else {
+            return placeholderEntry()
+        }
+
+        let isPlaceholder = defaults.bool(forKey: "wellness_placeholder")
+        if isPlaceholder {
+            return placeholderEntry()
+        }
+
+        let planId = defaults.string(forKey: "wellness_plan_id") ?? ""
+        let focus = defaults.string(forKey: "wellness_focus") ?? "Today's Focus"
+
+        return WellnessEntry(
+            date: Date(),
+            planId: planId,
+            focus: focus,
+            task1: WellnessTaskRow(
+                text: defaults.string(forKey: "wellness_task1_text") ?? "",
+                id: defaults.string(forKey: "wellness_task1_id") ?? "",
+                checked: defaults.bool(forKey: "wellness_task1_checked")),
+            task2: WellnessTaskRow(
+                text: defaults.string(forKey: "wellness_task2_text") ?? "",
+                id: defaults.string(forKey: "wellness_task2_id") ?? "",
+                checked: defaults.bool(forKey: "wellness_task2_checked")),
+            nextTask: defaults.string(forKey: "wellness_next_task") ?? "",
+            allDone: defaults.bool(forKey: "wellness_all_done"),
+            completed: defaults.integer(forKey: "wellness_completed"),
+            total: defaults.integer(forKey: "wellness_total"),
+            progress: defaults.integer(forKey: "wellness_progress"),
+            isPlaceholder: false
+        )
+    }
+
+    private func placeholderEntry() -> WellnessEntry {
+        WellnessEntry(
+            date: Date(),
+            planId: "",
+            focus: "",
+            task1: WellnessTaskRow(text: "", id: "", checked: false),
+            task2: WellnessTaskRow(text: "", id: "", checked: false),
+            nextTask: "", allDone: false, completed: 0, total: 0, progress: 0,
+            isPlaceholder: true
+        )
+    }
+}
+
+// MARK: - Widget View
+
+struct AIWellnessWidgetEntryView: View {
+    var entry: WellnessEntry
+
+    @Environment(\.widgetFamily) var family
+
+    var body: some View {
+        if entry.isPlaceholder {
+            placeholderView
+        } else {
+            contentView
+        }
+    }
+
+    private var placeholderView: some View {
+        VStack {
+            Spacer()
+            Text("Open the app to start your wellness day.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding()
+            Spacer()
+        }
+    }
+
+    private var contentView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header: icon + focus
+            HStack(spacing: 8) {
+                Text("✨").font(.title3)
+                Text(entry.focus)
+                    .font(.headline)
+                    .foregroundColor(Color("WidgetPrimary"))
+                    .lineLimit(1)
+            }
+
+            if entry.allDone {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.square.fill")
+                        .foregroundColor(Color("WidgetPrimary"))
+                    Text("All actions complete 🎉")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            } else {
+                if entry.task1.hasTask { taskRow(entry.task1) }
+                if entry.task2.hasTask { taskRow(entry.task2) }
+
+                if !entry.nextTask.isEmpty {
+                    Text("Up next · \(entry.nextTask)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .padding(.leading, 28)
+                        .opacity(0.7)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            // Progress
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(entry.completed) of \(entry.total) actions")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                ProgressView(value: entry.total == 0 ? 0 : Double(entry.progress) / 100.0)
+                    .tint(Color("WidgetPrimary"))
+            }
+        }
+        .padding()
+    }
+
+    @ViewBuilder
+    private func taskRow(_ task: WellnessTaskRow) -> some View {
+        #if canImport(AppIntents)
+        if #available(iOS 17.0, *) {
+            Button(intent: toggleIntent(for: task)) {
+                rowContent(task)
+            }
+            .buttonStyle(.plain)
+        } else {
+            rowContent(task)
+        }
+        #else
+        rowContent(task)
+        #endif
+    }
+
+    #if canImport(AppIntents)
+    @available(iOS 17.0, *)
+    private func toggleIntent(for task: WellnessTaskRow) -> BackgroundIntent {
+        // Matches AppState.backgroundCallback's `wellness_toggle` handler:
+        // aiwellnesspal://wellness_toggle?plan_id=..&action_id=..
+        let encodedPlan = entry.planId.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed) ?? entry.planId
+        let encodedAction = task.id.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed) ?? task.id
+        let url = URL(
+            string: "aiwellnesspal://wellness_toggle?plan_id=\(encodedPlan)&action_id=\(encodedAction)")
+        return BackgroundIntent(url: url, appGroup: kAppGroup)
+    }
+    #endif
+
+    private func rowContent(_ task: WellnessTaskRow) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: task.checked ? "checkmark.square.fill" : "square")
+                .foregroundColor(Color("WidgetPrimary"))
+                .font(.body)
+            Text(task.text)
+                .font(.subheadline)
+                .strikethrough(task.checked, color: .secondary)
+                .foregroundColor(task.checked ? .secondary : .primary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Widget Configuration
+
+struct AIWellnessWidget: Widget {
+    let kind: String = "AIWellnessWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: WellnessTimelineProvider()) { entry in
+            AIWellnessWidgetEntryView(entry: entry)
+        }
+        .configurationDisplayName("Today's Plan")
+        .description("Your daily wellness plan at a glance.")
+        .supportedFamilies([.systemMedium])
+    }
+}
+
+// MARK: - Widget Bundle (hosts every widget in this extension)
+
+@main
+struct AIWellnessWidgetBundle: WidgetBundle {
+    var body: some Widget {
+        AIWellnessWidget()
+        IntentionWidget()
+    }
+}

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AI Wellness Widget theme colors (default: Serenity theme) -->
+    <color name="widget_primary">#FF6B9FD4</color>
+    <color name="widget_background">#FFF0F5FC</color>
+    <color name="widget_text">#FF333333</color>
+	<color name="ic_launcher_background">#F8F5F2</color>
+</resources>

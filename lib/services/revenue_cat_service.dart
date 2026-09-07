@@ -1,0 +1,426 @@
+import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+/// Singleton service for managing RevenueCat subscriptions
+class RevenueCatService {
+  static final RevenueCatService _instance = RevenueCatService._internal();
+  factory RevenueCatService() => _instance;
+  RevenueCatService._internal();
+
+  static const String _iosApiKey = 'test_XblNGHDinPqDqxmWppeJYlbJIwy';
+  static const String _androidApiKey = 'test_XblNGHDinPqDqxmWppeJYlbJIwy';
+  static const String proEntitlementId = 'ai_wellness_pal_pro';
+
+  /// SharedPreferences key for cached entitlement state (Req 13.6)
+  static const String _cachedIsProKey = 'rc_cached_is_pro';
+
+  /// SharedPreferences key for upsell throttle timestamp (Req 13.5)
+  static const String _upsellLastShownKey = 'upsell_last_shown_at';
+
+  bool _isInitialized = false;
+
+  /// True only when [Purchases.configure] actually ran successfully.
+  /// When false, every method that touches the native RevenueCat SDK must
+  /// short-circuit to avoid a native crash (calling the SDK before configure
+  /// throws an uncatchable NSException on iOS).
+  bool _isConfigured = false;
+
+  CustomerInfo? _cachedCustomerInfo;
+  Function(CustomerInfo)? _updateListener;
+
+  /// Initialize RevenueCat SDK
+  ///
+  /// On error, falls back to cached entitlement state from SharedPreferences.
+  /// If no cache exists, defaults to free tier (Req 13.6).
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    try {
+      String apiKey;
+      if (Platform.isIOS) {
+        apiKey = _iosApiKey;
+      } else if (Platform.isAndroid) {
+        apiKey = _androidApiKey;
+      } else {
+        throw UnsupportedError('Platform not supported for RevenueCat');
+      }
+
+      // Skip RevenueCat in release mode if still using test key.
+      // Mark as initialized (so callers don't retry) but NOT configured, so
+      // every SDK-touching method short-circuits and never calls native code.
+      if (!kDebugMode && apiKey.startsWith('test_')) {
+        debugPrint('⚠️ RevenueCat: Skipping init — test key in release build');
+        _isInitialized = true;
+        _isConfigured = false;
+        return;
+      }
+
+      await Purchases.configure(
+        PurchasesConfiguration(apiKey)
+          ..appUserID = null, // Let RevenueCat generate anonymous ID
+      );
+      _isConfigured = true;
+
+      // Enable debug logs in debug mode
+      if (kDebugMode) {
+        await Purchases.setLogLevel(LogLevel.debug);
+      }
+
+      _isInitialized = true;
+      debugPrint('✅ RevenueCat initialized successfully');
+
+      // Add customer info update listener
+      Purchases.addCustomerInfoUpdateListener((customerInfo) {
+        debugPrint('🔄 RevenueCat: CustomerInfo updated');
+        _cachedCustomerInfo = customerInfo;
+        _updateListener?.call(customerInfo);
+      });
+
+      // Fetch initial customer info
+      await refreshCustomerInfo();
+    } catch (e) {
+      debugPrint('❌ RevenueCat initialization failed: $e');
+      // Fallback: do not rethrow — allow the app to continue with cached state
+      debugPrint('ℹ️ RevenueCat: falling back to cached entitlement state');
+    }
+  }
+
+  /// Get current customer info (cached or fresh)
+  Future<CustomerInfo> getCustomerInfo({bool forceRefresh = false}) async {
+    if (!_isInitialized) {
+      throw StateError('RevenueCat not initialized. Call initialize() first.');
+    }
+
+    // Not configured (e.g. test key skipped in release): no customer info.
+    if (!_isConfigured) {
+      throw StateError('RevenueCat not configured (running without a valid API key).');
+    }
+
+    if (!forceRefresh && _cachedCustomerInfo != null) {
+      return _cachedCustomerInfo!;
+    }
+
+    return await refreshCustomerInfo();
+  }
+
+  /// Refresh customer info from server.
+  ///
+  /// On error, falls back to cached customer info or reads from
+  /// SharedPreferences (Req 13.6).
+  Future<CustomerInfo> refreshCustomerInfo() async {
+    if (!_isConfigured) {
+      if (_cachedCustomerInfo != null) return _cachedCustomerInfo!;
+      throw StateError('RevenueCat not configured.');
+    }
+    try {
+      _cachedCustomerInfo = await Purchases.getCustomerInfo();
+      return _cachedCustomerInfo!;
+    } catch (e) {
+      debugPrint('❌ Failed to get customer info: $e');
+      // If we have in-memory cached info, return it
+      if (_cachedCustomerInfo != null) {
+        debugPrint('ℹ️ Returning in-memory cached customer info');
+        return _cachedCustomerInfo!;
+      }
+      rethrow;
+    }
+  }
+
+  /// Get active subscription status
+  Future<SubscriptionStatus> getSubscriptionStatus() async {
+    try {
+      final customerInfo = await getCustomerInfo();
+      final hasAccess = customerInfo.entitlements.active.containsKey(proEntitlementId);
+      
+      if (!hasAccess) {
+        return SubscriptionStatus.none;
+      }
+
+      final entitlement = customerInfo.entitlements.active[proEntitlementId]!;
+      final productId = entitlement.productIdentifier;
+
+      if (productId.contains('monthly')) {
+        return SubscriptionStatus.monthly;
+      } else if (productId.contains('annual')) {
+        return SubscriptionStatus.yearly;
+      }
+
+      return SubscriptionStatus.other;
+    } catch (e) {
+      debugPrint('❌ Failed to get subscription status: $e');
+      return SubscriptionStatus.none;
+    }
+  }
+
+  /// Check if user has active pro subscription.
+  ///
+  /// On error, falls back to cached entitlement state from SharedPreferences.
+  /// If no cached state exists, defaults to free tier (Req 13.6).
+  Future<bool> hasProAccess({bool forceRefresh = false}) async {
+    try {
+      final customerInfo = await getCustomerInfo(forceRefresh: forceRefresh);
+
+      // Verification: make sure the customer info we're reading belongs to the
+      // CURRENT app user (the Firebase UID we logged in with), not a stale
+      // anonymous session. Note: `originalAppUserId` is the FIRST id RevenueCat
+      // ever created for this device (often an anonymous `$RCAnonymousID:...`)
+      // and does NOT change after `Purchases.logIn(uid)`. Comparing against it
+      // therefore fails for every logged-in user and must not be used here.
+      final currentAppUserId = await Purchases.appUserID;
+      final isAnonymous = currentAppUserId.startsWith(r'$RCAnonymousID:');
+
+      // Strictly check the entitlement
+      final proEntitlement = customerInfo.entitlements.all[proEntitlementId];
+      final isProActive = proEntitlement?.isActive ?? false;
+
+      debugPrint('🛡️ RevenueCat Strict Check:');
+      debugPrint('   - Current App User: $currentAppUserId (anonymous: $isAnonymous)');
+      debugPrint('   - Pro Entitlement Active: $isProActive');
+
+      // Grant access when the entitlement is active. We do not require a match
+      // against `originalAppUserId` because it never equals the logged-in UID.
+      final result = isProActive;
+
+      // Cache the result to SharedPreferences for fallback (Req 13.6)
+      await _cacheProStatus(result);
+
+      return result;
+    } catch (e) {
+      debugPrint('❌ Failed to check pro access: $e');
+      // Fallback: read cached entitlement state (Req 13.6)
+      return await _getCachedProStatus();
+    }
+  }
+
+  /// Caches the current pro status to SharedPreferences for offline fallback.
+  Future<void> _cacheProStatus(bool isPro) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_cachedIsProKey, isPro);
+    } catch (e) {
+      debugPrint('⚠️ Failed to cache pro status: $e');
+    }
+  }
+
+  /// Reads the cached pro status from SharedPreferences.
+  /// Returns false (free tier) if no cached value exists (Req 13.6).
+  Future<bool> _getCachedProStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_cachedIsProKey) ?? false;
+    } catch (e) {
+      debugPrint('⚠️ Failed to read cached pro status: $e');
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 48-Hour Upsell Throttle (Req 13.5)
+  // ---------------------------------------------------------------------------
+
+  /// Checks whether a proactive upsell prompt can be shown.
+  ///
+  /// Returns `true` if the prompt can be shown (more than 48 hours since the
+  /// last proactive upsell, or no record exists). Returns `false` if within
+  /// the 48-hour suppression window.
+  ///
+  /// This does NOT apply to paywalls triggered by the user tapping a locked
+  /// feature — those should bypass this check entirely.
+  Future<bool> canShowProactiveUpsell() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastShownMs = prefs.getInt(_upsellLastShownKey);
+
+      if (lastShownMs == null) return true;
+
+      final lastShown = DateTime.fromMillisecondsSinceEpoch(lastShownMs);
+      final elapsed = DateTime.now().difference(lastShown);
+      return elapsed.inHours >= 48;
+    } catch (e) {
+      debugPrint('⚠️ Error checking upsell throttle: $e');
+      return true; // Default to allowing on error
+    }
+  }
+
+  /// Records that a proactive upsell prompt was shown right now.
+  ///
+  /// Writes the current timestamp to SharedPreferences and to the user's
+  /// Firestore document (`upsell_last_shown_at`) for cross-device consistency.
+  Future<void> recordUpsellShown({String? userId}) async {
+    try {
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_upsellLastShownKey, now.millisecondsSinceEpoch);
+
+      // Also persist to Firestore for cross-device throttling
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .update({'upsell_last_shown_at': Timestamp.fromDate(now)});
+        } catch (e) {
+          debugPrint('⚠️ Failed to write upsell timestamp to Firestore: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error recording upsell shown: $e');
+    }
+  }
+
+  /// Syncs the upsell throttle timestamp from Firestore to local storage.
+  /// Called during cloud sync to ensure cross-device consistency.
+  Future<void> syncUpsellThrottleFromFirestore(String userId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data();
+        final timestamp = data?['upsell_last_shown_at'] as Timestamp?;
+        if (timestamp != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt(
+              _upsellLastShownKey, timestamp.toDate().millisecondsSinceEpoch);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Failed to sync upsell throttle from Firestore: $e');
+    }
+  }
+
+  /// Restore purchases
+  Future<CustomerInfo> restorePurchases() async {
+    if (!_isConfigured) {
+      throw StateError('RevenueCat not configured — cannot restore purchases.');
+    }
+    try {
+      final customerInfo = await Purchases.restorePurchases();
+      _cachedCustomerInfo = customerInfo;
+      debugPrint('✅ Purchases restored successfully');
+      return customerInfo;
+    } catch (e) {
+      debugPrint('❌ Failed to restore purchases: $e');
+      rethrow;
+    }
+  }
+
+  /// Get available offerings
+  Future<Offerings?> getOfferings() async {
+    if (!_isConfigured) return null;
+    try {
+      return await Purchases.getOfferings();
+    } catch (e) {
+      debugPrint('❌ Failed to get offerings: $e');
+      return null;
+    }
+  }
+
+  /// Purchase a package
+  Future<CustomerInfo> purchasePackage(Package package) async {
+    if (!_isConfigured) {
+      throw StateError('RevenueCat not configured — cannot purchase.');
+    }
+    try {
+      final purchaserInfo = await Purchases.purchasePackage(package);
+      _cachedCustomerInfo = purchaserInfo.customerInfo;
+      debugPrint('✅ Purchase successful');
+      return purchaserInfo.customerInfo;
+    } on PlatformException catch (e) {
+      final errorCode = PurchasesErrorHelper.getErrorCode(e);
+      if (errorCode == PurchasesErrorCode.purchaseCancelledError) {
+        debugPrint('ℹ️ Purchase cancelled by user');
+      } else {
+        debugPrint('❌ Purchase failed: ${e.message}');
+      }
+      rethrow;
+    }
+  }
+
+  /// Set user email for RevenueCat
+  Future<void> setEmail(String email) async {
+    if (!_isConfigured) return;
+    try {
+      await Purchases.setEmail(email);
+      debugPrint('✅ Set RevenueCat email: $email');
+    } catch (e) {
+      debugPrint('❌ Failed to set RevenueCat email: $e');
+    }
+  }
+
+  /// Log in a user with a custom App User ID (e.g. Supabase UID)
+  Future<void> logIn(String userId) async {
+    if (!_isConfigured) return;
+    try {
+      final result = await Purchases.logIn(userId);
+      _cachedCustomerInfo = result.customerInfo;
+      debugPrint('✅ RevenueCat: Logged in as $userId');
+      _updateListener?.call(result.customerInfo);
+    } catch (e) {
+      debugPrint('❌ RevenueCat: Log in failed: $e');
+    }
+  }
+
+  /// Log out the current user and return to an anonymous ID
+  Future<void> logOut() async {
+    if (!_isConfigured) return;
+    try {
+      _cachedCustomerInfo = await Purchases.logOut();
+      debugPrint('✅ RevenueCat: Logged out');
+      _updateListener?.call(_cachedCustomerInfo!);
+    } catch (e) {
+      debugPrint('❌ RevenueCat: Log out failed: $e');
+    }
+  }
+
+  /// Set listener for customer info updates
+  void setUpdateListener(Function(CustomerInfo) callback) {
+    _updateListener = callback;
+  }
+
+  /// Manage subscriptions by opening the appropriate store URL
+  Future<void> manageSubscriptions() async {
+    try {
+      final customerInfo = await getCustomerInfo();
+      String? url = customerInfo.managementURL;
+      
+      if (url == null) {
+        if (Platform.isIOS) {
+          url = 'https://apps.apple.com/account/subscriptions';
+        } else if (Platform.isAndroid) {
+          url = 'https://play.google.com/store/account/subscriptions';
+        }
+      }
+
+      if (url != null) {
+        final uri = Uri.parse(url);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          debugPrint('❌ Could not launch subscription management URL: $url');
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ Error managing subscriptions: $e');
+    }
+  }
+
+  /// Clear cached customer info (useful for testing)
+  void clearCache() {
+    _cachedCustomerInfo = null;
+  }
+}
+
+enum SubscriptionStatus {
+  none,
+  monthly,
+  yearly,
+  other,
+}

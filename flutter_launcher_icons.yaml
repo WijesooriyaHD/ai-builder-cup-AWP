@@ -1,0 +1,25 @@
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  # Use the clean logo (black border removed, bg-filled edges) for all icon types
+  image_path: "assets/images/wellness_pal_logo_clean.png"
+  remove_alpha_ios: true
+  background_color: "#F8F5F2"
+  # Adaptive icon (Android 8+): use pre-padded foreground with safe zone margin
+  adaptive_icon_foreground: "assets/images/wellness_pal_adaptive_foreground.png"
+  adaptive_icon_background: "#F8F5F2"
+
+  web:
+    generate: true
+    image_path: "assets/images/wellness_pal_logo.png"
+    background_color: "#F8F5F2"
+    theme_color: "#D9C2FF"
+
+  windows:
+    generate: true
+    image_path: "assets/images/wellness_pal_logo.png"
+    icon_size: 256
+
+  macos:
+    generate: true
+    image_path: "assets/images/wellness_pal_logo.png"

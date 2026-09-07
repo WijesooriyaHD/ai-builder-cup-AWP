@@ -1,0 +1,407 @@
+[
+  {
+    "id": "fallback_1_under10",
+    "energyTier": 1,
+    "timeRange": "under10",
+    "todaysFocus": "Gentle Recovery",
+    "actions": [
+      { "id": "a1", "title": "Deep Breathing Exercise", "durationMinutes": 4, "category": "mindfulness", "intensityLevel": "low" },
+      { "id": "a2", "title": "Neck & Shoulder Release", "durationMinutes": 5, "category": "recovery", "intensityLevel": "low" }
+    ],
+    "totalTime": 9
+  },
+  {
+    "id": "fallback_1_under10_v2",
+    "energyTier": 1,
+    "timeRange": "under10",
+    "todaysFocus": "Quiet Reset",
+    "actions": [
+      { "id": "a1", "title": "Calming Hand Massage", "durationMinutes": 3, "category": "recovery", "intensityLevel": "low" },
+      { "id": "a2", "title": "Slow Belly Breathing", "durationMinutes": 5, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 8
+  },
+  {
+    "id": "fallback_1_under10_v3",
+    "energyTier": 1,
+    "timeRange": "under10",
+    "todaysFocus": "Peaceful Pause",
+    "actions": [
+      { "id": "a1", "title": "Eye Relaxation Exercise", "durationMinutes": 3, "category": "recovery", "intensityLevel": "low" },
+      { "id": "a2", "title": "Gratitude Micro-Reflection", "durationMinutes": 5, "category": "mindfulness", "intensityLevel": "low" }
+    ],
+    "totalTime": 8
+  },
+  {
+    "id": "fallback_1_range10_20",
+    "energyTier": 1,
+    "timeRange": "range10_20",
+    "todaysFocus": "Restore Energy",
+    "actions": [
+      { "id": "a1", "title": "Guided Body Scan", "durationMinutes": 8, "category": "mindfulness", "intensityLevel": "low" },
+      { "id": "a2", "title": "Gentle Seated Stretches", "durationMinutes": 7, "category": "flexibility", "intensityLevel": "low" }
+    ],
+    "totalTime": 15
+  },
+  {
+    "id": "fallback_1_range10_20_v2",
+    "energyTier": 1,
+    "timeRange": "range10_20",
+    "todaysFocus": "Soothing Stillness",
+    "actions": [
+      { "id": "a1", "title": "Progressive Muscle Relaxation", "durationMinutes": 10, "category": "recovery", "intensityLevel": "low" },
+      { "id": "a2", "title": "Lavender Breathing Ritual", "durationMinutes": 5, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 15
+  },
+  {
+    "id": "fallback_1_range10_20_v3",
+    "energyTier": 1,
+    "timeRange": "range10_20",
+    "todaysFocus": "Soft Unwinding",
+    "actions": [
+      { "id": "a1", "title": "Legs Up the Wall Pose", "durationMinutes": 8, "category": "recovery", "intensityLevel": "low" },
+      { "id": "a2", "title": "Calming Humming Breath", "durationMinutes": 6, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 14
+  },
+  {
+    "id": "fallback_1_range20_40",
+    "energyTier": 1,
+    "timeRange": "range20_40",
+    "todaysFocus": "Calm Restoration",
+    "actions": [
+      { "id": "a1", "title": "Restorative Yoga Flow", "durationMinutes": 15, "category": "flexibility", "intensityLevel": "low" },
+      { "id": "a2", "title": "Guided Relaxation Audio", "durationMinutes": 10, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 25
+  },
+  {
+    "id": "fallback_1_range20_40_v2",
+    "energyTier": 1,
+    "timeRange": "range20_40",
+    "todaysFocus": "Nurturing Pause",
+    "actions": [
+      { "id": "a1", "title": "Gentle Foam Rolling", "durationMinutes": 10, "category": "recovery", "intensityLevel": "low" },
+      { "id": "a2", "title": "Calming Nature Sounds Meditation", "durationMinutes": 12, "category": "mindfulness", "intensityLevel": "low" },
+      { "id": "a3", "title": "Warm Tea Ritual & Gratitude", "durationMinutes": 8, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 30
+  },
+  {
+    "id": "fallback_1_range20_40_v3",
+    "energyTier": 1,
+    "timeRange": "range20_40",
+    "todaysFocus": "Tender Self-Care",
+    "actions": [
+      { "id": "a1", "title": "Aromatherapy Breathing", "durationMinutes": 8, "category": "stress", "intensityLevel": "low" },
+      { "id": "a2", "title": "Gentle Spinal Twists", "durationMinutes": 10, "category": "flexibility", "intensityLevel": "low" },
+      { "id": "a3", "title": "Self-Compassion Journaling", "durationMinutes": 10, "category": "mindfulness", "intensityLevel": "low" }
+    ],
+    "totalTime": 28
+  },
+  {
+    "id": "fallback_1_range40_60",
+    "energyTier": 1,
+    "timeRange": "range40_60",
+    "todaysFocus": "Deep Rest & Renewal",
+    "actions": [
+      { "id": "a1", "title": "Yin Yoga Session", "durationMinutes": 20, "category": "flexibility", "intensityLevel": "low" },
+      { "id": "a2", "title": "Sleep Preparation Routine", "durationMinutes": 15, "category": "sleep", "intensityLevel": "low" },
+      { "id": "a3", "title": "Gratitude Journaling", "durationMinutes": 10, "category": "mindfulness", "intensityLevel": "low" }
+    ],
+    "totalTime": 45
+  },
+  {
+    "id": "fallback_1_over60",
+    "energyTier": 1,
+    "timeRange": "over60",
+    "todaysFocus": "Full Recovery Day",
+    "actions": [
+      { "id": "a1", "title": "Gentle Morning Stretches", "durationMinutes": 15, "category": "flexibility", "intensityLevel": "low" },
+      { "id": "a2", "title": "Guided Meditation", "durationMinutes": 20, "category": "mindfulness", "intensityLevel": "low" },
+      { "id": "a3", "title": "Warm Bath & Self-Care", "durationMinutes": 20, "category": "recovery", "intensityLevel": "low" },
+      { "id": "a4", "title": "Evening Wind-Down Breathing", "durationMinutes": 10, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 65
+  },
+  {
+    "id": "fallback_2_under10",
+    "energyTier": 2,
+    "timeRange": "under10",
+    "todaysFocus": "Quick Balance Reset",
+    "actions": [
+      { "id": "a1", "title": "Box Breathing Exercise", "durationMinutes": 4, "category": "stress", "intensityLevel": "low" },
+      { "id": "a2", "title": "Standing Stretch Break", "durationMinutes": 5, "category": "flexibility", "intensityLevel": "medium" }
+    ],
+    "totalTime": 9
+  },
+  {
+    "id": "fallback_2_under10_v2",
+    "energyTier": 2,
+    "timeRange": "under10",
+    "todaysFocus": "Instant Recharge",
+    "actions": [
+      { "id": "a1", "title": "Energizing Breath Cycles", "durationMinutes": 3, "category": "energy", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Quick Posture Reset", "durationMinutes": 4, "category": "flexibility", "intensityLevel": "low" }
+    ],
+    "totalTime": 7
+  },
+  {
+    "id": "fallback_2_range10_20",
+    "energyTier": 2,
+    "timeRange": "range10_20",
+    "todaysFocus": "Mindful Movement",
+    "actions": [
+      { "id": "a1", "title": "Walking Meditation", "durationMinutes": 10, "category": "mindfulness", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Upper Body Stretch Sequence", "durationMinutes": 8, "category": "flexibility", "intensityLevel": "low" }
+    ],
+    "totalTime": 18
+  },
+  {
+    "id": "fallback_2_range10_20_v2",
+    "energyTier": 2,
+    "timeRange": "range10_20",
+    "todaysFocus": "Gentle Focus",
+    "actions": [
+      { "id": "a1", "title": "Desk-Friendly Mobility Flow", "durationMinutes": 8, "category": "flexibility", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Focus Breathing Technique", "durationMinutes": 5, "category": "mentalClarity", "intensityLevel": "low" }
+    ],
+    "totalTime": 13
+  },
+  {
+    "id": "fallback_2_range10_20_v3",
+    "energyTier": 2,
+    "timeRange": "range10_20",
+    "todaysFocus": "Clarity Boost",
+    "actions": [
+      { "id": "a1", "title": "Alternate Nostril Breathing", "durationMinutes": 5, "category": "mentalClarity", "intensityLevel": "low" },
+      { "id": "a2", "title": "Joint Mobility Circles", "durationMinutes": 8, "category": "flexibility", "intensityLevel": "medium" }
+    ],
+    "totalTime": 13
+  },
+  {
+    "id": "fallback_2_range20_40",
+    "energyTier": 2,
+    "timeRange": "range20_40",
+    "todaysFocus": "Balanced Wellness",
+    "actions": [
+      { "id": "a1", "title": "Moderate Pilates Session", "durationMinutes": 15, "category": "movement", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Mindfulness Body Check", "durationMinutes": 8, "category": "mindfulness", "intensityLevel": "low" },
+      { "id": "a3", "title": "Hydration & Nutrition Check", "durationMinutes": 5, "category": "energy", "intensityLevel": "low" }
+    ],
+    "totalTime": 28
+  },
+  {
+    "id": "fallback_2_range20_40_v2",
+    "energyTier": 2,
+    "timeRange": "range20_40",
+    "todaysFocus": "Movement & Mindfulness",
+    "actions": [
+      { "id": "a1", "title": "Moderate Walk Outdoors", "durationMinutes": 15, "category": "movement", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Guided Visualization", "durationMinutes": 10, "category": "mentalClarity", "intensityLevel": "low" }
+    ],
+    "totalTime": 25
+  },
+  {
+    "id": "fallback_2_range20_40_v3",
+    "energyTier": 2,
+    "timeRange": "range20_40",
+    "todaysFocus": "Harmonious Flow",
+    "actions": [
+      { "id": "a1", "title": "Tai Chi Basics", "durationMinutes": 12, "category": "movement", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Gratitude & Intention Setting", "durationMinutes": 8, "category": "mindfulness", "intensityLevel": "low" },
+      { "id": "a3", "title": "Hip & Spine Mobility", "durationMinutes": 8, "category": "flexibility", "intensityLevel": "medium" }
+    ],
+    "totalTime": 28
+  },
+  {
+    "id": "fallback_2_range40_60",
+    "energyTier": 2,
+    "timeRange": "range40_60",
+    "todaysFocus": "Steady Progress",
+    "actions": [
+      { "id": "a1", "title": "Gentle Cardio Walk", "durationMinutes": 20, "category": "movement", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Full Body Stretch Routine", "durationMinutes": 15, "category": "flexibility", "intensityLevel": "medium" },
+      { "id": "a3", "title": "Stress Release Meditation", "durationMinutes": 10, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 45
+  },
+  {
+    "id": "fallback_2_over60",
+    "energyTier": 2,
+    "timeRange": "over60",
+    "todaysFocus": "Comprehensive Balance",
+    "actions": [
+      { "id": "a1", "title": "Moderate Yoga Flow", "durationMinutes": 25, "category": "flexibility", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Wellness Journaling", "durationMinutes": 15, "category": "mentalClarity", "intensityLevel": "low" },
+      { "id": "a3", "title": "Light Strength Routine", "durationMinutes": 20, "category": "movement", "intensityLevel": "medium" },
+      { "id": "a4", "title": "Evening Relaxation", "durationMinutes": 10, "category": "stress", "intensityLevel": "low" }
+    ],
+    "totalTime": 70
+  },
+  {
+    "id": "fallback_3_under10",
+    "energyTier": 3,
+    "timeRange": "under10",
+    "todaysFocus": "Quick Energy Burst",
+    "actions": [
+      { "id": "a1", "title": "Power Breathing Circuit", "durationMinutes": 3, "category": "energy", "intensityLevel": "medium" },
+      { "id": "a2", "title": "Dynamic Stretch Sequence", "durationMinutes": 5, "category": "flexibility", "intensityLevel": "high" }
+    ],
+    "totalTime": 8
+  },
+  {
+    "id": "fallback_3_under10_v2",
+    "energyTier": 3,
+    "timeRange": "under10",
+    "todaysFocus": "Explosive Start",
+    "actions": [
+      { "id": "a1", "title": "Jumping Jacks Burst", "durationMinutes": 3, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Speed Stretching", "durationMinutes": 4, "category": "flexibility", "intensityLevel": "medium" }
+    ],
+    "totalTime": 7
+  },
+  {
+    "id": "fallback_3_range10_20",
+    "energyTier": 3,
+    "timeRange": "range10_20",
+    "todaysFocus": "Active Momentum",
+    "actions": [
+      { "id": "a1", "title": "HIIT Warm-Up", "durationMinutes": 8, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Core Activation Drills", "durationMinutes": 7, "category": "movement", "intensityLevel": "medium" }
+    ],
+    "totalTime": 15
+  },
+  {
+    "id": "fallback_3_range10_20_v2",
+    "energyTier": 3,
+    "timeRange": "range10_20",
+    "todaysFocus": "Morning Movement Flow",
+    "actions": [
+      { "id": "a1", "title": "Sun Salutation Sequence", "durationMinutes": 8, "category": "flexibility", "intensityLevel": "high" },
+      { "id": "a2", "title": "Power Squats & Lunges", "durationMinutes": 7, "category": "movement", "intensityLevel": "high" }
+    ],
+    "totalTime": 15
+  },
+  {
+    "id": "fallback_3_range10_20_v3",
+    "energyTier": 3,
+    "timeRange": "range10_20",
+    "todaysFocus": "Swift Strength",
+    "actions": [
+      { "id": "a1", "title": "Push-Up & Plank Combo", "durationMinutes": 7, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Agility Footwork Drills", "durationMinutes": 6, "category": "movement", "intensityLevel": "high" }
+    ],
+    "totalTime": 13
+  },
+  {
+    "id": "fallback_3_range20_40",
+    "energyTier": 3,
+    "timeRange": "range20_40",
+    "todaysFocus": "Power & Flow",
+    "actions": [
+      { "id": "a1", "title": "High-Energy Pilates", "durationMinutes": 15, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Active Recovery Stretches", "durationMinutes": 8, "category": "recovery", "intensityLevel": "medium" },
+      { "id": "a3", "title": "Energizing Breathwork", "durationMinutes": 5, "category": "energy", "intensityLevel": "medium" }
+    ],
+    "totalTime": 28
+  },
+  {
+    "id": "fallback_3_range20_40_v2",
+    "energyTier": 3,
+    "timeRange": "range20_40",
+    "todaysFocus": "Energizing Challenge",
+    "actions": [
+      { "id": "a1", "title": "Dance Cardio Session", "durationMinutes": 12, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Plank & Core Challenge", "durationMinutes": 8, "category": "movement", "intensityLevel": "high" },
+      { "id": "a3", "title": "Stretch & Breathe", "durationMinutes": 5, "category": "flexibility", "intensityLevel": "low" }
+    ],
+    "totalTime": 25
+  },
+  {
+    "id": "fallback_3_range20_40_v3",
+    "energyTier": 3,
+    "timeRange": "range20_40",
+    "todaysFocus": "Cardio & Core Ignite",
+    "actions": [
+      { "id": "a1", "title": "Jump Rope Intervals", "durationMinutes": 10, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Ab Circuit Blitz", "durationMinutes": 10, "category": "movement", "intensityLevel": "high" },
+      { "id": "a3", "title": "Breathwork Cool Down", "durationMinutes": 5, "category": "recovery", "intensityLevel": "low" }
+    ],
+    "totalTime": 25
+  },
+  {
+    "id": "fallback_3_range20_40_v4",
+    "energyTier": 3,
+    "timeRange": "range20_40",
+    "todaysFocus": "Strength & Agility",
+    "actions": [
+      { "id": "a1", "title": "Kettlebell Swings", "durationMinutes": 10, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Lateral Movement Drills", "durationMinutes": 10, "category": "movement", "intensityLevel": "high" },
+      { "id": "a3", "title": "Guided Cool-Down", "durationMinutes": 8, "category": "recovery", "intensityLevel": "low" }
+    ],
+    "totalTime": 28
+  },
+  {
+    "id": "fallback_3_range20_40_v5",
+    "energyTier": 3,
+    "timeRange": "range20_40",
+    "todaysFocus": "Total Body Burst",
+    "actions": [
+      { "id": "a1", "title": "Burpee & Mountain Climber Set", "durationMinutes": 12, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Dynamic Flexibility Flow", "durationMinutes": 8, "category": "flexibility", "intensityLevel": "medium" },
+      { "id": "a3", "title": "Power Breathing Reset", "durationMinutes": 5, "category": "energy", "intensityLevel": "medium" }
+    ],
+    "totalTime": 25
+  },
+  {
+    "id": "fallback_3_range40_60",
+    "energyTier": 3,
+    "timeRange": "range40_60",
+    "todaysFocus": "Full Vitality Session",
+    "actions": [
+      { "id": "a1", "title": "Intense Cardio Circuit", "durationMinutes": 20, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Strength & Tone Routine", "durationMinutes": 15, "category": "movement", "intensityLevel": "high" },
+      { "id": "a3", "title": "Cool-Down Stretches", "durationMinutes": 10, "category": "flexibility", "intensityLevel": "low" }
+    ],
+    "totalTime": 45
+  },
+  {
+    "id": "fallback_3_range40_60_v2",
+    "energyTier": 3,
+    "timeRange": "range40_60",
+    "todaysFocus": "Strength & Stamina",
+    "actions": [
+      { "id": "a1", "title": "Full Body Strength Training", "durationMinutes": 25, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Active Flexibility Drills", "durationMinutes": 10, "category": "flexibility", "intensityLevel": "medium" },
+      { "id": "a3", "title": "Recovery Breathing", "durationMinutes": 5, "category": "recovery", "intensityLevel": "low" }
+    ],
+    "totalTime": 40
+  },
+  {
+    "id": "fallback_3_range40_60_v3",
+    "energyTier": 3,
+    "timeRange": "range40_60",
+    "todaysFocus": "Athletic Power Hour",
+    "actions": [
+      { "id": "a1", "title": "Sprint Interval Training", "durationMinutes": 15, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Functional Strength Moves", "durationMinutes": 20, "category": "movement", "intensityLevel": "high" },
+      { "id": "a3", "title": "Mobility & Stretch Down", "durationMinutes": 10, "category": "flexibility", "intensityLevel": "medium" }
+    ],
+    "totalTime": 45
+  },
+  {
+    "id": "fallback_3_over60",
+    "energyTier": 3,
+    "timeRange": "over60",
+    "todaysFocus": "Peak Performance Day",
+    "actions": [
+      { "id": "a1", "title": "Advanced HIIT Workout", "durationMinutes": 25, "category": "movement", "intensityLevel": "high" },
+      { "id": "a2", "title": "Power Yoga Flow", "durationMinutes": 20, "category": "flexibility", "intensityLevel": "high" },
+      { "id": "a3", "title": "Mindful Cool-Down", "durationMinutes": 10, "category": "mindfulness", "intensityLevel": "low" },
+      { "id": "a4", "title": "Post-Workout Nutrition Planning", "durationMinutes": 10, "category": "energy", "intensityLevel": "low" }
+    ],
+    "totalTime": 65
+  }
+]

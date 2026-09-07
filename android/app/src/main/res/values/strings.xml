@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AI Wellness Pal</string>
+    <string name="intention_widget_name">Wellness Intention</string>
+    <string name="intention_widget_description">Track your wellness intention tasks</string>
+    <string name="ai_wellness_widget_name">AI Wellness</string>
+    <string name="ai_wellness_widget_description">Your daily wellness plan at a glance</string>
+</resources>

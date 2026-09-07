@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "travel_memories",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "public", "order": "ASCENDING" },
+        { "fieldPath": "visited_date", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// Firestore security rules for AI Wellness Pal.
+//
+// This file is a SUPERSET of the rules that were live in the Firebase console
+// as of 2026-08-15 (fetched via the Firebase Rules API), plus one addition:
+// a collection-group read for public travel memories.
+//
+// Preserved from the live ruleset:
+//   - users/{userId}/{document=**} : owner-only read/write (recursive, so it
+//     also covers daily_plans, check_ins, wellness_intentions,
+//     wellness_studio_sessions, travel_memories, and any future subcollection)
+//   - wellness_fallback_plans/{planId} : any signed-in user may read
+//
+// Added:
+//   - collection-group read of travel_memories where public == true, so
+//     StorageService.fetchPublicMemories() works without exposing private data.
+//
+// NOTE: `firebase deploy` REPLACES the live ruleset with this file. If anyone
+// edits rules directly in the console afterwards, re-sync this file first.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Owner-scoped user data (recursive) ----
+    // A user can read/write their own document and everything nested under it.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ---- Curated fallback plans (read-only for signed-in users) ----
+    match /wellness_fallback_plans/{planId} {
+      allow read: if request.auth != null;
+    }
+
+    // ---- Public travel memories feed (collection-group query) ----
+    // Supports StorageService.fetchPublicMemories():
+    //   collectionGroup('travel_memories').where('public', isEqualTo: true)
+    // A signed-in user may read any travel_memories document across all users
+    // ONLY when that document has public == true. Private memories stay hidden
+    // because the owner-recursive rule above does not grant cross-user reads,
+    // and this rule requires public == true.
+    match /{path=**}/travel_memories/{memoryId} {
+      allow read: if request.auth != null && resource.data.public == true;
+    }
+  }
+}
