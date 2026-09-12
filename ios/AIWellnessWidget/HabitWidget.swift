@@ -93,11 +93,14 @@ struct HabitWidgetEntryView: View {
     var entry: HabitEntry
 
     var body: some View {
-        if !entry.hasHabits {
-            emptyView
-        } else {
-            contentView
+        Group {
+            if !entry.hasHabits {
+                emptyView
+            } else {
+                contentView
+            }
         }
+        .widgetBackgroundGradient()
     }
 
     private var emptyView: some View {

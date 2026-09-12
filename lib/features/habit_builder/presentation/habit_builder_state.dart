@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
@@ -35,6 +38,10 @@ class HabitBuilderState extends ChangeNotifier {
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      // The home-screen widget's background isolate writes habit toggles into
+      // this same key. Reload so the UI isolate sees the latest value instead
+      // of a stale in-memory copy.
+      await prefs.reload();
       final raw = prefs.getString(_prefsKey);
       if (raw != null && raw.isNotEmpty) {
         _habits = Habit.decodeList(raw);
@@ -43,6 +50,8 @@ class HabitBuilderState extends ChangeNotifier {
       debugPrint('❌ HabitBuilderState.load: $e');
     }
     notifyListeners();
+    // Populate the home-screen "Today's Habits" widget on load.
+    await _pushHabitsToWidget();
   }
 
   Future<void> _save() async {
@@ -51,6 +60,144 @@ class HabitBuilderState extends ChangeNotifier {
       await prefs.setString(_prefsKey, Habit.encodeList(_habits));
     } catch (e) {
       debugPrint('❌ HabitBuilderState._save: $e');
+    }
+    // Keep the home-screen "Today's Habits" widget in sync after every save.
+    await _pushHabitsToWidget();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Home-screen widget ("Today's Habits")
+  // ---------------------------------------------------------------------------
+
+  /// Today's date key ("yyyy-MM-dd"), matching Habit's completion log keys.
+  static String _todayKey() {
+    final n = DateTime.now();
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}-'
+        '${n.day.toString().padLeft(2, '0')}';
+  }
+
+  /// Pushes today's active habits to the native widget from the UI isolate.
+  Future<void> _pushHabitsToWidget() async {
+    try {
+      await _writeHabitWidgetData(todaysHabits
+          .map((h) => {
+                'id': h.id,
+                'title': h.title,
+                'emoji': h.tool.emoji,
+                'checked': h.isCompletedToday,
+              })
+          .toList());
+      await HomeWidget.updateWidget(
+          name: 'HabitWidget', androidName: 'HabitWidget');
+    } catch (e) {
+      debugPrint('❌ HabitBuilderState._pushHabitsToWidget: $e');
+    }
+  }
+
+  /// Writes the "Today's Habits" widget keys.
+  ///
+  /// Keys: habit_has_habits (bool), habit_count (int, ≤4 shown),
+  /// habit_completed / habit_total / habit_progress (int),
+  /// and per row 1..4: habit_{n}_id / _text / _emoji / _checked.
+  ///
+  /// [items] is an ordered list of maps with id/title/emoji/checked for the
+  /// habits scheduled today.
+  static Future<void> _writeHabitWidgetData(
+      List<Map<String, dynamic>> items) async {
+    final total = items.length;
+    final completed = items.where((h) => h['checked'] == true).length;
+    const maxRows = 4;
+
+    await HomeWidget.saveWidgetData<bool>('habit_has_habits', total > 0);
+    await HomeWidget.saveWidgetData<int>('habit_count', total.clamp(0, maxRows));
+    await HomeWidget.saveWidgetData<int>('habit_completed', completed);
+    await HomeWidget.saveWidgetData<int>('habit_total', total);
+    await HomeWidget.saveWidgetData<int>('habit_progress',
+        total == 0 ? 0 : ((completed / total) * 100).round());
+
+    for (int i = 0; i < maxRows; i++) {
+      final n = i + 1;
+      if (i < items.length) {
+        final h = items[i];
+        await HomeWidget.saveWidgetData<String>('habit_${n}_id', h['id'] ?? '');
+        await HomeWidget.saveWidgetData<String>(
+            'habit_${n}_text', h['title'] ?? '');
+        await HomeWidget.saveWidgetData<String>(
+            'habit_${n}_emoji', h['emoji'] ?? '⭐');
+        await HomeWidget.saveWidgetData<bool>(
+            'habit_${n}_checked', h['checked'] == true);
+      } else {
+        await HomeWidget.saveWidgetData<String>('habit_${n}_id', '');
+        await HomeWidget.saveWidgetData<String>('habit_${n}_text', '');
+        await HomeWidget.saveWidgetData<String>('habit_${n}_emoji', '');
+        await HomeWidget.saveWidgetData<bool>('habit_${n}_checked', false);
+      }
+    }
+  }
+
+  /// Background-isolate sync used by [AppState.backgroundCallback] when a habit
+  /// checkbox is toggled from the home-screen widget. Reads the raw
+  /// `habit_builder_habits` prefs, recomputes today's active habits, and writes
+  /// the widget keys.
+  @pragma('vm:entry-point')
+  static Future<void> syncHabitWidgetFromPrefs(SharedPreferences prefs) async {
+    try {
+      final raw = prefs.getString(_prefsKey);
+      final List<Map<String, dynamic>> items = [];
+      if (raw != null && raw.isNotEmpty) {
+        final habits = Habit.decodeList(raw);
+        final today = habits
+            .where((h) => h.isActive && h.isScheduledToday)
+            .toList();
+        for (final h in today) {
+          items.add({
+            'id': h.id,
+            'title': h.title,
+            'emoji': h.tool.emoji,
+            'checked': h.isCompletedToday,
+          });
+        }
+      }
+      await _writeHabitWidgetData(items);
+      await HomeWidget.updateWidget(
+          name: 'HabitWidget', androidName: 'HabitWidget');
+    } catch (e) {
+      debugPrint('❌ HabitBuilderState.syncHabitWidgetFromPrefs: $e');
+    }
+  }
+
+  /// Toggles today's completion for [habitId] directly in the raw prefs list
+  /// (used from the background isolate). Returns true if a habit was changed.
+  @pragma('vm:entry-point')
+  static Future<bool> toggleHabitInPrefs(
+      SharedPreferences prefs, String habitId) async {
+    final raw = prefs.getString(_prefsKey);
+    if (raw == null || raw.isEmpty) return false;
+    try {
+      final List<dynamic> list = jsonDecode(raw);
+      final key = _todayKey();
+      bool changed = false;
+      for (final h in list) {
+        if (h['id'] == habitId) {
+          final log = Map<String, dynamic>.from(h['log'] ?? {});
+          if (log.containsKey(key)) {
+            log.remove(key);
+          } else {
+            final target = (h['targetValue'] as num?)?.toDouble() ?? 1.0;
+            log[key] = target;
+          }
+          h['log'] = log;
+          changed = true;
+          break;
+        }
+      }
+      if (changed) {
+        await prefs.setString(_prefsKey, jsonEncode(list));
+      }
+      return changed;
+    } catch (e) {
+      debugPrint('❌ HabitBuilderState.toggleHabitInPrefs: $e');
+      return false;
     }
   }
 

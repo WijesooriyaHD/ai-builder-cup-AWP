@@ -5,4 +5,6 @@
     <string name="intention_widget_description">Track your wellness intention tasks</string>
     <string name="ai_wellness_widget_name">AI Wellness</string>
     <string name="ai_wellness_widget_description">Your daily wellness plan at a glance</string>
+    <string name="habit_widget_name">Today's Habits</string>
+    <string name="habit_widget_description">Check off today's habits from your home screen</string>
 </resources>

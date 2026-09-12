@@ -99,11 +99,14 @@ struct IntentionWidgetEntryView: View {
     var entry: IntentionEntry
 
     var body: some View {
-        if !entry.hasIntention {
-            emptyView
-        } else {
-            contentView
+        Group {
+            if !entry.hasIntention {
+                emptyView
+            } else {
+                contentView
+            }
         }
+        .widgetBackgroundGradient()
     }
 
     private var emptyView: some View {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/journal_entry.dart';
 import '../providers/app_state.dart';
+import '../services/ai_service.dart';
 import '../utils/wellnesspal_snackbar.dart';
 
 class JournalAiDiscussionScreen extends StatefulWidget {
@@ -24,11 +24,12 @@ class _JournalAiDiscussionScreenState extends State<JournalAiDiscussionScreen> {
   @override
   void initState() {
     super.initState();
-    // Start with an initial message from AI
-    _messages.add(ChatMessage(
-      text: "I've read your entry '${widget.entry.title}'. What would you like to explore further about this?",
-      isAi: true,
-    ));
+    // Start with an initial grounding message from the AI.
+    final title = widget.entry.title.trim();
+    final opener = title.isNotEmpty
+        ? "I've read your entry \u201C$title\u201D. What feels most alive for you in it right now, and how are you doing with it?"
+        : "I've read your journal entry. What feels most alive for you in it right now, and how are you doing with it?";
+    _messages.add(ChatMessage(text: opener, isAi: true));
   }
 
   @override
@@ -62,32 +63,35 @@ class _JournalAiDiscussionScreenState extends State<JournalAiDiscussionScreen> {
     _scrollToBottom();
 
     try {
-      final context = "Journal Entry Context: Title: ${widget.entry.title}, Content: ${widget.entry.content}";
-      final history = _messages.take(_messages.length - 1).map((m) => "${m.isAi ? 'AI' : 'User'}: ${m.text}").join("\n");
-      
-      final callable = FirebaseFunctions.instance.httpsCallable('journalInsight');
-      final response = await callable.call({
-        'text': "User message: $text\n\n$context\n\nConversation history:\n$history",
-        'is_discussion': true,
-      });
+      // Build the prior conversation (everything except the message we just
+      // added) so the AI can respond in context.
+      final history = _messages
+          .take(_messages.length - 1)
+          .map((m) => {'role': m.isAi ? 'ai' : 'user', 'text': m.text})
+          .toList();
 
-      final data = response.data;
-      String reply = "";
-      if (data is Map) {
-        reply = data['reply'] ?? data['insight'] ?? data['message'] ?? data.toString();
-      } else {
-        reply = data.toString();
-      }
+      final reply = await AIService().discussJournalEntry(
+        entryTitle: widget.entry.title,
+        entryContent: widget.entry.content,
+        history: history,
+        userMessage: text,
+      );
 
+      if (!mounted) return;
       setState(() {
-        _messages.add(ChatMessage(text: reply, isAi: true));
+        _messages.add(ChatMessage(
+          text: reply ??
+              "I'm having trouble responding right now. Could you try rephrasing, or check your connection?",
+          isAi: true,
+        ));
         _isLoading = false;
       });
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      WellnessPalSnackBar.show(context, message: "Error connecting to AI: $e", isError: true);
+      WellnessPalSnackBar.show(context,
+          message: "Error connecting to AI: $e", isError: true);
     }
   }
 

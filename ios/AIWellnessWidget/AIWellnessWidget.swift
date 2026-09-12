@@ -8,6 +8,34 @@ import AppIntents
 
 private let kAppGroup = "group.com.aiwellnesspal.app"
 
+// MARK: - Shared widget background
+
+/// A soft diagonal gradient used as the background for every home-screen
+/// widget in this extension — decent and eye-catching without hurting text
+/// contrast. Mirrors the Android `widget_background_gradient` drawable.
+let kWidgetBackgroundGradient = LinearGradient(
+    colors: [
+        Color(red: 0.89, green: 0.93, blue: 0.98), // #E3EEFB light primary tint
+        Color(red: 0.95, green: 0.97, blue: 0.996), // #F3F7FE
+        Color.white,
+    ],
+    startPoint: .topLeading,
+    endPoint: .bottomTrailing
+)
+
+extension View {
+    /// Applies the shared widget gradient as the WidgetKit container background
+    /// (required on iOS 17+); falls back to a plain background on older iOS.
+    @ViewBuilder
+    func widgetBackgroundGradient() -> some View {
+        if #available(iOS 17.0, *) {
+            containerBackground(for: .widget) { kWidgetBackgroundGradient }
+        } else {
+            background(kWidgetBackgroundGradient)
+        }
+    }
+}
+
 // MARK: - Timeline Entry
 
 struct WellnessTaskRow {
@@ -116,11 +144,14 @@ struct AIWellnessWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
 
     var body: some View {
-        if entry.isPlaceholder {
-            placeholderView
-        } else {
-            contentView
+        Group {
+            if entry.isPlaceholder {
+                placeholderView
+            } else {
+                contentView
+            }
         }
+        .widgetBackgroundGradient()
     }
 
     private var placeholderView: some View {
@@ -252,5 +283,6 @@ struct AIWellnessWidgetBundle: WidgetBundle {
     var body: some Widget {
         AIWellnessWidget()
         IntentionWidget()
+        HabitWidget()
     }
 }

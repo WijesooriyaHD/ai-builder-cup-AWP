@@ -34,19 +34,30 @@ class HabitBuilderScreen extends StatefulWidget {
 }
 
 class _HabitBuilderScreenState extends State<HabitBuilderScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tab;
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => context.read<HabitBuilderState>().load());
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // A habit toggled from the home-screen widget writes to SharedPreferences
+    // from a background isolate; reload on resume so the in-app list reflects it.
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<HabitBuilderState>().load();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tab.dispose();
     super.dispose();
   }

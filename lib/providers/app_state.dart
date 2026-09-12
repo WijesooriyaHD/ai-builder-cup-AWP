@@ -25,6 +25,7 @@ import '../services/blog_audio_handler.dart';
 import '../theme/wellness_themes.dart';
 import '../exceptions/premium_feature_exception.dart';
 import '../data/ai_voices.dart';
+import '../features/habit_builder/presentation/habit_builder_state.dart';
 import '../services/dream_migration_service.dart';
 
 @pragma('vm:entry-point')
@@ -682,8 +683,24 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
-    
-    if (uri?.host == 'intention_toggle') {
+
+    if (uri?.host == 'habit_toggle') {
+      // Toggle today's completion for a habit from the "Today's Habits" widget.
+      final String? habitId = uri?.queryParameters['id'];
+      debugPrint('Background Habit Toggle: habitId=$habitId');
+      if (habitId != null && habitId.isNotEmpty) {
+        final changed =
+            await HabitBuilderState.toggleHabitInPrefs(prefs, habitId);
+        if (changed) {
+          // Flag for the UI to reload habits on next foreground resume.
+          await prefs.setBool('habit_pending_sync', true);
+          await HabitBuilderState.syncHabitWidgetFromPrefs(prefs);
+        }
+      }
+    } else if (uri?.host == 'habit_refresh') {
+      debugPrint('Background Habit Refresh Request');
+      await HabitBuilderState.syncHabitWidgetFromPrefs(prefs);
+    } else if (uri?.host == 'intention_toggle') {
       // Toggle a wellness intention task from the home-screen Intention widget.
       final String? intentionId = uri?.queryParameters['id'];
       final String? taskId = uri?.queryParameters['task'];

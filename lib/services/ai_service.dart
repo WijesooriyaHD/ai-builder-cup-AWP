@@ -492,6 +492,71 @@ Respond ONLY with valid JSON in this exact format:
     }
   }
 
+  /// Generates a reply for the "Discuss" conversation about a journal entry.
+  ///
+  /// The reply is grounded in the entry's [entryTitle]/[entryContent], the
+  /// prior [history] turns, and the [userMessage], all through a supportive
+  /// wellness lens. Returns null on timeout/error so the UI can show a
+  /// friendly fallback.
+  ///
+  /// [history] is an ordered list of {'role': 'user'|'ai', 'text': ...} maps.
+  Future<String?> discussJournalEntry({
+    required String entryTitle,
+    required String entryContent,
+    required List<Map<String, String>> history,
+    required String userMessage,
+  }) async {
+    final buffer = StringBuffer();
+    buffer.writeln("The user wrote this journal entry:");
+    buffer.writeln('Title: ${entryTitle.isEmpty ? "(untitled)" : entryTitle}');
+    buffer.writeln('Entry: ${entryContent.isEmpty ? "(no body text)" : entryContent}');
+    buffer.writeln();
+
+    if (history.isNotEmpty) {
+      buffer.writeln('Conversation so far:');
+      for (final turn in history) {
+        final who = turn['role'] == 'ai' ? 'You (coach)' : 'User';
+        buffer.writeln('$who: ${turn['text']}');
+      }
+      buffer.writeln();
+    }
+
+    buffer.writeln('User\'s latest message: $userMessage');
+    buffer.writeln();
+    buffer.writeln(
+        'Respond to the user\'s latest message. Stay specific to what they '
+        'wrote in the entry and the conversation — reference their own words '
+        'where helpful. Keep a warm, wellness-focused tone.');
+
+    try {
+      final reply = await _generateText(
+        buffer.toString(),
+        temperature: 0.75,
+        maxOutputTokens: 600,
+        systemInstruction:
+            'You are a warm, insightful wellness companion inside a journaling '
+            'app. You help the user reflect on their own journal entry through '
+            'a wellness lens — emotional wellbeing, self-care, stress, energy, '
+            'sleep, relationships, and healthy habits. Ground every reply in '
+            'the specific content of their entry and the conversation; never '
+            'give generic filler. Be supportive and non-judgmental, ask one '
+            'gentle follow-up question when useful, and offer small, doable '
+            'suggestions. Do not give medical diagnoses or clinical advice — '
+            'suggest professional support for serious concerns. Reply in plain '
+            'text (short paragraphs, no code fences), 2–5 sentences.',
+        timeout: const Duration(seconds: 20),
+      );
+      if (reply == null || reply.trim().isEmpty) return null;
+      return ContentSafetyFilter.sanitize(reply.trim());
+    } on TimeoutException catch (_) {
+      debugPrint('⏱️ AIService.discussJournalEntry timed out');
+      return null;
+    } catch (e) {
+      debugPrint('❌ AIService.discussJournalEntry error: $e');
+      return null;
+    }
+  }
+
   String _buildReflectionPromptsPrompt(
     CheckIn? checkIn,
     List<WellnessIntention>? intentions,
