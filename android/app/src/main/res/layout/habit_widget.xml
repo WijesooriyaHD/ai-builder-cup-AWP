@@ -3,13 +3,13 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background_gradient"
+    android:background="@drawable/bg_todays_habits"
     android:orientation="vertical"
-    android:padding="18dp">
+    android:padding="16dp">
 
-    <!-- Header: icon + title -->
+    <!-- Header: icon + title (no chip) -->
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -18,28 +18,31 @@
             android:id="@+id/h_icon"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingEnd="10dp"
+            android:paddingEnd="8dp"
             android:text="📋"
-            android:textSize="22sp" />
+            android:textSize="18sp" />
 
         <TextView
             android:id="@+id/h_title"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Today's Habits"
             android:textColor="@color/widget_primary"
-            android:textSize="17sp"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
     </LinearLayout>
 
-    <!-- Empty state -->
+    <!-- Empty state chip -->
     <TextView
         android:id="@+id/h_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="14dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_chip"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
         android:text="No habits for today. Open the app to add some."
         android:textColor="@color/widget_text"
         android:textSize="14sp"
@@ -50,10 +53,12 @@
         android:id="@+id/h_row1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_chip"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingTop="14dp"
-        android:paddingBottom="3dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
         android:visibility="gone">
         <TextView
             android:id="@+id/h_row1_check"
@@ -62,14 +67,14 @@
             android:paddingEnd="10dp"
             android:text="☐"
             android:textColor="@color/widget_primary"
-            android:textSize="22sp" />
+            android:textSize="20sp" />
         <TextView
             android:id="@+id/h_row1_emoji"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:paddingEnd="8dp"
             android:text=""
-            android:textSize="16sp" />
+            android:textSize="15sp" />
         <TextView
             android:id="@+id/h_row1_text"
             android:layout_width="match_parent"
@@ -78,7 +83,7 @@
             android:ellipsize="end"
             android:text=""
             android:textColor="@color/widget_text"
-            android:textSize="15sp" />
+            android:textSize="14sp" />
     </LinearLayout>
 
     <!-- Habit row 2 -->
@@ -86,9 +91,12 @@
         android:id="@+id/h_row2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/widget_chip"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingVertical="3dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
         android:visibility="gone">
         <TextView
             android:id="@+id/h_row2_check"
@@ -97,14 +105,14 @@
             android:paddingEnd="10dp"
             android:text="☐"
             android:textColor="@color/widget_primary"
-            android:textSize="22sp" />
+            android:textSize="20sp" />
         <TextView
             android:id="@+id/h_row2_emoji"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:paddingEnd="8dp"
             android:text=""
-            android:textSize="16sp" />
+            android:textSize="15sp" />
         <TextView
             android:id="@+id/h_row2_text"
             android:layout_width="match_parent"
@@ -113,99 +121,33 @@
             android:ellipsize="end"
             android:text=""
             android:textColor="@color/widget_text"
-            android:textSize="15sp" />
+            android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Habit row 3 -->
+    <!-- Progress (no chip) -->
     <LinearLayout
-        android:id="@+id/h_row3"
+        android:id="@+id/h_progress_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingVertical="3dp"
+        android:layout_marginTop="10dp"
+        android:orientation="vertical"
         android:visibility="gone">
         <TextView
-            android:id="@+id/h_row3_check"
+            android:id="@+id/h_progress_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingEnd="10dp"
-            android:text="☐"
-            android:textColor="@color/widget_primary"
-            android:textSize="22sp" />
-        <TextView
-            android:id="@+id/h_row3_emoji"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="8dp"
-            android:text=""
-            android:textSize="16sp" />
-        <TextView
-            android:id="@+id/h_row3_text"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:text=""
+            android:paddingBottom="5dp"
+            android:text="0 of 0 done"
             android:textColor="@color/widget_text"
-            android:textSize="15sp" />
-    </LinearLayout>
-
-    <!-- Habit row 4 -->
-    <LinearLayout
-        android:id="@+id/h_row4"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingVertical="3dp"
-        android:visibility="gone">
-        <TextView
-            android:id="@+id/h_row4_check"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="10dp"
-            android:text="☐"
-            android:textColor="@color/widget_primary"
-            android:textSize="22sp" />
-        <TextView
-            android:id="@+id/h_row4_emoji"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingEnd="8dp"
-            android:text=""
-            android:textSize="16sp" />
-        <TextView
-            android:id="@+id/h_row4_text"
+            android:textSize="12sp" />
+        <ProgressBar
+            android:id="@+id/h_progress_bar"
+            style="@android:style/Widget.ProgressBar.Horizontal"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:text=""
-            android:textColor="@color/widget_text"
-            android:textSize="15sp" />
+            android:layout_height="7dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="@color/widget_primary" />
     </LinearLayout>
-
-    <!-- Progress section -->
-    <TextView
-        android:id="@+id/h_progress_label"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="14dp"
-        android:paddingBottom="6dp"
-        android:text="0 of 0 done"
-        android:textColor="@color/widget_text"
-        android:textSize="12sp"
-        android:visibility="gone" />
-
-    <ProgressBar
-        android:id="@+id/h_progress_bar"
-        style="@android:style/Widget.ProgressBar.Horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="8dp"
-        android:max="100"
-        android:progress="0"
-        android:progressTint="@color/widget_primary"
-        android:visibility="gone" />
 
 </LinearLayout>

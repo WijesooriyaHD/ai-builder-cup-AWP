@@ -98,6 +98,8 @@ struct IntentionTimelineProvider: TimelineProvider {
 struct IntentionWidgetEntryView: View {
     var entry: IntentionEntry
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         Group {
             if !entry.hasIntention {
@@ -106,64 +108,60 @@ struct IntentionWidgetEntryView: View {
                 contentView
             }
         }
-        .widgetBackgroundGradient()
+        .widgetBackgroundImage("bg_wellness_intention", scheme: scheme)
     }
 
     private var emptyView: some View {
         VStack(spacing: 8) {
             Spacer()
-            Text("🎯").font(.title)
-            Text("Open the app and pin an intention to see it here.")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            WidgetChip {
+                VStack(spacing: 6) {
+                    Text("🎯").font(.title2)
+                    Text("Open the app and pin an intention to see it here.")
+                        .font(.footnote)
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                }
+            }
             Spacer()
         }
         .padding()
     }
 
     private var contentView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header: icon + title
+        VStack(alignment: .leading, spacing: 6) {
+            // Header: icon + title (no chip)
             HStack(spacing: 8) {
-                Text("🎯").font(.title3)
+                Text("🎯").font(.subheadline)
                 Text(entry.title)
-                    .font(.headline)
+                    .font(.subheadline).bold()
                     .foregroundColor(Color("WidgetPrimary"))
                     .lineLimit(1)
             }
 
             if entry.allDone {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.square.fill")
-                        .foregroundColor(Color("WidgetPrimary"))
-                    Text("All steps complete 🎉")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+                WidgetChip {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.square.fill")
+                            .foregroundColor(Color("WidgetPrimary"))
+                        Text("All steps complete 🎉")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             } else {
                 if entry.task1.hasTask { taskRow(entry.task1) }
                 if entry.task2.hasTask { taskRow(entry.task2) }
-
-                // Up next (dimmed preview)
-                if !entry.nextTask.isEmpty {
-                    Text("Up next · \(entry.nextTask)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .padding(.leading, 28)
-                        .opacity(0.7)
-                }
             }
 
             Spacer(minLength: 0)
 
-            // Progress
+            // Progress (no chip)
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(entry.completed) of \(entry.total) steps")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color("WidgetPrimary"))
                 ProgressView(value: entry.total == 0 ? 0 : Double(entry.progress) / 100.0)
                     .tint(Color("WidgetPrimary"))
             }
@@ -175,13 +173,13 @@ struct IntentionWidgetEntryView: View {
     private func taskRow(_ task: IntentionTaskRow) -> some View {
         #if canImport(AppIntents)
         if #available(iOS 17.0, *) {
-            Button(intent: toggleIntent(for: task)) { taskRowContent(task) }
+            Button(intent: toggleIntent(for: task)) { WidgetChip { taskRowContent(task) } }
                 .buttonStyle(.plain)
         } else {
-            taskRowContent(task)
+            WidgetChip { taskRowContent(task) }
         }
         #else
-        taskRowContent(task)
+        WidgetChip { taskRowContent(task) }
         #endif
     }
 

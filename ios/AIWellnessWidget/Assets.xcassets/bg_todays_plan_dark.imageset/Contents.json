@@ -1,0 +1,6 @@
+{
+  "images" : [
+    { "idiom" : "universal", "filename" : "todays_plan_dark.png" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

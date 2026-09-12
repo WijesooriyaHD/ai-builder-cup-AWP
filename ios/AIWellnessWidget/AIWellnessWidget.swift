@@ -34,6 +34,47 @@ extension View {
             background(kWidgetBackgroundGradient)
         }
     }
+
+    /// Applies a full-bleed light/dark background image as the WidgetKit
+    /// container background. [baseName] is the asset base (e.g. "bg_todays_plan");
+    /// the "_light"/"_dark" variant is chosen from [scheme].
+    @ViewBuilder
+    func widgetBackgroundImage(_ baseName: String, scheme: ColorScheme) -> some View {
+        let asset = "\(baseName)_\(scheme == .dark ? "dark" : "light")"
+        if #available(iOS 17.0, *) {
+            containerBackground(for: .widget) {
+                GeometryReader { geo in
+                    Image(asset)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+            }
+        } else {
+            background(
+                Image(asset).resizable().scaledToFill()
+            )
+        }
+    }
+}
+
+/// A rounded white "chip" wrapper so widget text stays readable over the
+/// background image. Mirrors the Android `widget_chip` drawable.
+struct WidgetChip<Content: View>: View {
+    @Environment(\.colorScheme) private var scheme
+    let content: Content
+    init(@ViewBuilder _ content: () -> Content) { self.content = content() }
+
+    var body: some View {
+        content
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.95))
+            )
+    }
 }
 
 // MARK: - Timeline Entry
@@ -143,6 +184,8 @@ struct AIWellnessWidgetEntryView: View {
 
     @Environment(\.widgetFamily) var family
 
+    @Environment(\.colorScheme) private var scheme
+
     var body: some View {
         Group {
             if entry.isPlaceholder {
@@ -151,62 +194,57 @@ struct AIWellnessWidgetEntryView: View {
                 contentView
             }
         }
-        .widgetBackgroundGradient()
+        .widgetBackgroundImage("bg_todays_plan", scheme: scheme)
     }
 
     private var placeholderView: some View {
         VStack {
             Spacer()
-            Text("Open the app to start your wellness day.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding()
+            WidgetChip {
+                Text("Open the app to start your wellness day.")
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+            }
             Spacer()
         }
+        .padding()
     }
 
     private var contentView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header: icon + focus
+        VStack(alignment: .leading, spacing: 6) {
+            // Header: icon + focus (no chip)
             HStack(spacing: 8) {
-                Text("✨").font(.title3)
+                Text("✨").font(.subheadline)
                 Text(entry.focus)
-                    .font(.headline)
+                    .font(.subheadline).bold()
                     .foregroundColor(Color("WidgetPrimary"))
                     .lineLimit(1)
             }
 
             if entry.allDone {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.square.fill")
-                        .foregroundColor(Color("WidgetPrimary"))
-                    Text("All actions complete 🎉")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+                WidgetChip {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.square.fill")
+                            .foregroundColor(Color("WidgetPrimary"))
+                        Text("All actions complete 🎉")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             } else {
                 if entry.task1.hasTask { taskRow(entry.task1) }
                 if entry.task2.hasTask { taskRow(entry.task2) }
-
-                if !entry.nextTask.isEmpty {
-                    Text("Up next · \(entry.nextTask)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .padding(.leading, 28)
-                        .opacity(0.7)
-                }
             }
 
             Spacer(minLength: 0)
 
-            // Progress
+            // Progress (no chip)
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(entry.completed) of \(entry.total) actions")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color("WidgetPrimary"))
                 ProgressView(value: entry.total == 0 ? 0 : Double(entry.progress) / 100.0)
                     .tint(Color("WidgetPrimary"))
             }
@@ -219,14 +257,14 @@ struct AIWellnessWidgetEntryView: View {
         #if canImport(AppIntents)
         if #available(iOS 17.0, *) {
             Button(intent: toggleIntent(for: task)) {
-                rowContent(task)
+                WidgetChip { rowContent(task) }
             }
             .buttonStyle(.plain)
         } else {
-            rowContent(task)
+            WidgetChip { rowContent(task) }
         }
         #else
-        rowContent(task)
+        WidgetChip { rowContent(task) }
         #endif
     }
 

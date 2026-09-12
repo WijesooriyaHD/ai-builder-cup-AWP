@@ -25,6 +25,7 @@ struct HabitEntry: TimelineEntry {
     let total: Int
     let progress: Int // 0..100
     let hasHabits: Bool
+    let allDone: Bool
 }
 
 // MARK: - Timeline Provider
@@ -33,14 +34,14 @@ struct HabitTimelineProvider: TimelineProvider {
     private let sharedDefaults = UserDefaults(suiteName: kHabitAppGroup)
 
     func placeholder(in context: Context) -> HabitEntry {
+        // Only two rows are ever shown, matching the placed widget.
         HabitEntry(
             date: Date(),
             rows: [
                 HabitRow(id: "1", text: "Morning stretch", emoji: "🧘", checked: false),
-                HabitRow(id: "2", text: "Drink water", emoji: "💧", checked: true),
-                HabitRow(id: "3", text: "10-min walk", emoji: "🚶", checked: false),
+                HabitRow(id: "2", text: "Drink water", emoji: "💧", checked: false),
             ],
-            completed: 1, total: 3, progress: 33, hasHabits: true)
+            completed: 1, total: 3, progress: 33, hasHabits: true, allDone: false)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (HabitEntry) -> Void) {
@@ -59,7 +60,7 @@ struct HabitTimelineProvider: TimelineProvider {
         if !hasHabits {
             return emptyEntry()
         }
-        let count = min(d.integer(forKey: "habit_count"), 4)
+        let count = min(d.integer(forKey: "habit_count"), 2)
         var rows: [HabitRow] = []
         if count > 0 {
             for i in 1...count {
@@ -72,18 +73,24 @@ struct HabitTimelineProvider: TimelineProvider {
                 }
             }
         }
+        let total = d.integer(forKey: "habit_total")
+        let completed = d.integer(forKey: "habit_completed")
+        let allDone = d.bool(forKey: "habit_all_done")
         return HabitEntry(
             date: Date(),
             rows: rows,
-            completed: d.integer(forKey: "habit_completed"),
-            total: d.integer(forKey: "habit_total"),
+            completed: completed,
+            total: total,
             progress: d.integer(forKey: "habit_progress"),
-            hasHabits: !rows.isEmpty
+            hasHabits: total > 0,
+            allDone: allDone
         )
     }
 
     private func emptyEntry() -> HabitEntry {
-        HabitEntry(date: Date(), rows: [], completed: 0, total: 0, progress: 0, hasHabits: false)
+        HabitEntry(
+            date: Date(), rows: [], completed: 0, total: 0, progress: 0,
+            hasHabits: false, allDone: false)
     }
 }
 
@@ -91,6 +98,8 @@ struct HabitTimelineProvider: TimelineProvider {
 
 struct HabitWidgetEntryView: View {
     var entry: HabitEntry
+
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         Group {
@@ -100,17 +109,21 @@ struct HabitWidgetEntryView: View {
                 contentView
             }
         }
-        .widgetBackgroundGradient()
+        .widgetBackgroundImage("bg_todays_habits", scheme: scheme)
     }
 
     private var emptyView: some View {
         VStack(spacing: 8) {
             Spacer()
-            Text("📋").font(.title)
-            Text("No habits for today. Open the app to add some.")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            WidgetChip {
+                VStack(spacing: 6) {
+                    Text("📋").font(.title2)
+                    Text("No habits for today. Open the app to add some.")
+                        .font(.footnote)
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                }
+            }
             Spacer()
         }
         .padding()
@@ -118,26 +131,41 @@ struct HabitWidgetEntryView: View {
 
     private var contentView: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Header
+            // Header (no chip)
             HStack(spacing: 8) {
-                Text("📋").font(.title3)
+                Text("📋").font(.subheadline)
                 Text("Today's Habits")
-                    .font(.headline)
+                    .font(.subheadline).bold()
                     .foregroundColor(Color("WidgetPrimary"))
                     .lineLimit(1)
             }
 
-            ForEach(entry.rows) { row in
-                habitRow(row)
+            if entry.allDone {
+                WidgetChip {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.square.fill")
+                            .foregroundColor(Color("WidgetPrimary"))
+                        Text("All habits done 🎉")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            } else {
+                // Show the first two incomplete habits, matching the
+                // Wellness Intention widget.
+                ForEach(Array(entry.rows.prefix(2))) { row in
+                    habitRow(row)
+                }
             }
 
             Spacer(minLength: 0)
 
-            // Progress
+            // Progress (no chip)
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(entry.completed) of \(entry.total) done")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color("WidgetPrimary"))
                 ProgressView(value: entry.total == 0 ? 0 : Double(entry.progress) / 100.0)
                     .tint(Color("WidgetPrimary"))
             }
@@ -149,13 +177,13 @@ struct HabitWidgetEntryView: View {
     private func habitRow(_ row: HabitRow) -> some View {
         #if canImport(AppIntents)
         if #available(iOS 17.0, *) {
-            Button(intent: toggleIntent(for: row)) { rowContent(row) }
+            Button(intent: toggleIntent(for: row)) { WidgetChip { rowContent(row) } }
                 .buttonStyle(.plain)
         } else {
-            rowContent(row)
+            WidgetChip { rowContent(row) }
         }
         #else
-        rowContent(row)
+        WidgetChip { rowContent(row) }
         #endif
     }
 

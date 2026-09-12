@@ -96,9 +96,12 @@ class HabitBuilderState extends ChangeNotifier {
 
   /// Writes the "Today's Habits" widget keys.
   ///
-  /// Keys: habit_has_habits (bool), habit_count (int, ≤4 shown),
+  /// Keys: habit_has_habits (bool), habit_count (int, ≤2 shown),
   /// habit_completed / habit_total / habit_progress (int),
-  /// and per row 1..4: habit_{n}_id / _text / _emoji / _checked.
+  /// and per row 1..2: habit_{n}_id / _text / _emoji / _checked.
+  ///
+  /// Mirrors the Wellness Intention widget: only the first two habits are
+  /// shown as tappable rows, while progress reflects the full day's totals.
   ///
   /// [items] is an ordered list of maps with id/title/emoji/checked for the
   /// habits scheduled today.
@@ -106,10 +109,19 @@ class HabitBuilderState extends ChangeNotifier {
       List<Map<String, dynamic>> items) async {
     final total = items.length;
     final completed = items.where((h) => h['checked'] == true).length;
-    const maxRows = 4;
+    const maxRows = 2;
+
+    // Mirror the Wellness Intention widget: display the first two *incomplete*
+    // habits as tappable rows. Progress still reflects the full day's totals.
+    final incomplete =
+        items.where((h) => h['checked'] != true).toList(growable: false);
+    final rows = incomplete.take(maxRows).toList(growable: false);
+
+    final allDone = total > 0 && completed == total;
 
     await HomeWidget.saveWidgetData<bool>('habit_has_habits', total > 0);
-    await HomeWidget.saveWidgetData<int>('habit_count', total.clamp(0, maxRows));
+    await HomeWidget.saveWidgetData<bool>('habit_all_done', allDone);
+    await HomeWidget.saveWidgetData<int>('habit_count', rows.length);
     await HomeWidget.saveWidgetData<int>('habit_completed', completed);
     await HomeWidget.saveWidgetData<int>('habit_total', total);
     await HomeWidget.saveWidgetData<int>('habit_progress',
@@ -117,8 +129,8 @@ class HabitBuilderState extends ChangeNotifier {
 
     for (int i = 0; i < maxRows; i++) {
       final n = i + 1;
-      if (i < items.length) {
-        final h = items[i];
+      if (i < rows.length) {
+        final h = rows[i];
         await HomeWidget.saveWidgetData<String>('habit_${n}_id', h['id'] ?? '');
         await HomeWidget.saveWidgetData<String>(
             'habit_${n}_text', h['title'] ?? '');

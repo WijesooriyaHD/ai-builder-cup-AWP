@@ -3,13 +3,13 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background_gradient"
+    android:background="@drawable/bg_todays_plan"
     android:orientation="vertical"
-    android:padding="18dp">
+    android:padding="16dp">
 
-    <!-- Header: icon + focus title -->
+    <!-- Header: icon + focus title (no chip) -->
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -18,42 +18,47 @@
             android:id="@+id/w_icon"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingEnd="10dp"
+            android:paddingEnd="8dp"
             android:text="✨"
-            android:textSize="22sp" />
+            android:textSize="18sp" />
 
         <TextView
             android:id="@+id/wellness_focus_label"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Today's Focus"
             android:textColor="@color/widget_primary"
-            android:textSize="17sp"
+            android:textSize="16sp"
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
     </LinearLayout>
 
-    <!-- Placeholder Message (shown when no data) -->
+    <!-- Placeholder chip (shown when no data) -->
     <TextView
         android:id="@+id/placeholder_message"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="14dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_chip"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="10dp"
         android:text="Open the app to start your wellness day."
         android:textColor="@color/widget_text"
         android:textSize="14sp"
         android:visibility="gone" />
 
-    <!-- Task row 1 -->
+    <!-- Task row 1 chip -->
     <LinearLayout
         android:id="@+id/w_row1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_chip"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingTop="16dp"
-        android:paddingBottom="4dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
         android:visibility="gone">
 
         <TextView
@@ -63,7 +68,7 @@
             android:paddingEnd="12dp"
             android:text="☐"
             android:textColor="@color/widget_primary"
-            android:textSize="24sp" />
+            android:textSize="22sp" />
 
         <TextView
             android:id="@+id/w_row1_text"
@@ -73,17 +78,20 @@
             android:ellipsize="end"
             android:text=""
             android:textColor="@color/widget_text"
-            android:textSize="15sp" />
+            android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Task row 2 -->
+    <!-- Task row 2 chip -->
     <LinearLayout
         android:id="@+id/w_row2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/widget_chip"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingVertical="4dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
         android:visibility="gone">
 
         <TextView
@@ -93,7 +101,7 @@
             android:paddingEnd="12dp"
             android:text="☐"
             android:textColor="@color/widget_primary"
-            android:textSize="24sp" />
+            android:textSize="22sp" />
 
         <TextView
             android:id="@+id/w_row2_text"
@@ -103,44 +111,33 @@
             android:ellipsize="end"
             android:text=""
             android:textColor="@color/widget_text"
-            android:textSize="15sp" />
+            android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Up next (dimmed preview of the following action) -->
-    <TextView
-        android:id="@+id/w_next_text"
+    <!-- Progress (no chip) -->
+    <LinearLayout
+        android:id="@+id/w_progress_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="36dp"
-        android:paddingTop="4dp"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:text=""
-        android:textColor="@color/widget_text"
-        android:alpha="0.5"
-        android:textSize="13sp"
-        android:visibility="gone" />
-
-    <!-- Progress section -->
-    <TextView
-        android:id="@+id/w_progress_label"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="14dp"
-        android:paddingBottom="6dp"
-        android:text="0 of 0 actions"
-        android:textColor="@color/widget_text"
-        android:textSize="12sp"
-        android:visibility="gone" />
-
-    <ProgressBar
-        android:id="@+id/w_progress_bar"
-        style="@android:style/Widget.ProgressBar.Horizontal"
-        android:layout_width="match_parent"
-        android:layout_height="8dp"
-        android:max="100"
-        android:progress="0"
-        android:progressTint="@color/widget_primary"
-        android:visibility="gone" />
+        android:layout_marginTop="10dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/w_progress_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingBottom="5dp"
+            android:text="0 of 0 actions"
+            android:textColor="@color/widget_text"
+            android:textSize="12sp" />
+        <ProgressBar
+            android:id="@+id/w_progress_bar"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="7dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="@color/widget_primary" />
+    </LinearLayout>
 
 </LinearLayout>

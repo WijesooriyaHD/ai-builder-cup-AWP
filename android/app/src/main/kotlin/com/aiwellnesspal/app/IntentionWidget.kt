@@ -44,14 +44,11 @@ class IntentionWidget : HomeWidgetProvider() {
                     setViewVisibility(R.id.widget_empty, View.VISIBLE)
                     setViewVisibility(R.id.row1, View.GONE)
                     setViewVisibility(R.id.row2, View.GONE)
-                    setViewVisibility(R.id.next_text, View.GONE)
-                    setViewVisibility(R.id.progress_label, View.GONE)
-                    setViewVisibility(R.id.progress_bar, View.GONE)
+                    setViewVisibility(R.id.progress_container, View.GONE)
                 } else {
                     setViewVisibility(R.id.widget_empty, View.GONE)
 
                     val allDone = widgetData.getBoolean("intention_all_done", false)
-                    val nextTask = widgetData.getString("intention_next_task", "") ?: ""
                     val completed = widgetData.getInt("intention_completed", 0)
                     val total = widgetData.getInt("intention_total", 0)
                     val progress = widgetData.getInt("intention_progress", 0)
@@ -83,17 +80,8 @@ class IntentionWidget : HomeWidgetProvider() {
                         )
                     }
 
-                    // "Up next" dimmed preview of the following step.
-                    if (!allDone && nextTask.isNotEmpty()) {
-                        setViewVisibility(R.id.next_text, View.VISIBLE)
-                        setTextViewText(R.id.next_text, "Up next \u00B7 $nextTask")
-                    } else {
-                        setViewVisibility(R.id.next_text, View.GONE)
-                    }
-
                     // Progress section.
-                    setViewVisibility(R.id.progress_label, View.VISIBLE)
-                    setViewVisibility(R.id.progress_bar, View.VISIBLE)
+                    setViewVisibility(R.id.progress_container, View.VISIBLE)
                     setTextViewText(R.id.progress_label, "$completed of $total steps")
                     setProgressBar(R.id.progress_bar, 100, progress, false)
                 }

@@ -43,15 +43,12 @@ class AIWellnessWidget : HomeWidgetProvider() {
                     setViewVisibility(R.id.placeholder_message, View.VISIBLE)
                     setViewVisibility(R.id.w_row1, View.GONE)
                     setViewVisibility(R.id.w_row2, View.GONE)
-                    setViewVisibility(R.id.w_next_text, View.GONE)
-                    setViewVisibility(R.id.w_progress_label, View.GONE)
-                    setViewVisibility(R.id.w_progress_bar, View.GONE)
+                    setViewVisibility(R.id.w_progress_container, View.GONE)
                     setTextViewText(R.id.wellness_focus_label, "Today's Plan")
                 } else {
                     setViewVisibility(R.id.placeholder_message, View.GONE)
 
                     val allDone = widgetData.getBoolean("wellness_all_done", false)
-                    val nextTask = widgetData.getString("wellness_next_task", "") ?: ""
                     val completed = widgetData.getInt("wellness_completed", 0)
                     val total = widgetData.getInt("wellness_total", 0)
                     val progress = widgetData.getInt("wellness_progress", 0)
@@ -80,15 +77,7 @@ class AIWellnessWidget : HomeWidgetProvider() {
                         )
                     }
 
-                    if (!allDone && nextTask.isNotEmpty()) {
-                        setViewVisibility(R.id.w_next_text, View.VISIBLE)
-                        setTextViewText(R.id.w_next_text, "Up next \u00B7 $nextTask")
-                    } else {
-                        setViewVisibility(R.id.w_next_text, View.GONE)
-                    }
-
-                    setViewVisibility(R.id.w_progress_label, View.VISIBLE)
-                    setViewVisibility(R.id.w_progress_bar, View.VISIBLE)
+                    setViewVisibility(R.id.w_progress_container, View.VISIBLE)
                     setTextViewText(R.id.w_progress_label, "$completed of $total actions")
                     setProgressBar(R.id.w_progress_bar, 100, progress, false)
                 }

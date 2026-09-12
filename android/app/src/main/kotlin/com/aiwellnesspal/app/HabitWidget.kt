@@ -13,14 +13,15 @@ import es.antonborri.home_widget.HomeWidgetProvider
 /**
  * "Today's Habits" home-screen widget.
  *
- * Shows the day's active habits (up to 4) as tappable checkbox rows with a
- * progress indicator. Tapping a row toggles today's completion via the
- * home_widget background callback (no app launch).
+ * Shows the day's active habits (first two incomplete) as tappable checkbox
+ * rows with a progress indicator, mirroring the Wellness Intention widget.
+ * Tapping a row toggles today's completion via the home_widget background
+ * callback (no app launch).
  *
  * Keys written by HabitBuilderState._writeHabitWidgetData:
- *   habit_has_habits (bool), habit_count (int), habit_completed (int),
- *   habit_total (int), habit_progress (int),
- *   habit_{n}_id / _text / _emoji / _checked  (n = 1..4)
+ *   habit_has_habits (bool), habit_all_done (bool), habit_count (int),
+ *   habit_completed (int), habit_total (int), habit_progress (int),
+ *   habit_{n}_id / _text / _emoji / _checked  (n = 1..2)
  */
 class HabitWidget : HomeWidgetProvider() {
     override fun onUpdate(
@@ -33,25 +34,34 @@ class HabitWidget : HomeWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.habit_widget).apply {
                 val hasHabits = widgetData.getBoolean("habit_has_habits", false)
 
-                val rowIds = intArrayOf(R.id.h_row1, R.id.h_row2, R.id.h_row3, R.id.h_row4)
-                val checkIds = intArrayOf(R.id.h_row1_check, R.id.h_row2_check, R.id.h_row3_check, R.id.h_row4_check)
-                val emojiIds = intArrayOf(R.id.h_row1_emoji, R.id.h_row2_emoji, R.id.h_row3_emoji, R.id.h_row4_emoji)
-                val textIds = intArrayOf(R.id.h_row1_text, R.id.h_row2_text, R.id.h_row3_text, R.id.h_row4_text)
+                // Only two rows are shown, matching the Wellness Intention widget.
+                val rowIds = intArrayOf(R.id.h_row1, R.id.h_row2)
+                val checkIds = intArrayOf(R.id.h_row1_check, R.id.h_row2_check)
+                val emojiIds = intArrayOf(R.id.h_row1_emoji, R.id.h_row2_emoji)
+                val textIds = intArrayOf(R.id.h_row1_text, R.id.h_row2_text)
 
                 if (!hasHabits) {
                     setViewVisibility(R.id.h_empty, View.VISIBLE)
                     for (id in rowIds) setViewVisibility(id, View.GONE)
-                    setViewVisibility(R.id.h_progress_label, View.GONE)
-                    setViewVisibility(R.id.h_progress_bar, View.GONE)
+                    setViewVisibility(R.id.h_progress_container, View.GONE)
                 } else {
                     setViewVisibility(R.id.h_empty, View.GONE)
 
-                    val count = widgetData.getInt("habit_count", 0).coerceIn(0, 4)
+                    val allDone = widgetData.getBoolean("habit_all_done", false)
+                    val count = widgetData.getInt("habit_count", 0).coerceIn(0, 2)
                     val completed = widgetData.getInt("habit_completed", 0)
                     val total = widgetData.getInt("habit_total", 0)
                     val progress = widgetData.getInt("habit_progress", 0)
 
-                    for (i in 0 until 4) {
+                    if (allDone) {
+                        // Celebration: single static row, no tap.
+                        setViewVisibility(R.id.h_row1, View.VISIBLE)
+                        setViewVisibility(R.id.h_row2, View.GONE)
+                        setTextViewText(R.id.h_row1_check, "\u2611")
+                        setTextViewText(R.id.h_row1_emoji, "")
+                        setTextViewText(R.id.h_row1_text, "All habits done \uD83C\uDF89")
+                    } else {
+                    for (i in 0 until 2) {
                         val n = i + 1
                         if (i < count) {
                             val id = widgetData.getString("habit_${n}_id", "") ?: ""
@@ -92,9 +102,9 @@ class HabitWidget : HomeWidgetProvider() {
                             setViewVisibility(rowIds[i], View.GONE)
                         }
                     }
+                    }
 
-                    setViewVisibility(R.id.h_progress_label, View.VISIBLE)
-                    setViewVisibility(R.id.h_progress_bar, View.VISIBLE)
+                    setViewVisibility(R.id.h_progress_container, View.VISIBLE)
                     setTextViewText(R.id.h_progress_label, "$completed of $total done")
                     setProgressBar(R.id.h_progress_bar, 100, progress, false)
                 }
