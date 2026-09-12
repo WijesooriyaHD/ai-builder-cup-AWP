@@ -107,6 +107,11 @@ class HabitBuilderState extends ChangeNotifier {
   /// habits scheduled today.
   static Future<void> _writeHabitWidgetData(
       List<Map<String, dynamic>> items) async {
+    // Ensure writes land in the iOS app group the widget extension reads from.
+    // Safe/no-op on Android. Idempotent, so calling it here covers both the UI
+    // isolate and the background toggle isolate.
+    await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
+
     final total = items.length;
     final completed = items.where((h) => h['checked'] == true).length;
     const maxRows = 2;

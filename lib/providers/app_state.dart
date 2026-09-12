@@ -370,7 +370,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
+  /// iOS app group shared with the widget extension. Must match the suite the
+  /// native widgets read from (see `kAppGroup` / `kHabitAppGroup` in the Swift
+  /// widget sources and the `.entitlements` files). Without this, `home_widget`
+  /// writes to the app's private defaults and the extension reads an empty
+  /// app-group suite — so widgets appear empty and never update on iOS.
+  static const String kWidgetAppGroupId = 'group.com.aiwellnesspal.app';
+
   AppState() {
+    // Point home_widget at the shared app group before any widget writes.
+    HomeWidget.setAppGroupId(kWidgetAppGroupId);
+    _refreshHabitWidget();
     _loadSettings();
     _loadData();
     _initAudioService();
@@ -640,6 +650,23 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _handleForegroundResume();
+      // Keep the "Today's Habits" widget fresh on every foreground, since its
+      // HabitBuilderState provider is lazy and may not be loaded otherwise.
+      _refreshHabitWidget();
+    }
+  }
+
+  /// Pushes today's habits to the "Today's Habits" home-screen widget straight
+  /// from prefs, independent of whether the Habit Builder screen (and its lazy
+  /// [HabitBuilderState] provider) has been opened this session. Mirrors how
+  /// the Intention/Wellness widgets are refreshed from [AppState] at startup.
+  Future<void> _refreshHabitWidget() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      await HabitBuilderState.syncHabitWidgetFromPrefs(prefs);
+    } catch (e) {
+      debugPrint('❌ AppState._refreshHabitWidget: $e');
     }
   }
 
@@ -680,11 +707,31 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   @pragma('vm:entry-point')
   static Future<void> backgroundCallback(Uri? uri) async {
     debugPrint('--- Background Callback Triggered: $uri ---');
-    
+
+    // This runs in a separate isolate, so the app group must be set here too
+    // before any saveWidgetData/updateWidget calls reach the shared suite.
+    await HomeWidget.setAppGroupId(kWidgetAppGroupId);
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
 
-    if (uri?.host == 'habit_toggle') {
+    if (uri?.host == 'widget_theme_toggle') {
+      // Flip the manual light/dark theme shared by all home-screen widgets.
+      // The Swift widgets read `widget_theme_dark` from the app group to pick
+      // the background image and chip colors.
+      final bool current = prefs.getBool('widget_theme_dark') ?? false;
+      final bool next = !current;
+      await prefs.setBool('widget_theme_dark', next);
+      await HomeWidget.saveWidgetData<bool>('widget_theme_dark', next);
+      debugPrint('Background Widget Theme Toggle -> dark=$next');
+      // Refresh every widget so the new theme is applied immediately.
+      await HomeWidget.updateWidget(
+          name: 'AIWellnessWidget', androidName: 'AIWellnessWidget');
+      await HomeWidget.updateWidget(
+          name: 'IntentionWidget', androidName: 'IntentionWidget');
+      await HomeWidget.updateWidget(
+          name: 'HabitWidget', androidName: 'HabitWidget');
+    } else if (uri?.host == 'habit_toggle') {
       // Toggle today's completion for a habit from the "Today's Habits" widget.
       final String? habitId = uri?.queryParameters['id'];
       debugPrint('Background Habit Toggle: habitId=$habitId');

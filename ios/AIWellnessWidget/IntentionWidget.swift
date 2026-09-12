@@ -98,8 +98,6 @@ struct IntentionTimelineProvider: TimelineProvider {
 struct IntentionWidgetEntryView: View {
     var entry: IntentionEntry
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
         Group {
             if !entry.hasIntention {
@@ -108,7 +106,11 @@ struct IntentionWidgetEntryView: View {
                 contentView
             }
         }
-        .widgetBackgroundImage("bg_wellness_intention", scheme: scheme)
+        .overlay(alignment: .topTrailing) {
+            WidgetThemeToggleButton(isDark: widgetThemeIsDark())
+                .padding(10)
+        }
+        .widgetBackgroundImage("bg_wellness_intention")
     }
 
     private var emptyView: some View {
@@ -119,7 +121,7 @@ struct IntentionWidgetEntryView: View {
                     Text("🎯").font(.title2)
                     Text("Open the app and pin an intention to see it here.")
                         .font(.footnote)
-                        .foregroundColor(.primary)
+                        .foregroundColor(widgetTextColor())
                         .multilineTextAlignment(.center)
                 }
             }
@@ -146,7 +148,7 @@ struct IntentionWidgetEntryView: View {
                             .foregroundColor(Color("WidgetPrimary"))
                         Text("All steps complete 🎉")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(widgetSecondaryTextColor())
                             .lineLimit(1)
                     }
                 }
@@ -190,8 +192,8 @@ struct IntentionWidgetEntryView: View {
                 .font(.body)
             Text(task.text)
                 .font(.subheadline)
-                .strikethrough(task.checked, color: .secondary)
-                .foregroundColor(task.checked ? .secondary : .primary)
+                .strikethrough(task.checked, color: widgetSecondaryTextColor())
+                .foregroundColor(task.checked ? widgetSecondaryTextColor() : widgetTextColor())
                 .lineLimit(1)
             Spacer(minLength: 0)
         }

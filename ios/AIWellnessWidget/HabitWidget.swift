@@ -60,18 +60,17 @@ struct HabitTimelineProvider: TimelineProvider {
         if !hasHabits {
             return emptyEntry()
         }
-        let count = min(d.integer(forKey: "habit_count"), 2)
+        // Read exactly two fixed slots, mirroring the Wellness Intention
+        // widget. This never depends on `habit_count`, so a stale/old value
+        // can never cause more than two rows to render.
         var rows: [HabitRow] = []
-        if count > 0 {
-            for i in 1...count {
-                let id = d.string(forKey: "habit_\(i)_id") ?? "\(i)"
-                let text = d.string(forKey: "habit_\(i)_text") ?? ""
-                let emoji = d.string(forKey: "habit_\(i)_emoji") ?? ""
-                let checked = d.bool(forKey: "habit_\(i)_checked")
-                if !text.isEmpty {
-                    rows.append(HabitRow(id: id, text: text, emoji: emoji, checked: checked))
-                }
-            }
+        for i in 1...2 {
+            let text = d.string(forKey: "habit_\(i)_text") ?? ""
+            if text.isEmpty { continue }
+            let id = d.string(forKey: "habit_\(i)_id") ?? "\(i)"
+            let emoji = d.string(forKey: "habit_\(i)_emoji") ?? ""
+            let checked = d.bool(forKey: "habit_\(i)_checked")
+            rows.append(HabitRow(id: id, text: text, emoji: emoji, checked: checked))
         }
         let total = d.integer(forKey: "habit_total")
         let completed = d.integer(forKey: "habit_completed")
@@ -99,8 +98,6 @@ struct HabitTimelineProvider: TimelineProvider {
 struct HabitWidgetEntryView: View {
     var entry: HabitEntry
 
-    @Environment(\.colorScheme) private var scheme
-
     var body: some View {
         Group {
             if !entry.hasHabits {
@@ -109,7 +106,11 @@ struct HabitWidgetEntryView: View {
                 contentView
             }
         }
-        .widgetBackgroundImage("bg_todays_habits", scheme: scheme)
+        .overlay(alignment: .topTrailing) {
+            WidgetThemeToggleButton(isDark: widgetThemeIsDark())
+                .padding(10)
+        }
+        .widgetBackgroundImage("bg_todays_habits")
     }
 
     private var emptyView: some View {
@@ -120,7 +121,7 @@ struct HabitWidgetEntryView: View {
                     Text("📋").font(.title2)
                     Text("No habits for today. Open the app to add some.")
                         .font(.footnote)
-                        .foregroundColor(.primary)
+                        .foregroundColor(widgetTextColor())
                         .multilineTextAlignment(.center)
                 }
             }
@@ -147,7 +148,7 @@ struct HabitWidgetEntryView: View {
                             .foregroundColor(Color("WidgetPrimary"))
                         Text("All habits done 🎉")
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(widgetSecondaryTextColor())
                             .lineLimit(1)
                     }
                 }
@@ -197,8 +198,8 @@ struct HabitWidgetEntryView: View {
             }
             Text(row.text)
                 .font(.subheadline)
-                .strikethrough(row.checked, color: .secondary)
-                .foregroundColor(row.checked ? .secondary : .primary)
+                .strikethrough(row.checked, color: widgetSecondaryTextColor())
+                .foregroundColor(row.checked ? widgetSecondaryTextColor() : widgetTextColor())
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
