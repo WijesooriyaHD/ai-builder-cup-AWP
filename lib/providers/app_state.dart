@@ -2159,101 +2159,37 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await _loadData(); // Re-load to get merged results or just to refresh everything
   }
 
-  /// Removes deprecated seeded entries (e.g. "Daily Rituals") and refreshes the
-  /// seeded "welcome" note to its latest copy for existing users. Persists
-  /// changes locally and to Firestore. Idempotent — safe to call every load.
+  /// Removes the deprecated "Daily Rituals" checklist entry (its use case moved
+  /// to Wellness Intentions) from the local list, pinned-to-home list, and
+  /// Firestore. Seeded content for new users is handled entirely by
+  /// [_addSampleData]; this only cleans up the obsolete entry for anyone who
+  /// still has it. Idempotent — a no-op once the entry is gone.
   Future<void> _purgeDeprecatedEntries() async {
     const deprecatedIds = {'daily_rituals'};
-    bool changed = false;
-
-    // 1. Remove deprecated entries.
     final toRemove =
         _journalEntries.where((e) => deprecatedIds.contains(e.id)).toList();
-    if (toRemove.isNotEmpty) {
-      _journalEntries.removeWhere((e) => deprecatedIds.contains(e.id));
-      _pinnedJournalToHomeIds.removeWhere((id) => deprecatedIds.contains(id));
-      changed = true;
+    if (toRemove.isEmpty) return;
 
-      final uid = _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null && uid.isNotEmpty) {
-        for (final entry in toRemove) {
-          FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .collection('journal_entries')
-              .doc(entry.id)
-              .delete()
-              .catchError((e) =>
-                  debugPrint('❌ purgeDeprecatedEntries: ${entry.id}: $e'));
-        }
-      }
-    }
+    _journalEntries.removeWhere((e) => deprecatedIds.contains(e.id));
+    _pinnedJournalToHomeIds.removeWhere((id) => deprecatedIds.contains(id));
+    await _storage.saveJournalEntries(_journalEntries);
 
-    // 2. Refresh a stale "welcome_note" to the latest copy so existing users
-    //    (who already had the old note seeded) see the new AI Coach content.
-    final idx = _journalEntries.indexWhere((e) => e.id == 'welcome_note');
-    if (idx != -1) {
-      final fresh = _buildWelcomeNote();
-      final current = _journalEntries[idx];
-      if (current.title != fresh.title || current.content != fresh.content) {
-        // Preserve user-controllable state (pin/save) while updating copy.
-        _journalEntries[idx] = fresh.copyWith(
-          isPinned: current.isPinned,
-          isSaved: current.isSaved,
-        );
-        changed = true;
-
-        final uid = _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
-        if (uid != null && uid.isNotEmpty) {
-          FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .collection('journal_entries')
-              .doc('welcome_note')
-              .set(_journalEntries[idx].toMap())
-              .catchError(
-                  (e) => debugPrint('❌ purge: welcome_note refresh: $e'));
-        }
-      }
-    }
-
-    // 3. Seed the example reflection ONCE for existing users who don't have it.
-    //    Guarded by a one-time flag so we never re-add it if the user later
-    //    deletes it. Brand-new users get it via _addSampleData instead.
-    final prefs = await SharedPreferences.getInstance();
-    const exampleSeededKey = 'example_reflection_seeded';
-    final exampleSeeded = prefs.getBool(exampleSeededKey) ?? false;
-    final seededBefore = await _storage.hasSeedData();
-    if (!exampleSeeded &&
-        seededBefore &&
-        !_journalEntries.any((e) => e.id == 'example_reflection')) {
-      final example = _buildExampleNote();
-      _journalEntries.add(example);
-      changed = true;
-      await prefs.setBool(exampleSeededKey, true);
-
-      final uid = _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null && uid.isNotEmpty) {
+    final uid = _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      for (final entry in toRemove) {
         FirebaseFirestore.instance
             .collection('users')
             .doc(uid)
             .collection('journal_entries')
-            .doc('example_reflection')
-            .set(example.toMap())
-            .catchError((e) => debugPrint('❌ purge: example seed: $e'));
+            .doc(entry.id)
+            .delete()
+            .catchError((e) =>
+                debugPrint('❌ purgeDeprecatedEntries: ${entry.id}: $e'));
       }
-    }
-
-    if (changed) {
-      await _storage.saveJournalEntries(_journalEntries);
     }
   }
 
-  /// The current copy for the seeded "welcome" reflection. Bump
-  /// [welcomeNoteVersion] whenever this content changes so existing users get
-  /// the refreshed note on next load (see [_purgeDeprecatedEntries]).
-  static const int welcomeNoteVersion = 2;
-
+  /// The seeded "welcome" reflection shown to new users on first launch.
   static JournalEntry _buildWelcomeNote() => JournalEntry(
         id: 'welcome_note',
         title: "AI Wellness Coach",
@@ -2307,12 +2243,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _journalEntries.add(_buildExampleNote());
     await _save();
     await _storage.setHasSeedData();
-    // Mark the example as seeded so the existing-user backfill in
-    // _purgeDeprecatedEntries doesn't re-add it.
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('example_reflection_seeded', true);
-    } catch (_) {}
     notifyListeners();
   }
 }
