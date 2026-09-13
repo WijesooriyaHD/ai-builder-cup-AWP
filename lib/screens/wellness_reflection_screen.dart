@@ -822,21 +822,22 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                   Expanded(
-                     child: Text(
-                        entry.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                   ),
-                   if (entry.mood != null) ...[
-                     Text(entry.mood!, style: const TextStyle(fontSize: 18)),
-                     const SizedBox(width: 8),
-                   ],
+                  // Mood emoji before the title (only shown when a title exists).
+                  if (entry.mood != null) ...[
+                    Text(entry.mood!, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 8),
+                  ],
+                  Expanded(
+                    child: Text(
+                      entry.title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),

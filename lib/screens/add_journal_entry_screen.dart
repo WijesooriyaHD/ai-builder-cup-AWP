@@ -26,12 +26,12 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
   late TextEditingController _contentController;
   late TextEditingController _tagController;
   
-  // State variables
-  late JournalEntryType _type;
+  // State variables. Reflections are notes only (checklist type removed —
+  // that use case is covered by Wellness Intentions).
+  static const JournalEntryType _type = JournalEntryType.note;
   late int _selectedColor;
   String? _selectedMood;
   List<String> _tags = [];
-  List<TodoItem> _todos = [];
   
   // Moods available
   final List<String> _moods = ["😊", "😔", "🔥", "🧘", "😴", "💡", "🌿", "🚀"];
@@ -54,19 +54,9 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
     _contentController = TextEditingController(text: widget.entry?.content ?? '');
     _tagController = TextEditingController();
     
-    _type = widget.entry?.type ?? JournalEntryType.note;
     _selectedColor = widget.entry?.color ?? _colors[0];
     _selectedMood = widget.entry?.mood;
     _tags = List.from(widget.entry?.tags ?? []);
-    
-    if (widget.entry != null) {
-      _todos = List.from(widget.entry!.todos.map((t) => t.copyWith()));
-    } else {
-      _todos = [];
-      if (_type == JournalEntryType.todo) {
-        _todos.add(TodoItem(text: ''));
-      }
-    }
   }
 
   @override
@@ -80,22 +70,14 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
   void _saveEntry() {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
-    
+
     if (title.isEmpty) {
       WellnessPalSnackBar.show(context, message: "Please enter a title", isError: true);
       return;
     }
-    
-    if (_type == JournalEntryType.todo) {
-      _todos.removeWhere((t) => t.text.trim().isEmpty);
-      if (_todos.isEmpty) {
-        WellnessPalSnackBar.show(context, message: "Add at least one item to your list", isError: true);
-        return;
-      }
-    }
 
     final appState = Provider.of<AppState>(context, listen: false);
-    
+
     if (widget.entry == null) {
       final newEntry = JournalEntry(
         title: title,
@@ -104,12 +86,10 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
         color: _selectedColor,
         mood: _selectedMood,
         tags: _tags,
-        todos: _todos,
+        todos: const [],
       );
       appState.addJournalEntry(newEntry);
       WellnessPalSnackBar.show(context, message: "Journal entry created");
-      
-      // Trigger async AI insight generation + Firestore write (non-blocking)
       _generateAiInsightAndSync(newEntry, appState);
     } else {
       final updatedEntry = widget.entry!.copyWith(
@@ -119,16 +99,14 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
         color: _selectedColor,
         mood: _selectedMood,
         tags: _tags,
-        todos: _todos,
+        todos: const [],
         updatedAt: DateTime.now(),
       );
       appState.updateJournalEntry(updatedEntry);
       WellnessPalSnackBar.show(context, message: "Journal entry updated");
-      
-      // Sync updated entry to Firestore
       _writeEntryToFirestore(updatedEntry);
     }
-    
+
     Navigator.pop(context);
   }
 
@@ -297,16 +275,6 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Type Selector Chips
-                    Row(
-                      children: [
-                        _buildTypeChip(JournalEntryType.note, "Note", Icons.edit_note_rounded),
-                        const SizedBox(width: 10),
-                        _buildTypeChip(JournalEntryType.todo, "Checklist", Icons.checklist_rounded),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-  
                     // Title Input
                     TextField(
                       controller: _titleController,
@@ -432,93 +400,29 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
                     ),
                     const SizedBox(height: 48),
   
-                    // Content Area
-                    if (_type == JournalEntryType.note)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionHeader("THOUGHTS", isDark),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _contentController,
-                            maxLines: null,
-                            textCapitalization: TextCapitalization.sentences,
-                            style: TextStyle(
-                              fontSize: 18, 
-                              height: 1.6,
-                              color: isDark ? Colors.white.withOpacity(0.85) : Colors.black87,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: "Start writing from your heart...",
-                              border: InputBorder.none,
-                              hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey.shade400),
-                            ),
+                    // Content Area (reflections are notes only)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionHeader("THOUGHTS", isDark),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _contentController,
+                          maxLines: null,
+                          textCapitalization: TextCapitalization.sentences,
+                          style: TextStyle(
+                            fontSize: 18,
+                            height: 1.6,
+                            color: isDark ? Colors.white.withOpacity(0.85) : Colors.black87,
                           ),
-                        ],
-                      )
-                    else
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionHeader("CHECKLIST", isDark),
-                          const SizedBox(height: 12),
-                          ..._todos.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final todo = entry.value;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: Checkbox(
-                                      value: todo.isCompleted,
-                                      onChanged: (val) => setState(() => _todos[index] = todo.copyWith(isCompleted: val)),
-                                      activeColor: primaryColor,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                      side: BorderSide(color: isDark ? Colors.white30 : Colors.grey.shade400, width: 2),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: TextEditingController(text: todo.text)
-                                        ..selection = TextSelection.fromPosition(TextPosition(offset: todo.text.length)),
-                                      onChanged: (val) => _todos[index] = todo.copyWith(text: val),
-                                      decoration: InputDecoration(
-                                        hintText: "Add a task...",
-                                        border: InputBorder.none,
-                                        hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey.shade400),
-                                      ),
-                                      style: TextStyle(
-                                        decoration: todo.isCompleted ? TextDecoration.lineThrough : null,
-                                        color: todo.isCompleted 
-                                            ? (isDark ? Colors.white38 : Colors.grey) 
-                                            : (isDark ? Colors.white : Colors.black87),
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.close_rounded, size: 18, color: isDark ? Colors.white24 : Colors.grey),
-                                    onPressed: () => setState(() => _todos.removeAt(index)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                          const SizedBox(height: 8),
-                          TextButton.icon(
-                            onPressed: () => setState(() => _todos.add(TodoItem(text: ''))),
-                            icon: Icon(Icons.add_circle_outline_rounded, size: 20, color: primaryColor),
-                            label: Text("Add item", style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold)),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 0),
-                            ),
+                          decoration: InputDecoration(
+                            hintText: "Start writing from your heart...",
+                            border: InputBorder.none,
+                            hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.grey.shade400),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+                    ),
                     
                     const SizedBox(height: 48),
                     
@@ -641,64 +545,6 @@ class _AddJournalEntryScreenState extends State<AddJournalEntryScreen> {
         fontSize: 11,
         letterSpacing: 1.2,
       )
-    );
-  }
-
-  Widget _buildTypeChip(JournalEntryType type, String label, IconData icon) {
-    final isSelected = _type == type;
-    final primaryColor = Color(_selectedColor);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _type = type;
-          if (_type == JournalEntryType.todo && _todos.isEmpty) {
-            _todos.add(TodoItem(text: ''));
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected 
-              ? primaryColor 
-              : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected 
-                ? primaryColor 
-                : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
-          ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: primaryColor.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            )
-          ] : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon, 
-              size: 18, 
-              color: isSelected ? Colors.white : (isDark ? Colors.white54 : Colors.grey.shade600)
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.grey.shade700),
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

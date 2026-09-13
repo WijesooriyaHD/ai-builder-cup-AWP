@@ -159,8 +159,9 @@ class HomeTabScreen extends StatelessWidget {
       default:
         if (cardId.startsWith('journal_')) {
           final entryId = cardId.replaceFirst('journal_', '');
-          final entry = appState.journalEntries.firstWhere((e) => e.id == entryId);
-          cardContent = _buildPinnedJournalCard(context, entry, appState);
+          final entries = appState.journalEntries.where((e) => e.id == entryId);
+          if (entries.isEmpty) return null; // Entry was deleted/purged
+          cardContent = _buildPinnedJournalCard(context, entries.first, appState);
         }
     }
 

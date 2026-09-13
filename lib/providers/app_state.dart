@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/dream.dart';
 import '../models/challenge_step.dart';
 import '../models/travel_memory.dart';
@@ -1269,6 +1270,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       _dreams = results[1] as List<Dream>;
       _travelMemories = results[2] as List<TravelMemory>;
       _journalEntries = results[3] as List<JournalEntry>;
+
+      // Purge the deprecated "Daily Rituals" sample entry for all users —
+      // that checklist use case is now covered by Wellness Intentions.
+      await _purgeDeprecatedEntries();
       _pinnedCardIds = results[4] as List<String>;
       _gardenCells = results[5] as List<int>;
       _negotiationsCompleted = results[6] as int;
@@ -1746,6 +1751,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> deleteJournalEntry(String id) async {
     _journalEntries.removeWhere((e) => e.id == id);
+    // Clean up any Home pin for this entry so the Home tab doesn't
+    // try to render a card for a deleted entry.
+    _pinnedJournalToHomeIds.remove(id);
     await _save();
     notifyListeners();
     await _checkAchievements();
@@ -1979,9 +1987,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     // Filter out demo entries for achievements
-    final userJournalEntries = _journalEntries.where((e) => e.id != 'welcome_note' && e.id != 'daily_rituals').length;
+    final userJournalEntries = _journalEntries.where((e) => e.id != 'welcome_note' && e.id != 'daily_rituals' && e.id != 'example_reflection').length;
     final userTodoItems = _journalEntries
-        .where((e) => e.id != 'welcome_note' && e.id != 'daily_rituals' && e.type == JournalEntryType.todo)
+        .where((e) => e.id != 'welcome_note' && e.id != 'daily_rituals' && e.id != 'example_reflection' && e.type == JournalEntryType.todo)
         .expand((e) => e.todos)
         .where((t) => t.isCompleted)
         .length;
@@ -2151,48 +2159,160 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await _loadData(); // Re-load to get merged results or just to refresh everything
   }
 
+  /// Removes deprecated seeded entries (e.g. "Daily Rituals") and refreshes the
+  /// seeded "welcome" note to its latest copy for existing users. Persists
+  /// changes locally and to Firestore. Idempotent — safe to call every load.
+  Future<void> _purgeDeprecatedEntries() async {
+    const deprecatedIds = {'daily_rituals'};
+    bool changed = false;
+
+    // 1. Remove deprecated entries.
+    final toRemove =
+        _journalEntries.where((e) => deprecatedIds.contains(e.id)).toList();
+    if (toRemove.isNotEmpty) {
+      _journalEntries.removeWhere((e) => deprecatedIds.contains(e.id));
+      _pinnedJournalToHomeIds.removeWhere((id) => deprecatedIds.contains(id));
+      changed = true;
+
+      final uid = _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        for (final entry in toRemove) {
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .collection('journal_entries')
+              .doc(entry.id)
+              .delete()
+              .catchError((e) =>
+                  debugPrint('❌ purgeDeprecatedEntries: ${entry.id}: $e'));
+        }
+      }
+    }
+
+    // 2. Refresh a stale "welcome_note" to the latest copy so existing users
+    //    (who already had the old note seeded) see the new AI Coach content.
+    final idx = _journalEntries.indexWhere((e) => e.id == 'welcome_note');
+    if (idx != -1) {
+      final fresh = _buildWelcomeNote();
+      final current = _journalEntries[idx];
+      if (current.title != fresh.title || current.content != fresh.content) {
+        // Preserve user-controllable state (pin/save) while updating copy.
+        _journalEntries[idx] = fresh.copyWith(
+          isPinned: current.isPinned,
+          isSaved: current.isSaved,
+        );
+        changed = true;
+
+        final uid = _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null && uid.isNotEmpty) {
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .collection('journal_entries')
+              .doc('welcome_note')
+              .set(_journalEntries[idx].toMap())
+              .catchError(
+                  (e) => debugPrint('❌ purge: welcome_note refresh: $e'));
+        }
+      }
+    }
+
+    // 3. Seed the example reflection ONCE for existing users who don't have it.
+    //    Guarded by a one-time flag so we never re-add it if the user later
+    //    deletes it. Brand-new users get it via _addSampleData instead.
+    final prefs = await SharedPreferences.getInstance();
+    const exampleSeededKey = 'example_reflection_seeded';
+    final exampleSeeded = prefs.getBool(exampleSeededKey) ?? false;
+    final seededBefore = await _storage.hasSeedData();
+    if (!exampleSeeded &&
+        seededBefore &&
+        !_journalEntries.any((e) => e.id == 'example_reflection')) {
+      final example = _buildExampleNote();
+      _journalEntries.add(example);
+      changed = true;
+      await prefs.setBool(exampleSeededKey, true);
+
+      final uid = _currentUserId ?? FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .collection('journal_entries')
+            .doc('example_reflection')
+            .set(example.toMap())
+            .catchError((e) => debugPrint('❌ purge: example seed: $e'));
+      }
+    }
+
+    if (changed) {
+      await _storage.saveJournalEntries(_journalEntries);
+    }
+  }
+
+  /// The current copy for the seeded "welcome" reflection. Bump
+  /// [welcomeNoteVersion] whenever this content changes so existing users get
+  /// the refreshed note on next load (see [_purgeDeprecatedEntries]).
+  static const int welcomeNoteVersion = 2;
+
+  static JournalEntry _buildWelcomeNote() => JournalEntry(
+        id: 'welcome_note',
+        title: "AI Wellness Coach",
+        content: "This is your space to talk things through with an AI coach "
+            "focused on your wellbeing. \n\n"
+            "✨ How to use AI Wellness Coach:\n\n"
+            "• Tap the + button to start a new conversation.\n"
+            "• Share what's on your mind — stress, sleep, motivation, habits, "
+            "or anything wellness-related.\n"
+            "• Use the 'Discuss' button on any entry to go deeper with AI.\n\n"
+            "Soon you'll be able to talk out loud and have a natural, "
+            "voice-guided conversation about the topics that matter to you.",
+        type: JournalEntryType.note,
+        color: Colors.purple.shade100.toARGB32(),
+        tags: const ["Welcome", "AI Coach"],
+        mood: "😊",
+        isPinned: true,
+        isSaved: true,
+      );
+
+  /// A worked example reflection showing what a wellness discussion with the
+  /// AI coach can look like. Seeded for new users and refreshed for existing
+  /// ones (see [_purgeDeprecatedEntries]).
+  static JournalEntry _buildExampleNote() => JournalEntry(
+        id: 'example_reflection',
+        title: "Feeling stretched thin lately",
+        content: "I've been feeling a bit overwhelmed this week — too much on "
+            "my plate and my sleep has been off. I want to slow down but I'm "
+            "not sure where to start.",
+        type: JournalEntryType.note,
+        color: Colors.teal.shade100.toARGB32(),
+        tags: const ["Example", "Stress", "Sleep"],
+        mood: "😔",
+        aiInsight: "It sounds like your body is asking for a little more rest "
+            "and space. That's worth listening to. A gentle place to start: "
+            "pick one small wind-down ritual tonight — dim the lights 30 "
+            "minutes before bed, and jot down the three things on your mind so "
+            "they're out of your head. Tomorrow, we could look at trimming one "
+            "commitment together. What feels like the heaviest thing right now?",
+        isSaved: true,
+      );
+
   Future<void> _addSampleData() async {
     // Clear and add to ensure clean state
-    _journalEntries.removeWhere((e) => e.id == 'welcome_note' || e.id == 'daily_rituals');
-    
-    final welcomeNote = JournalEntry(
-      id: 'welcome_note',
-      title: "Welcome to AI Wellness Pal! 🌸",
-      content: "This is your personal space to reflect, dream, and grow. \n\n"
-          "✨ **How to use AI Wellness Pal:**\n"
-          "• Tap the + button to create a new note or list.\n"
-          "• Use the 'Discuss' button on any entry to dive deeper with AI.\n"
-          "• Track your mood to see how your garden grows.\n\n"
-          "We're glad to have you on this journey!",
-      type: JournalEntryType.note,
-      color: Colors.purple.shade100.toARGB32(),
-      tags: ["Welcome", "Guide"],
-      mood: "😊",
-      isPinned: true,
-      isSaved: true,
-    );
+    _journalEntries.removeWhere((e) =>
+        e.id == 'welcome_note' ||
+        e.id == 'daily_rituals' ||
+        e.id == 'example_reflection');
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final dailyRituals = JournalEntry(
-      id: 'daily_rituals',
-      title: "Daily Rituals 🌿",
-      content: "",
-      type: JournalEntryType.todo,
-      color: Colors.green.shade100.toARGB32(),
-      tags: ["Habits", "Routine"],
-      todos: [
-        TodoItem(id: 'ritual_1_$timestamp', text: "Morning Reflection", isCompleted: false),
-        TodoItem(id: 'ritual_2_$timestamp', text: "Drink 2L Water", isCompleted: false),
-        TodoItem(id: 'ritual_3_$timestamp', text: "30-min Movement", isCompleted: false),
-        TodoItem(id: 'ritual_4_$timestamp', text: "Express Gratitude", isCompleted: false),
-      ],
-      mood: "✨",
-      isSaved: true,
-    );
-
-    _journalEntries.addAll([welcomeNote, dailyRituals]);
+    _journalEntries.add(_buildWelcomeNote());
+    _journalEntries.add(_buildExampleNote());
     await _save();
     await _storage.setHasSeedData();
+    // Mark the example as seeded so the existing-user backfill in
+    // _purgeDeprecatedEntries doesn't re-add it.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('example_reflection_seeded', true);
+    } catch (_) {}
     notifyListeners();
   }
 }

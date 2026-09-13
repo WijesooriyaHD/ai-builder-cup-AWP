@@ -14,9 +14,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/wellness_enums.dart';
+import '../models/journal_entry.dart';
 import '../providers/app_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../providers/check_in_state.dart';
+import 'add_journal_entry_screen.dart';
 import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/storage_service.dart';
@@ -421,6 +423,9 @@ class _HomeScreenState extends State<HomeScreen>
                           // 7. Recommended Wellness Studio Session Badge
                           _buildStudioRecommendationBadge(context, planState),
 
+                          // 8. Reflections pinned to Home ("Add to Home")
+                          _buildPinnedJournalSection(context),
+
                           const SizedBox(height: 80),
 
                         ],
@@ -477,6 +482,133 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) {
       setState(() {});
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Section 8: Reflections pinned to Home
+  // ---------------------------------------------------------------------------
+
+  /// Renders the reflection entries the user pinned via "Add to Home".
+  /// Returns an empty box when nothing is pinned.
+  Widget _buildPinnedJournalSection(BuildContext context) {
+    return Consumer<AppState>(
+      builder: (context, appState, _) {
+        final pinned = appState.journalEntries
+            .where((e) => appState.pinnedJournalToHomeIds.contains(e.id))
+            .toList();
+        if (pinned.isEmpty) return const SizedBox.shrink();
+
+        final theme = Theme.of(context);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 24),
+            Text(
+              'Pinned Reflections',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...pinned.map((entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildPinnedJournalCard(context, entry, appState),
+                )),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPinnedJournalCard(
+      BuildContext context, JournalEntry entry, AppState appState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accentColor = Color(entry.color);
+    final preview = entry.content.trim();
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddJournalEntryScreen(entry: entry),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? Theme.of(context).cardColor : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border:
+              Border.all(color: isDark ? Colors.white10 : Colors.grey.shade100),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Color.lerp(accentColor, Colors.black, 0.2) ??
+                        accentColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.auto_stories_rounded,
+                      size: 16, color: Colors.white),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    entry.title.isNotEmpty ? entry.title : 'Reflection',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (entry.mood != null) ...[
+                  const SizedBox(width: 8),
+                  Text(entry.mood!, style: const TextStyle(fontSize: 18)),
+                ],
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    appState.toggleJournalPinToHome(entry.id);
+                    WellnessPalSnackBar.show(context,
+                        message: 'Removed from Home',
+                        icon: Icons.home_outlined);
+                  },
+                  child: Icon(Icons.close_rounded,
+                      size: 18, color: Colors.grey.withOpacity(0.5)),
+                ),
+              ],
+            ),
+            if (preview.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                preview,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------

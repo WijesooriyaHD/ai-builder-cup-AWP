@@ -186,7 +186,7 @@ class _TodayTab extends StatelessWidget {
       }
 
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
         children: [
           _sectionLabel(context, "Today's habits"),
           const SizedBox(height: 10),
