@@ -98,6 +98,9 @@ struct HabitTimelineProvider: TimelineProvider {
 struct HabitWidgetEntryView: View {
     var entry: HabitEntry
 
+    /// Per-widget theme id (independent light/dark).
+    private let wid = "habit"
+
     var body: some View {
         Group {
             if !entry.hasHabits {
@@ -107,10 +110,10 @@ struct HabitWidgetEntryView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            WidgetThemeToggleButton(isDark: widgetThemeIsDark())
+            WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
                 .padding(10)
         }
-        .widgetBackgroundImage("bg_todays_habits")
+        .widgetBackgroundImage("bg_todays_habits", widgetId: wid)
         // Tapping anywhere outside the interactive buttons opens the app on the
         // Habit Builder tab. The `homeWidget` query item is REQUIRED: the
         // home_widget plugin only recognizes a launch URL as a widget URL when
@@ -122,12 +125,12 @@ struct HabitWidgetEntryView: View {
     private var emptyView: some View {
         VStack(spacing: 8) {
             Spacer()
-            WidgetChip {
+            WidgetChip(wid) {
                 VStack(spacing: 6) {
                     Text("📋").font(.title2)
                     Text("No habits for today. Open the app to add some.")
                         .font(.footnote)
-                        .foregroundColor(widgetTextColor())
+                        .foregroundColor(widgetTextColor(wid))
                         .multilineTextAlignment(.center)
                 }
             }
@@ -148,13 +151,13 @@ struct HabitWidgetEntryView: View {
             }
 
             if entry.allDone {
-                WidgetChip {
+                WidgetChip(wid) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.square.fill")
                             .foregroundColor(Color("WidgetPrimary"))
                         Text("All habits done 🎉")
                             .font(.subheadline)
-                            .foregroundColor(widgetSecondaryTextColor())
+                            .foregroundColor(widgetSecondaryTextColor(wid))
                             .lineLimit(1)
                     }
                 }
@@ -184,13 +187,13 @@ struct HabitWidgetEntryView: View {
     private func habitRow(_ row: HabitRow) -> some View {
         #if canImport(AppIntents)
         if #available(iOS 17.0, *) {
-            Button(intent: toggleIntent(for: row)) { WidgetChip { rowContent(row) } }
+            Button(intent: toggleIntent(for: row)) { WidgetChip(wid) { rowContent(row) } }
                 .buttonStyle(.plain)
         } else {
-            WidgetChip { rowContent(row) }
+            WidgetChip(wid) { rowContent(row) }
         }
         #else
-        WidgetChip { rowContent(row) }
+        WidgetChip(wid) { rowContent(row) }
         #endif
     }
 
@@ -204,8 +207,8 @@ struct HabitWidgetEntryView: View {
             }
             Text(row.text)
                 .font(.subheadline)
-                .strikethrough(row.checked, color: widgetSecondaryTextColor())
-                .foregroundColor(row.checked ? widgetSecondaryTextColor() : widgetTextColor())
+                .strikethrough(row.checked, color: widgetSecondaryTextColor(wid))
+                .foregroundColor(row.checked ? widgetSecondaryTextColor(wid) : widgetTextColor(wid))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }

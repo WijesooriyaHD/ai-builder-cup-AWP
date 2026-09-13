@@ -39,7 +39,10 @@ struct LifeToolInfo {
 struct LifeToolWidgetView: View {
     let tool: LifeToolInfo
 
-    private var textColor: Color { widgetTextColor() }
+    /// Per-widget theme id (independent light/dark), namespaced per tool.
+    private var wid: String { "tool_\(tool.id)" }
+
+    private var textColor: Color { widgetTextColor(wid) }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -53,7 +56,11 @@ struct LifeToolWidgetView: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(LifeToolBackground(accent: tool.accent))
+        .overlay(alignment: .topTrailing) {
+            WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
+                .padding(6)
+        }
+        .modifier(LifeToolBackground(accent: tool.accent, widgetId: wid))
         .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_\(tool.id)"))
     }
 }
@@ -63,15 +70,16 @@ struct LifeToolWidgetView: View {
 /// readable in light and dark.
 private struct LifeToolBackground: ViewModifier {
     let accent: Color
+    let widgetId: String
 
     private var base: Color {
-        widgetThemeIsDark()
+        widgetThemeIsDark(widgetId)
             ? Color(red: 0.118, green: 0.145, blue: 0.180)
             : Color.white
     }
 
     /// Soft tint: gentle in light mode, a touch stronger in dark mode.
-    private var tintOpacity: Double { widgetThemeIsDark() ? 0.30 : 0.16 }
+    private var tintOpacity: Double { widgetThemeIsDark(widgetId) ? 0.30 : 0.16 }
 
     @ViewBuilder
     private var fill: some View {

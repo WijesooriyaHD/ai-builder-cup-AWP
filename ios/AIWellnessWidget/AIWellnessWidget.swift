@@ -14,37 +14,42 @@ private let kAppGroup = "group.com.aiwellnesspal.app"
 /// helpers below are usable from every widget file in this extension.
 let kWidgetAppGroup = "group.com.aiwellnesspal.app"
 
-/// Whether the widgets should render in their dark theme. This is driven by a
-/// manual in-widget toggle (see `WidgetThemeToggleButton`) rather than the
-/// system appearance, because WidgetKit does not reliably re-render a placed
-/// widget's cached image rendition when the system light/dark mode changes.
-/// The value is stored in the shared app group under `widget_theme_dark` and
-/// flipped from Dart's `backgroundCallback` (`widget_theme_toggle`).
-func widgetThemeIsDark() -> Bool {
-    UserDefaults(suiteName: kWidgetAppGroup)?.bool(forKey: "widget_theme_dark") ?? false
+/// Whether a specific widget should render in its dark theme. Each widget owns
+/// its own theme, stored in the shared app group under
+/// `widget_theme_dark_<widgetId>` and flipped independently from Dart's
+/// `backgroundCallback` (`widget_theme_toggle?w=<widgetId>`). This is a manual
+/// in-widget toggle (see `WidgetThemeToggleButton`) rather than the system
+/// appearance, because WidgetKit does not reliably re-render a placed widget's
+/// cached image rendition when the system light/dark mode changes.
+func widgetThemeIsDark(_ widgetId: String) -> Bool {
+    UserDefaults(suiteName: kWidgetAppGroup)?.bool(forKey: "widget_theme_dark_\(widgetId)") ?? false
 }
 
-/// Primary text color that follows the manual widget theme (dark text on the
+/// Primary text color that follows a widget's manual theme (dark text on the
 /// light chip, light text on the dark chip). Using a fixed color per theme —
 /// rather than `.primary` — keeps text readable even when the manual theme
 /// differs from the system appearance.
-func widgetTextColor() -> Color {
-    widgetThemeIsDark() ? Color.white : Color(red: 0.11, green: 0.12, blue: 0.15)
+func widgetTextColor(_ widgetId: String) -> Color {
+    widgetThemeIsDark(widgetId) ? Color.white : Color(red: 0.11, green: 0.12, blue: 0.15)
 }
 
-/// Secondary/dimmed text color for the current manual widget theme.
-func widgetSecondaryTextColor() -> Color {
-    widgetThemeIsDark()
+/// Secondary/dimmed text color for a widget's current manual theme.
+func widgetSecondaryTextColor(_ widgetId: String) -> Color {
+    widgetThemeIsDark(widgetId)
         ? Color.white.opacity(0.75)
         : Color(red: 0.11, green: 0.12, blue: 0.15).opacity(0.6)
 }
 
 /// A small sun/moon button, placed in the top-right of each widget, that flips
-/// the manual light/dark theme. Tapping fires the shared `BackgroundIntent`
-/// with the `widget_theme_toggle` URL, which Dart handles by flipping
-/// `widget_theme_dark` and re-pushing the widgets.
+/// THAT widget's manual light/dark theme independently. Tapping fires the
+/// shared `BackgroundIntent` with `widget_theme_toggle?w=<widgetId>`, which
+/// Dart handles by flipping `widget_theme_dark_<widgetId>` and re-pushing only
+/// that widget.
 struct WidgetThemeToggleButton: View {
     var isDark: Bool
+    /// The owning widget's id (e.g. "plan", "intention", "habit",
+    /// "tool_nutrition"). Determines which per-widget theme key is flipped.
+    var widgetId: String
 
     var body: some View {
         #if canImport(AppIntents)
@@ -76,7 +81,9 @@ struct WidgetThemeToggleButton: View {
     #if canImport(AppIntents)
     @available(iOS 17.0, *)
     private func themeToggleIntent() -> BackgroundIntent {
-        let url = URL(string: "aiwellnesspal://widget_theme_toggle")
+        let encoded = widgetId.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed) ?? widgetId
+        let url = URL(string: "aiwellnesspal://widget_theme_toggle?w=\(encoded)")
         return BackgroundIntent(url: url, appGroup: kWidgetAppGroup)
     }
     #endif
@@ -119,17 +126,18 @@ extension View {
     /// `Image` snapshot — so selecting by `colorScheme` here is what makes the
     /// background reliably switch both light→dark and back.
     @ViewBuilder
-    func widgetBackgroundImage(_ baseName: String) -> some View {
-        modifier(WidgetBackgroundImageModifier(baseName: baseName))
+    func widgetBackgroundImage(_ baseName: String, widgetId: String) -> some View {
+        modifier(WidgetBackgroundImageModifier(baseName: baseName, widgetId: widgetId))
     }
 }
 
-/// Picks the light/dark background image from the manual widget theme stored in
-/// the app group (see `widgetThemeIsDark()`), not the system appearance.
+/// Picks the light/dark background image from the owning widget's manual theme
+/// stored in the app group (see `widgetThemeIsDark(_:)`), not system appearance.
 private struct WidgetBackgroundImageModifier: ViewModifier {
     let baseName: String
+    let widgetId: String
 
-    private var asset: String { "\(baseName)_\(widgetThemeIsDark() ? "dark" : "light")" }
+    private var asset: String { "\(baseName)_\(widgetThemeIsDark(widgetId) ? "dark" : "light")" }
 
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
@@ -156,13 +164,18 @@ private struct WidgetBackgroundImageModifier: ViewModifier {
 /// so text painted with `WidgetPrimary` / `.primary` stays legible in both.
 /// Mirrors the Android `widget_chip` drawable.
 struct WidgetChip<Content: View>: View {
+    /// Owning widget id, so the chip fill follows that widget's own theme.
+    let widgetId: String
     let content: Content
-    init(@ViewBuilder _ content: () -> Content) { self.content = content() }
+    init(_ widgetId: String, @ViewBuilder _ content: () -> Content) {
+        self.widgetId = widgetId
+        self.content = content()
+    }
 
-    /// Chosen from the manual widget theme (app group), so it flips together
-    /// with the background image: near-white in light, dark translucent in dark.
+    /// Chosen from the owning widget's manual theme (app group), so it flips
+    /// together with the background: near-white in light, dark in dark.
     private var fill: Color {
-        widgetThemeIsDark()
+        widgetThemeIsDark(widgetId)
             ? Color(red: 0.118, green: 0.145, blue: 0.180).opacity(0.60)
             : Color.white.opacity(0.95)
     }
@@ -283,6 +296,9 @@ struct WellnessTimelineProvider: TimelineProvider {
 struct AIWellnessWidgetEntryView: View {
     var entry: WellnessEntry
 
+    /// Per-widget theme id (independent light/dark).
+    private let wid = "plan"
+
     @Environment(\.widgetFamily) var family
 
     var body: some View {
@@ -294,10 +310,10 @@ struct AIWellnessWidgetEntryView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            WidgetThemeToggleButton(isDark: widgetThemeIsDark())
+            WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
                 .padding(10)
         }
-        .widgetBackgroundImage("bg_todays_plan")
+        .widgetBackgroundImage("bg_todays_plan", widgetId: wid)
         // Tapping anywhere outside the interactive buttons opens the app on the
         // Home (daily plan) tab. `homeWidget` query item required (see
         // HabitWidget for the rationale).
@@ -307,10 +323,10 @@ struct AIWellnessWidgetEntryView: View {
     private var placeholderView: some View {
         VStack {
             Spacer()
-            WidgetChip {
+            WidgetChip(wid) {
                 Text("Open the app to start your wellness day.")
                     .font(.subheadline)
-                    .foregroundColor(widgetTextColor())
+                    .foregroundColor(widgetTextColor(wid))
                     .multilineTextAlignment(.center)
             }
             Spacer()
@@ -330,13 +346,13 @@ struct AIWellnessWidgetEntryView: View {
             }
 
             if entry.allDone {
-                WidgetChip {
+                WidgetChip(wid) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.square.fill")
                             .foregroundColor(Color("WidgetPrimary"))
                         Text("All actions complete 🎉")
                             .font(.subheadline)
-                            .foregroundColor(widgetSecondaryTextColor())
+                            .foregroundColor(widgetSecondaryTextColor(wid))
                             .lineLimit(1)
                     }
                 }
@@ -364,14 +380,14 @@ struct AIWellnessWidgetEntryView: View {
         #if canImport(AppIntents)
         if #available(iOS 17.0, *) {
             Button(intent: toggleIntent(for: task)) {
-                WidgetChip { rowContent(task) }
+                WidgetChip(wid) { rowContent(task) }
             }
             .buttonStyle(.plain)
         } else {
-            WidgetChip { rowContent(task) }
+            WidgetChip(wid) { rowContent(task) }
         }
         #else
-        WidgetChip { rowContent(task) }
+        WidgetChip(wid) { rowContent(task) }
         #endif
     }
 
@@ -397,8 +413,8 @@ struct AIWellnessWidgetEntryView: View {
                 .font(.body)
             Text(task.text)
                 .font(.subheadline)
-                .strikethrough(task.checked, color: widgetSecondaryTextColor())
-                .foregroundColor(task.checked ? widgetSecondaryTextColor() : widgetTextColor())
+                .strikethrough(task.checked, color: widgetSecondaryTextColor(wid))
+                .foregroundColor(task.checked ? widgetSecondaryTextColor(wid) : widgetTextColor(wid))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }

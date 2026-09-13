@@ -98,6 +98,9 @@ struct IntentionTimelineProvider: TimelineProvider {
 struct IntentionWidgetEntryView: View {
     var entry: IntentionEntry
 
+    /// Per-widget theme id (independent light/dark).
+    private let wid = "intention"
+
     var body: some View {
         Group {
             if !entry.hasIntention {
@@ -107,10 +110,10 @@ struct IntentionWidgetEntryView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            WidgetThemeToggleButton(isDark: widgetThemeIsDark())
+            WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
                 .padding(10)
         }
-        .widgetBackgroundImage("bg_wellness_intention")
+        .widgetBackgroundImage("bg_wellness_intention", widgetId: wid)
         // Tapping anywhere outside the interactive buttons opens the app on the
         // Wellness Intentions tab. `homeWidget` query item required (see
         // HabitWidget for the rationale).
@@ -120,12 +123,12 @@ struct IntentionWidgetEntryView: View {
     private var emptyView: some View {
         VStack(spacing: 8) {
             Spacer()
-            WidgetChip {
+            WidgetChip(wid) {
                 VStack(spacing: 6) {
                     Text("🎯").font(.title2)
                     Text("Open the app and pin an intention to see it here.")
                         .font(.footnote)
-                        .foregroundColor(widgetTextColor())
+                        .foregroundColor(widgetTextColor(wid))
                         .multilineTextAlignment(.center)
                 }
             }
@@ -146,13 +149,13 @@ struct IntentionWidgetEntryView: View {
             }
 
             if entry.allDone {
-                WidgetChip {
+                WidgetChip(wid) {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.square.fill")
                             .foregroundColor(Color("WidgetPrimary"))
                         Text("All steps complete 🎉")
                             .font(.subheadline)
-                            .foregroundColor(widgetSecondaryTextColor())
+                            .foregroundColor(widgetSecondaryTextColor(wid))
                             .lineLimit(1)
                     }
                 }
@@ -179,13 +182,13 @@ struct IntentionWidgetEntryView: View {
     private func taskRow(_ task: IntentionTaskRow) -> some View {
         #if canImport(AppIntents)
         if #available(iOS 17.0, *) {
-            Button(intent: toggleIntent(for: task)) { WidgetChip { taskRowContent(task) } }
+            Button(intent: toggleIntent(for: task)) { WidgetChip(wid) { taskRowContent(task) } }
                 .buttonStyle(.plain)
         } else {
-            WidgetChip { taskRowContent(task) }
+            WidgetChip(wid) { taskRowContent(task) }
         }
         #else
-        WidgetChip { taskRowContent(task) }
+        WidgetChip(wid) { taskRowContent(task) }
         #endif
     }
 
@@ -196,8 +199,8 @@ struct IntentionWidgetEntryView: View {
                 .font(.body)
             Text(task.text)
                 .font(.subheadline)
-                .strikethrough(task.checked, color: widgetSecondaryTextColor())
-                .foregroundColor(task.checked ? widgetSecondaryTextColor() : widgetTextColor())
+                .strikethrough(task.checked, color: widgetSecondaryTextColor(wid))
+                .foregroundColor(task.checked ? widgetSecondaryTextColor(wid) : widgetTextColor(wid))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }

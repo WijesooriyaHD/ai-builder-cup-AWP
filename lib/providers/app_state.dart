@@ -704,6 +704,42 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _applySettings(settings);
     notifyListeners();
   }
+  /// Maps a per-widget theme id (used in `widget_theme_toggle?w=<id>`) to the
+  /// widget kind/name understood by `HomeWidget.updateWidget`. The names match
+  /// the iOS widget `kind` strings and the Android receiver class names.
+  static String _widgetKindForThemeId(String id) {
+    switch (id) {
+      case 'plan':
+        return 'AIWellnessWidget';
+      case 'intention':
+        return 'IntentionWidget';
+      case 'habit':
+        return 'HabitWidget';
+      // Life-tool widgets: theme id is `tool_<toolId>`; kind is the tool's
+      // widget struct/receiver name.
+      case 'tool_nutrition':
+        return 'NutritionToolWidget';
+      case 'tool_meal_planner':
+        return 'MealPlannerToolWidget';
+      case 'tool_calorie_budget':
+        return 'CalorieBudgetToolWidget';
+      case 'tool_hydration':
+        return 'HydrationToolWidget';
+      case 'tool_sleep':
+        return 'SleepToolWidget';
+      case 'tool_meditation':
+        return 'MeditationToolWidget';
+      case 'tool_period_tracker':
+        return 'PeriodTrackerToolWidget';
+      case 'tool_weight_tracker':
+        return 'WeightTrackerToolWidget';
+      case 'tool_mindful_travel':
+        return 'MindfulTravelToolWidget';
+      default:
+        return '';
+    }
+  }
+
   @pragma('vm:entry-point')
   static Future<void> backgroundCallback(Uri? uri) async {
     debugPrint('--- Background Callback Triggered: $uri ---');
@@ -716,21 +752,23 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.reload();
 
     if (uri?.host == 'widget_theme_toggle') {
-      // Flip the manual light/dark theme shared by all home-screen widgets.
-      // The Swift widgets read `widget_theme_dark` from the app group to pick
-      // the background image and chip colors.
-      final bool current = prefs.getBool('widget_theme_dark') ?? false;
-      final bool next = !current;
-      await prefs.setBool('widget_theme_dark', next);
-      await HomeWidget.saveWidgetData<bool>('widget_theme_dark', next);
-      debugPrint('Background Widget Theme Toggle -> dark=$next');
-      // Refresh every widget so the new theme is applied immediately.
-      await HomeWidget.updateWidget(
-          name: 'AIWellnessWidget', androidName: 'AIWellnessWidget');
-      await HomeWidget.updateWidget(
-          name: 'IntentionWidget', androidName: 'IntentionWidget');
-      await HomeWidget.updateWidget(
-          name: 'HabitWidget', androidName: 'HabitWidget');
+      // Flip the manual light/dark theme for ONE widget independently. The
+      // widget id arrives as `?w=<id>` (e.g. plan, intention, habit,
+      // tool_nutrition). Each widget reads `widget_theme_dark_<id>` from the
+      // app group to pick its background image and chip colors.
+      final String wid = uri?.queryParameters['w'] ?? '';
+      if (wid.isNotEmpty) {
+        final String key = 'widget_theme_dark_$wid';
+        final bool next = !(prefs.getBool(key) ?? false);
+        await prefs.setBool(key, next);
+        await HomeWidget.saveWidgetData<bool>(key, next);
+        debugPrint('Background Widget Theme Toggle [$wid] -> dark=$next');
+        // Reload only the affected widget kind.
+        final String kind = _widgetKindForThemeId(wid);
+        if (kind.isNotEmpty) {
+          await HomeWidget.updateWidget(name: kind, androidName: kind);
+        }
+      }
     } else if (uri?.host == 'habit_toggle') {
       // Toggle today's completion for a habit from the "Today's Habits" widget.
       final String? habitId = uri?.queryParameters['id'];
