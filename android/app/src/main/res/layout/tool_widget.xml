@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/tool_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/tool_widget_bg"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/tool_emoji"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⭐"
+        android:textSize="34sp" />
+
+    <TextView
+        android:id="@+id/tool_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:text=""
+        android:textColor="@color/widget_text"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+</LinearLayout>

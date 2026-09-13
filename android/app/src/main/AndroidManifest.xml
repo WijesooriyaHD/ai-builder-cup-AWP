@@ -81,6 +81,71 @@
                 android:resource="@xml/habit_widget_info" />
         </receiver>
 
+        <!-- Life-toolkit shortcut widgets (square, tap to open the tool). -->
+        <receiver android:name=".NutritionToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/nutrition_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".MealPlannerToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/meal_planner_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".CalorieBudgetToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/calorie_budget_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".HydrationToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/hydration_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".SleepToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/sleep_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".MeditationToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/meditation_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".PeriodTrackerToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/period_tracker_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".WeightTrackerToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/weight_tracker_tool_widget_info" />
+        </receiver>
+        <receiver android:name=".MindfulTravelToolWidget" android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/mindful_travel_tool_widget_info" />
+        </receiver>
+
         <receiver android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />

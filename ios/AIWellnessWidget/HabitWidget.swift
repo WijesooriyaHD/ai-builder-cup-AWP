@@ -111,6 +111,12 @@ struct HabitWidgetEntryView: View {
                 .padding(10)
         }
         .widgetBackgroundImage("bg_todays_habits")
+        // Tapping anywhere outside the interactive buttons opens the app on the
+        // Habit Builder tab. The `homeWidget` query item is REQUIRED: the
+        // home_widget plugin only recognizes a launch URL as a widget URL when
+        // it contains a query item named `homeWidget` (isWidgetUrl), otherwise
+        // the URL is dropped and the app just opens to its default screen.
+        .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=habit_builder"))
     }
 
     private var emptyView: some View {

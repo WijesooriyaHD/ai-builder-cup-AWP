@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Night overrides for the home-screen widget colors so text stays
+         readable on the dark tile background. -->
+    <color name="widget_background">#FF1E252E</color>
+    <color name="widget_text">#FFFFFFFF</color>
+</resources>

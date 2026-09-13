@@ -8,6 +8,7 @@ import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetBackgroundReceiver
+import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
 /**
@@ -109,18 +110,17 @@ class HabitWidget : HomeWidgetProvider() {
                     setProgressBar(R.id.h_progress_bar, 100, progress, false)
                 }
 
-                // Title/header click opens the app.
-                val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                if (launchIntent != null) {
-                    val pendingIntent = PendingIntent.getActivity(
-                        context,
-                        0,
-                        launchIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    setOnClickPendingIntent(R.id.h_title, pendingIntent)
-                    setOnClickPendingIntent(R.id.h_empty, pendingIntent)
-                }
+                // Title/header click opens the app on the Habit Builder tab.
+                // Uses home_widget's launch intent so the URI is delivered to
+                // Dart via HomeWidget.initiallyLaunchedFromHomeWidget /
+                // widgetClicked, which MainWrapper routes to the right tab.
+                val launchPendingIntent = HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    Uri.parse("aiwellnesspal://open?homeWidget=1&screen=habit_builder")
+                )
+                setOnClickPendingIntent(R.id.h_title, launchPendingIntent)
+                setOnClickPendingIntent(R.id.h_empty, launchPendingIntent)
             }
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

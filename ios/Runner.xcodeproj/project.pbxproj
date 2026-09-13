@@ -23,6 +23,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		ACA279E15DAACB3954C4A7D4 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A1776B61FDFB06E0216236EB /* GoogleService-Info.plist */; };
 		C003F00530551FBC003DA8CB /* HabitWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C003F00430551FBC003DA8CB /* HabitWidget.swift */; };
+		D1F70A11B2C34E5580AA9001 /* LifeToolWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F70A10B2C34E5580AA9000 /* LifeToolWidgets.swift */; };
 		CC1D6085AD2B35397877853F /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EDEEA26F7A3D25F9EB7C5A82 /* Pods_RunnerTests.framework */; };
 		E76A149EAA42327FE2A41CA3 /* BackgroundIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A5E4988C31BB39C17127FA /* BackgroundIntent.swift */; };
 		FBF1F081DA75F384AE7A2C42 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 30731A8EBBB3E8E4B4947C8B /* Pods_Runner.framework */; };
@@ -103,6 +104,7 @@
 		A630E40201891D4E4FF97EA2 /* AIWellnessWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AIWellnessWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7BAC923DC3517B81CCD38A5 /* Pods-AIWellnessWidget.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AIWellnessWidget.debug.xcconfig"; path = "Target Support Files/Pods-AIWellnessWidget/Pods-AIWellnessWidget.debug.xcconfig"; sourceTree = "<group>"; };
 		C003F00430551FBC003DA8CB /* HabitWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitWidget.swift; sourceTree = "<group>"; };
+		D1F70A10B2C34E5580AA9000 /* LifeToolWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeToolWidgets.swift; sourceTree = "<group>"; };
 		C6A5E4988C31BB39C17127FA /* BackgroundIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackgroundIntent.swift; sourceTree = "<group>"; };
 		E89A659E44A08B4481B2EA32 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		EDEEA26F7A3D25F9EB7C5A82 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -155,6 +157,7 @@
 				42ADFA698D16DFD7BFC52CC1 /* AIWellnessWidget.entitlements */,
 				F5B2332C9A29B793CD3A2E5D /* IntentionWidget.swift */,
 				C003F00430551FBC003DA8CB /* HabitWidget.swift */,
+				D1F70A10B2C34E5580AA9000 /* LifeToolWidgets.swift */,
 			);
 			path = AIWellnessWidget;
 			sourceTree = "<group>";
@@ -552,6 +555,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C003F00530551FBC003DA8CB /* HabitWidget.swift in Sources */,
+				D1F70A11B2C34E5580AA9001 /* LifeToolWidgets.swift in Sources */,
 				3C79D2AAC4E54F7B34E805A9 /* AIWellnessWidget.swift in Sources */,
 				E76A149EAA42327FE2A41CA3 /* BackgroundIntent.swift in Sources */,
 				294317FCA0B84B2CFB419147 /* IntentionWidget.swift in Sources */,

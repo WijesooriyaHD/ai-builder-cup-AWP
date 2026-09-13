@@ -298,6 +298,10 @@ struct AIWellnessWidgetEntryView: View {
                 .padding(10)
         }
         .widgetBackgroundImage("bg_todays_plan")
+        // Tapping anywhere outside the interactive buttons opens the app on the
+        // Home (daily plan) tab. `homeWidget` query item required (see
+        // HabitWidget for the rationale).
+        .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=home"))
     }
 
     private var placeholderView: some View {
@@ -421,9 +425,27 @@ struct AIWellnessWidget: Widget {
 
 @main
 struct AIWellnessWidgetBundle: WidgetBundle {
+    @WidgetBundleBuilder
     var body: some Widget {
         AIWellnessWidget()
         IntentionWidget()
         HabitWidget()
+        // Life-toolkit tool widgets (9 small square shortcuts).
+        lifeToolWidgets
+    }
+
+    // Grouped separately so the top-level bundle stays within the
+    // WidgetBundleBuilder arity limit.
+    @WidgetBundleBuilder
+    private var lifeToolWidgets: some Widget {
+        NutritionToolWidget()
+        MealPlannerToolWidget()
+        CalorieBudgetToolWidget()
+        HydrationToolWidget()
+        SleepToolWidget()
+        MeditationToolWidget()
+        PeriodTrackerToolWidget()
+        WeightTrackerToolWidget()
+        MindfulTravelToolWidget()
     }
 }

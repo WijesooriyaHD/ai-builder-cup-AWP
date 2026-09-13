@@ -111,6 +111,10 @@ struct IntentionWidgetEntryView: View {
                 .padding(10)
         }
         .widgetBackgroundImage("bg_wellness_intention")
+        // Tapping anywhere outside the interactive buttons opens the app on the
+        // Wellness Intentions tab. `homeWidget` query item required (see
+        // HabitWidget for the rationale).
+        .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=intentions"))
     }
 
     private var emptyView: some View {

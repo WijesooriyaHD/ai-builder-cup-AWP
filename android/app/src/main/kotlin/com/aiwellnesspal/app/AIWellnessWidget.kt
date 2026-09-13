@@ -8,6 +8,7 @@ import android.net.Uri
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetBackgroundReceiver
+import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
 /**
@@ -82,18 +83,14 @@ class AIWellnessWidget : HomeWidgetProvider() {
                     setProgressBar(R.id.w_progress_bar, 100, progress, false)
                 }
 
-                // Header click opens the app.
-                val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
-                if (launchIntent != null) {
-                    val pendingIntent = PendingIntent.getActivity(
-                        context,
-                        0,
-                        launchIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                    setOnClickPendingIntent(R.id.wellness_focus_label, pendingIntent)
-                    setOnClickPendingIntent(R.id.placeholder_message, pendingIntent)
-                }
+                // Header click opens the app on the Home (daily plan) tab.
+                val launchPendingIntent = HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    Uri.parse("aiwellnesspal://open?homeWidget=1&screen=home")
+                )
+                setOnClickPendingIntent(R.id.wellness_focus_label, launchPendingIntent)
+                setOnClickPendingIntent(R.id.placeholder_message, launchPendingIntent)
             }
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
