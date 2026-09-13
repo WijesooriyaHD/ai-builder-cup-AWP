@@ -653,6 +653,16 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
   }
 
 
+  /// Formats an entry date as e.g. "Sep 13" so it isn't mistaken for a
+  /// fraction/count like "9/13".
+  static String _formatEntryDate(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[d.month - 1]} ${d.day}';
+  }
+
   Widget _buildSavedJournalCard(BuildContext context, JournalEntry entry, AppState appState) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
@@ -763,7 +773,7 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
                    const Spacer(),
                  ],
                  Text(
-                   "${entry.updatedAt.month}/${entry.updatedAt.day}",
+                   _formatEntryDate(entry.updatedAt),
                    style: TextStyle(fontSize: 12, color: Colors.grey),
                  ),
                ],
