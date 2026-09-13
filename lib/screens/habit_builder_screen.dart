@@ -186,7 +186,7 @@ class _TodayTab extends StatelessWidget {
       }
 
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
         children: [
           _sectionLabel(context, "Today's habits"),
           const SizedBox(height: 10),
@@ -203,7 +203,7 @@ class _TodayTab extends StatelessWidget {
   Widget _emptyToday(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 120),
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 88),
       child: Column(
         children: [
           Icon(Icons.checklist_rounded,
@@ -259,7 +259,7 @@ class _AllHabitsTab extends StatelessWidget {
       final paused = state.habits.where((h) => !h.isActive).toList();
 
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
         children: [
           if (active.isNotEmpty) ...[
             _label(context, 'Active'),
@@ -286,7 +286,7 @@ class _AllHabitsTab extends StatelessWidget {
     final theme = Theme.of(context);
     // Keep the Challenges section visible even when there are no habits yet.
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 40, 16, 120),
+      padding: const EdgeInsets.fromLTRB(16, 40, 16, 88),
       children: [
         Column(
           children: [
