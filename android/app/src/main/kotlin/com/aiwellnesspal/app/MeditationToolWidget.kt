@@ -24,6 +24,7 @@ class MeditationToolWidget : HomeWidgetProvider() {
     ) {
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.tool_widget).apply {
+                setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_meditation)
                 setTextViewText(R.id.tool_emoji, "🧘")
                 setTextViewText(R.id.tool_label, "Meditation Pal")
 

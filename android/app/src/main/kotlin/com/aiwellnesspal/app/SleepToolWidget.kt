@@ -24,6 +24,7 @@ class SleepToolWidget : HomeWidgetProvider() {
     ) {
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.tool_widget).apply {
+                setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_sleep)
                 setTextViewText(R.id.tool_emoji, "🌙")
                 setTextViewText(R.id.tool_label, "Sleep Coach")
 

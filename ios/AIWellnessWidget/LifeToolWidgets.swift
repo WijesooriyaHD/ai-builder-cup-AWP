@@ -12,11 +12,26 @@ import SwiftUI
 // recognize the launch URL (see the note in the other widget files). The Dart
 // side (MainWrapper._handleWidgetUri) maps `tool_<id>` to the tool screen.
 
+extension Color {
+    /// Builds a Color from a 6-digit RRGGBB hex string (matches the in-app
+    /// tool accent colors).
+    init(hex: UInt32) {
+        self.init(
+            red: Double((hex >> 16) & 0xFF) / 255.0,
+            green: Double((hex >> 8) & 0xFF) / 255.0,
+            blue: Double(hex & 0xFF) / 255.0
+        )
+    }
+}
+
 /// Static description of a Life-toolkit tool shown as a widget.
 struct LifeToolInfo {
     let id: String
     let emoji: String
     let label: String
+    /// Accent color (matches the in-app "Jump to tool" tile), used as a soft
+    /// tinted background so each widget visually matches its emoji.
+    let accent: Color
 }
 
 /// A single small square tool tile: big emoji + label, on the shared themed
@@ -38,23 +53,34 @@ struct LifeToolWidgetView: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .modifier(LifeToolBackground())
+        .modifier(LifeToolBackground(accent: tool.accent))
         .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_\(tool.id)"))
     }
 }
 
-/// Full-bleed themed background for the tool tiles (reuses the manual light/dark
-/// theme + chip fill used by the other widgets).
+/// Full-bleed soft tinted background for a tool tile: the tool's accent color
+/// blended over the themed base so each widget matches its emoji while staying
+/// readable in light and dark.
 private struct LifeToolBackground: ViewModifier {
-    private var fill: Color {
+    let accent: Color
+
+    private var base: Color {
         widgetThemeIsDark()
             ? Color(red: 0.118, green: 0.145, blue: 0.180)
             : Color.white
     }
 
+    /// Soft tint: gentle in light mode, a touch stronger in dark mode.
+    private var tintOpacity: Double { widgetThemeIsDark() ? 0.30 : 0.16 }
+
+    @ViewBuilder
+    private var fill: some View {
+        base.overlay(accent.opacity(tintOpacity))
+    }
+
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
-            content.containerBackground(fill, for: .widget)
+            content.containerBackground(for: .widget) { fill }
         } else {
             content.background(fill)
         }
@@ -89,7 +115,7 @@ struct LifeToolEntry: TimelineEntry {
 // MARK: - Concrete widgets (one per tool)
 
 struct NutritionToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "nutrition", emoji: "🥗", label: "Nutrition Coach")
+    private let tool = LifeToolInfo(id: "nutrition", emoji: "🥗", label: "Nutrition Coach", accent: Color(hex: 0x57B894))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "NutritionToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -101,7 +127,7 @@ struct NutritionToolWidget: Widget {
 }
 
 struct MealPlannerToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "meal_planner", emoji: "🍽️", label: "Meal Planner")
+    private let tool = LifeToolInfo(id: "meal_planner", emoji: "🍽️", label: "Meal Planner", accent: Color(hex: 0xEF8354))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "MealPlannerToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -113,7 +139,7 @@ struct MealPlannerToolWidget: Widget {
 }
 
 struct CalorieBudgetToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "calorie_budget", emoji: "🔥", label: "Calorie Budget")
+    private let tool = LifeToolInfo(id: "calorie_budget", emoji: "🔥", label: "Calorie Budget", accent: Color(hex: 0xF5A623))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "CalorieBudgetToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -125,7 +151,7 @@ struct CalorieBudgetToolWidget: Widget {
 }
 
 struct HydrationToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "hydration", emoji: "💧", label: "Hydration Coach")
+    private let tool = LifeToolInfo(id: "hydration", emoji: "💧", label: "Hydration Coach", accent: Color(hex: 0x3FA9F5))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "HydrationToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -137,7 +163,7 @@ struct HydrationToolWidget: Widget {
 }
 
 struct SleepToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "sleep", emoji: "🌙", label: "Sleep Coach")
+    private let tool = LifeToolInfo(id: "sleep", emoji: "🌙", label: "Sleep Coach", accent: Color(hex: 0x6C63FF))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "SleepToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -149,7 +175,7 @@ struct SleepToolWidget: Widget {
 }
 
 struct MeditationToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "meditation", emoji: "🧘", label: "Meditation Pal")
+    private let tool = LifeToolInfo(id: "meditation", emoji: "🧘", label: "Meditation Pal", accent: Color(hex: 0x9B59B6))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "MeditationToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -161,7 +187,7 @@ struct MeditationToolWidget: Widget {
 }
 
 struct PeriodTrackerToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "period_tracker", emoji: "🌸", label: "Period Tracker")
+    private let tool = LifeToolInfo(id: "period_tracker", emoji: "🌸", label: "Period Tracker", accent: Color(hex: 0xE9506E))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "PeriodTrackerToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -173,7 +199,7 @@ struct PeriodTrackerToolWidget: Widget {
 }
 
 struct WeightTrackerToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "weight_tracker", emoji: "⚖️", label: "Body Weight")
+    private let tool = LifeToolInfo(id: "weight_tracker", emoji: "⚖️", label: "Body Weight", accent: Color(hex: 0x2ECC71))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "WeightTrackerToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
@@ -185,7 +211,7 @@ struct WeightTrackerToolWidget: Widget {
 }
 
 struct MindfulTravelToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "mindful_travel", emoji: "✈️", label: "Mindful Travel")
+    private let tool = LifeToolInfo(id: "mindful_travel", emoji: "✈️", label: "Mindful Travel", accent: Color(hex: 0x3A7BD5))
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "MindfulTravelToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
             LifeToolWidgetView(tool: entry.tool)
