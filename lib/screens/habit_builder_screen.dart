@@ -194,8 +194,6 @@ class _TodayTab extends StatelessWidget {
           const _SectionDivider(),
           const ChallengeEngineSection(),
           const _SectionDivider(),
-          Center(child: _sectionLabel(context, 'Jump to tool')),
-          const SizedBox(height: 10),
           const _ToolGrid(),
         ],
       );
@@ -226,8 +224,6 @@ class _TodayTab extends StatelessWidget {
           const _SectionDivider(),
           const ChallengeEngineSection(),
           const _SectionDivider(),
-          Center(child: _sectionLabel(context, 'Jump to tool')),
-          const SizedBox(height: 10),
           const _ToolGrid(),
         ],
       ),
@@ -280,8 +276,6 @@ class _AllHabitsTab extends StatelessWidget {
           const _SectionDivider(),
           const ChallengeEngineSection(),
           const _SectionDivider(),
-          Center(child: _label(context, 'Jump to tool')),
-          const SizedBox(height: 10),
           const _ToolGrid(),
         ],
       );
@@ -316,8 +310,6 @@ class _AllHabitsTab extends StatelessWidget {
         const _SectionDivider(),
         const ChallengeEngineSection(),
         const _SectionDivider(),
-        Center(child: _label(context, 'Jump to tool')),
-        const SizedBox(height: 10),
         const _ToolGrid(),
       ],
     );
@@ -662,6 +654,49 @@ class _HabitManageTile extends StatelessWidget {
 }
 
 // =============================================================================
+// Jump-to-tool section header (centered title + Customize Toolkit icon)
+// =============================================================================
+
+/// The "JUMP TO TOOL" section header: a centered uppercase label with a
+/// Customize Toolkit (tune) icon pinned to the right, matching the app bar's
+/// add-icon right spacing. Tapping the icon opens the shared customize sheet;
+/// [onCustomized] lets the parent refresh the grid after the sheet closes.
+class _JumpToToolHeader extends StatelessWidget {
+  final Future<void> Function() onCustomize;
+  const _JumpToToolHeader({required this.onCustomize});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        // Balances the trailing icon so the title stays visually centered.
+        const SizedBox(width: 48),
+        Expanded(
+          child: Center(
+            child: Text(
+              'JUMP TO TOOL',
+              style: theme.textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+                color: theme.colorScheme.onSurface.withOpacity(0.45),
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.tune_rounded),
+          iconSize: 22,
+          color: theme.colorScheme.primary,
+          onPressed: onCustomize,
+          tooltip: 'Customize Toolkit',
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
 // Tool Grid (shortcuts to each wellness tool)
 // =============================================================================
 
@@ -722,6 +757,10 @@ class _ToolGridState extends State<_ToolGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Section header: centered "JUMP TO TOOL" title with the Customize
+        // Toolkit icon on the right.
+        _JumpToToolHeader(onCustomize: _openCustomize),
+        const SizedBox(height: 10),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -734,40 +773,7 @@ class _ToolGridState extends State<_ToolGrid> {
           itemCount: visible.length,
           itemBuilder: (_, i) => _ToolTile(shortcut: visible[i]),
         ),
-        const SizedBox(height: 10),
-        _CustomizeToolkitButton(onPressed: _openCustomize),
       ],
-    );
-  }
-}
-
-/// A "Customize Toolkit" button matching the Life Toolkit section's customize
-/// affordance. Opens the shared Customize Toolkit sheet where the user can
-/// toggle which tools appear — kept in sync with the Life Toolkit screen.
-class _CustomizeToolkitButton extends StatelessWidget {
-  final VoidCallback onPressed;
-  const _CustomizeToolkitButton({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final primary = theme.colorScheme.primary;
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: const Icon(Icons.tune_rounded, size: 18),
-      label: const Text('Customize Toolkit'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: primary,
-        side: BorderSide(color: primary.withOpacity(0.4)),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-        textStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
     );
   }
 }
