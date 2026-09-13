@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../widgets/she_stacks/index.dart';
+import '../widgets/toolkit_customize_sheet.dart';
 import '../providers/app_state.dart';
 import 'package:provider/provider.dart';
 import 'achievement_completion_page.dart';
@@ -32,7 +33,7 @@ class SheStacksScreen extends StatefulWidget {
 }
 
 class _SheStacksScreenState extends State<SheStacksScreen> {
-  static const String _hiddenToolsKey = 'toolkit_hidden_tools';
+  static const String _hiddenToolsKey = ToolkitCustomize.hiddenToolsKey;
 
   /// IDs of tools the user has hidden from the toolkit. Persisted locally.
   Set<String> _hiddenTools = {};
@@ -54,22 +55,6 @@ class _SheStacksScreenState extends State<SheStacksScreen> {
       }
     } catch (e) {
       debugPrint('❌ SheStacks._loadHiddenTools: $e');
-    }
-  }
-
-  Future<void> _setToolVisible(String id, bool visible) async {
-    setState(() {
-      if (visible) {
-        _hiddenTools.remove(id);
-      } else {
-        _hiddenTools.add(id);
-      }
-    });
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_hiddenToolsKey, jsonEncode(_hiddenTools.toList()));
-    } catch (e) {
-      debugPrint('❌ SheStacks._setToolVisible: $e');
     }
   }
 
@@ -166,95 +151,13 @@ class _SheStacksScreenState extends State<SheStacksScreen> {
     return widgets;
   }
 
-  /// Bottom sheet to show/hide toolkit tools, mirroring the home-widget
-  /// customize pattern.
-  void _showCustomizeSheet(BuildContext context, AppState appState) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final entries = _toolkitEntries(appState);
-            return Container(
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color:
-                    isDark ? Theme.of(sheetContext).cardColor : Colors.white,
-                borderRadius: BorderRadius.circular(32),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white24 : Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(24, 20, 24, 4),
-                    child: Text('Customize Toolkit',
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                    child: Text(
-                      'Choose which tools appear in your Life Toolkit.',
-                      style: TextStyle(
-                          color: Colors.grey.shade600, fontSize: 13),
-                    ),
-                  ),
-                  Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.only(bottom: 16),
-                      children: entries.map((e) {
-                        final visible = !_hiddenTools.contains(e.id);
-                        final primary =
-                            Theme.of(sheetContext).colorScheme.primary;
-                        return SwitchListTile(
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 24),
-                          secondary: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: primary.withOpacity(0.1),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(e.icon, color: primary, size: 20),
-                          ),
-                          title: Text(e.label,
-                              style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600)),
-                          value: visible,
-                          activeColor: primary,
-                          onChanged: (val) {
-                            setSheetState(() {});
-                            _setToolVisible(e.id, val);
-                          },
-                          dense: true,
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+  /// Opens the shared Customize Toolkit sheet, then reloads visibility so the
+  /// tool cards refresh. The same sheet is used by the Habit Builder screen, so
+  /// both stay in sync.
+  Future<void> _showCustomizeSheet(
+      BuildContext context, AppState appState) async {
+    await showToolkitCustomizeSheet(context);
+    await _loadHiddenTools();
   }
 
   @override

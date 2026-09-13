@@ -18,6 +18,7 @@ import '../features/sleep/presentation/sleep_coach_screen.dart';
 import 'period_tracker_screen.dart';
 import 'travel_screen.dart';
 import 'weight_tracker_screen.dart';
+import '../widgets/toolkit_customize_sheet.dart';
 
 /// Habit Builder — bottom-nav level screen (index 2).
 ///
@@ -185,7 +186,7 @@ class _TodayTab extends StatelessWidget {
       }
 
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
           _sectionLabel(context, "Today's habits"),
           const SizedBox(height: 10),
@@ -204,7 +205,7 @@ class _TodayTab extends StatelessWidget {
   Widget _emptyToday(BuildContext context) {
     final theme = Theme.of(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 120),
       child: Column(
         children: [
           Icon(Icons.checklist_rounded,
@@ -262,7 +263,7 @@ class _AllHabitsTab extends StatelessWidget {
       final paused = state.habits.where((h) => !h.isActive).toList();
 
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
           if (active.isNotEmpty) ...[
             _label(context, 'Active'),
@@ -291,7 +292,7 @@ class _AllHabitsTab extends StatelessWidget {
     final theme = Theme.of(context);
     // Keep the Challenges section visible even when there are no habits yet.
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 40, 16, 32),
+      padding: const EdgeInsets.fromLTRB(16, 40, 16, 120),
       children: [
         Column(
           children: [
@@ -664,53 +665,120 @@ class _HabitManageTile extends StatelessWidget {
 // Tool Grid (shortcuts to each wellness tool)
 // =============================================================================
 
-class _ToolGrid extends StatelessWidget {
+class _ToolGrid extends StatefulWidget {
   const _ToolGrid();
 
+  @override
+  State<_ToolGrid> createState() => _ToolGridState();
+}
+
+class _ToolGridState extends State<_ToolGrid> {
+  // Ids match ToolkitCustomize.tools so the grid filters on the same
+  // visibility state the Customize Toolkit sheet writes.
   static final List<_ToolShortcut> _tools = [
-    _ToolShortcut('Nutrition\nCoach', '🥗', const Color(0xFF57B894),
+    _ToolShortcut('nutrition', 'Nutrition\nCoach', '🥗', const Color(0xFF57B894),
         const NutritionCoachScreen()),
-    _ToolShortcut('Meal\nPlanner', '🍽️', const Color(0xFFEF8354),
+    _ToolShortcut('meal_planner', 'Meal\nPlanner', '🍽️', const Color(0xFFEF8354),
         const MealPlannerScreen()),
-    _ToolShortcut('Calorie\nBudget', '🔥', const Color(0xFFF5A623),
-        const CalorieBudgetScreen()),
-    _ToolShortcut('Hydration\nCoach', '💧', const Color(0xFF3FA9F5),
+    _ToolShortcut('calorie_budget', 'Calorie\nBudget', '🔥',
+        const Color(0xFFF5A623), const CalorieBudgetScreen()),
+    _ToolShortcut('hydration', 'Hydration\nCoach', '💧', const Color(0xFF3FA9F5),
         const HydrationCoachScreen()),
-    _ToolShortcut('Sleep\nCoach', '🌙', const Color(0xFF6C63FF),
+    _ToolShortcut('sleep', 'Sleep\nCoach', '🌙', const Color(0xFF6C63FF),
         const SleepCoachEntry()),
-    _ToolShortcut('Meditation\nPal', '🧘', const Color(0xFF9B59B6),
+    _ToolShortcut('meditation', 'Meditation\nPal', '🧘', const Color(0xFF9B59B6),
         const MeditationHomeScreen()),
-    _ToolShortcut('Period\nTracker', '🌸', const Color(0xFFE9506E),
+    _ToolShortcut('period', 'Period\nTracker', '🌸', const Color(0xFFE9506E),
         const PeriodTrackerScreen()),
-    _ToolShortcut('Body\nWeight', '⚖️', const Color(0xFF2ECC71),
+    _ToolShortcut('weight', 'Body\nWeight', '⚖️', const Color(0xFF2ECC71),
         const WeightTrackerScreen()),
-    _ToolShortcut('Mindful\nTravel', '✈️', const Color(0xFF3A7BD5),
+    _ToolShortcut('travel', 'Mindful\nTravel', '✈️', const Color(0xFF3A7BD5),
         const TravelScreen()),
   ];
 
+  Set<String> _hidden = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHidden();
+  }
+
+  Future<void> _loadHidden() async {
+    final hidden = await ToolkitCustomize.loadHiddenTools();
+    if (mounted) setState(() => _hidden = hidden);
+  }
+
+  Future<void> _openCustomize() async {
+    await showToolkitCustomizeSheet(context);
+    // Refresh the grid so newly hidden/shown tools are reflected immediately.
+    await _loadHidden();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.1,
+    final visible =
+        _tools.where((t) => !_hidden.contains(t.id)).toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 1.05,
+          ),
+          itemCount: visible.length,
+          itemBuilder: (_, i) => _ToolTile(shortcut: visible[i]),
+        ),
+        const SizedBox(height: 10),
+        _CustomizeToolkitButton(onPressed: _openCustomize),
+      ],
+    );
+  }
+}
+
+/// A "Customize Toolkit" button matching the Life Toolkit section's customize
+/// affordance. Opens the shared Customize Toolkit sheet where the user can
+/// toggle which tools appear — kept in sync with the Life Toolkit screen.
+class _CustomizeToolkitButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _CustomizeToolkitButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: const Icon(Icons.tune_rounded, size: 18),
+      label: const Text('Customize Toolkit'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: primary,
+        side: BorderSide(color: primary.withOpacity(0.4)),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+        textStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
       ),
-      itemCount: _tools.length,
-      itemBuilder: (_, i) => _ToolTile(shortcut: _tools[i]),
     );
   }
 }
 
 class _ToolShortcut {
+  final String id;
   final String label;
   final String emoji;
   final Color color;
   final Widget screen;
-  const _ToolShortcut(this.label, this.emoji, this.color, this.screen);
+  const _ToolShortcut(this.id, this.label, this.emoji, this.color, this.screen);
 }
 
 class _ToolTile extends StatelessWidget {
