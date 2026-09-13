@@ -41,10 +41,12 @@ interface GenerateReflectionPromptsResponse {
 
 // --- Pre-written fallback prompts ---
 
+// Prompts are written in the user's own first-person voice — they are
+// questions the user asks themselves ("my", "I", "me"), never "you"/"your".
 const FALLBACK_PROMPTS: [string, string, string] = [
-  "How are you feeling today?",
-  "Where is your body asking for extra care?",
-  "What would feel supportive today?",
+  "What's weighing on my mind today?",
+  "How have my sleep and energy been lately?",
+  "What would help me feel more balanced right now?",
 ];
 
 /**
@@ -53,14 +55,14 @@ const FALLBACK_PROMPTS: [string, string, string] = [
  */
 const ALTERNATIVE_FALLBACK_SETS: [string, string, string][] = [
   [
-    "What is one small thing you can do for yourself today?",
-    "How does your body feel in this moment?",
-    "What would bring you a sense of calm right now?",
+    "What is one small thing I can do for myself today?",
+    "How does my body feel in this moment?",
+    "What would bring me a sense of calm right now?",
   ],
   [
-    "What are you grateful for about your body today?",
-    "Where could you use a little more rest or gentleness?",
-    "What intention would you like to carry into the rest of your day?",
+    "What am I grateful for about my body today?",
+    "Where could I use a little more rest or gentleness?",
+    "What intention would I like to carry into the rest of my day?",
   ],
 ];
 
@@ -101,12 +103,12 @@ function generatePersonalizedPrompts(
   // Generate contextual prompts based on check-in data
   if (checkIn.moodState) {
     const moodPrompts: Record<string, string> = {
-      calm: "You mentioned feeling calm today. What helped you find that sense of peace?",
-      anxious: "You noted some anxious feelings. What would help you feel grounded right now?",
-      tired: "It sounds like you are feeling tired. What kind of rest would serve you best today?",
-      energized: "You are feeling energized today. How would you like to channel that energy?",
-      stressed: "You mentioned feeling stressed. What is one thing you could release or let go of today?",
-      content: "You are feeling content today. What contributed to that sense of wellbeing?",
+      calm: "I'm feeling calm today. What helped me find that sense of peace?",
+      anxious: "I'm feeling a bit anxious. What would help me feel grounded right now?",
+      tired: "I'm feeling tired. What kind of rest would serve me best today?",
+      energized: "I'm feeling energized today. How would I like to channel that energy?",
+      stressed: "I'm feeling stressed. What is one thing I could release or let go of today?",
+      content: "I'm feeling content today. What contributed to that sense of wellbeing?",
     };
     const moodPrompt = moodPrompts[checkIn.moodState.toLowerCase()];
     if (moodPrompt) {
@@ -116,20 +118,20 @@ function generatePersonalizedPrompts(
 
   if (checkIn.energyScore != null) {
     if (checkIn.energyScore <= 2) {
-      prompts.push("Your energy is on the lower side today. What would feel restorative and gentle for you?");
+      prompts.push("My energy is on the lower side today. What would feel restorative and gentle for me?");
     } else if (checkIn.energyScore >= 4) {
-      prompts.push("You have good energy today. What would you most like to accomplish for your wellbeing?");
+      prompts.push("I have good energy today. What would I most like to do for my wellbeing?");
     } else {
-      prompts.push("How would you like to use your energy today in a way that feels balanced?");
+      prompts.push("How would I like to use my energy today in a way that feels balanced?");
     }
   }
 
   if (checkIn.recoveryStatus) {
     const recoveryPrompts: Record<string, string> = {
-      wellrested: "You are feeling well-rested. What would make today even better?",
-      sore: "Your body is feeling sore. Where could you offer yourself extra kindness today?",
-      fatigued: "You mentioned fatigue. What does your body need most right now?",
-      recovering: "You are in recovery mode. What gentle support would feel good today?",
+      wellrested: "I'm feeling well-rested. What would make today even better?",
+      sore: "My body is feeling sore. Where could I offer myself extra kindness today?",
+      fatigued: "I'm feeling fatigued. What does my body need most right now?",
+      recovering: "I'm in recovery mode. What gentle support would feel good today?",
     };
     const recoveryPrompt = recoveryPrompts[checkIn.recoveryStatus.toLowerCase().replace(/[-_]/g, "")];
     if (recoveryPrompt) {
@@ -141,15 +143,15 @@ function generatePersonalizedPrompts(
   if (intentions.length > 0) {
     const primaryIntention = intentions[0];
     prompts.push(
-      `Thinking about your intention to "${primaryIntention.title}" — what small step feels achievable today?`
+      `Thinking about my intention to "${primaryIntention.title}" — what small step feels achievable today?`
     );
   }
 
   // Fill remaining slots with supportive generic prompts
   const fillerPrompts = [
-    "What would feel supportive today?",
-    "How are you feeling in this moment?",
-    "What is one kind thing you can do for yourself right now?",
+    "What would feel supportive to me today?",
+    "How am I feeling in this moment?",
+    "What is one kind thing I can do for myself right now?",
   ];
 
   let fillerIndex = 0;

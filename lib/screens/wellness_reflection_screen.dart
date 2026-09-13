@@ -109,9 +109,9 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
       if (mounted) {
         setState(() {
           _reflectionPrompts = [
-            'How are you feeling today?',
-            'Where is your body asking for extra care?',
-            'What would feel supportive today?',
+            "What's weighing on my mind today?",
+            'How have my sleep and energy been lately?',
+            'What would help me feel more balanced right now?',
           ];
           _isLoadingPrompts = false;
         });
@@ -1257,6 +1257,50 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
   }
 
 
+  /// A styled block showing the AI reflection insight inside the entry popup.
+  Widget _buildInsightBlock(BuildContext context, String insight) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: primary.withOpacity(isDark ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_rounded, size: 16, color: primary),
+              const SizedBox(width: 8),
+              Text(
+                'Wellness Insight',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            // Pass through ContentSafetyFilter before rendering (Req 8.6).
+            ContentSafetyFilter.sanitize(insight),
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.5,
+              color: isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showViewEntryPopup(BuildContext context, JournalEntry entry, AppState appState) {
     final isInsight = entry.tags.contains("AI Discussion");
     
@@ -1368,9 +1412,24 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
                     child: SingleChildScrollView(
                       controller: scrollController,
                       child: currentEntry.type == JournalEntryType.note
-                          ? Text(
-                              currentEntry.content,
-                              style: const TextStyle(fontSize: 16, height: 1.6),
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (currentEntry.content.trim().isNotEmpty)
+                                  Text(
+                                    currentEntry.content,
+                                    style: const TextStyle(
+                                        fontSize: 16, height: 1.6),
+                                  ),
+                                // AI insight shown in the middle of the popup.
+                                if (currentEntry.aiInsight != null &&
+                                    currentEntry.aiInsight!.trim().isNotEmpty) ...[
+                                  if (currentEntry.content.trim().isNotEmpty)
+                                    const SizedBox(height: 20),
+                                  _buildInsightBlock(
+                                      context, currentEntry.aiInsight!),
+                                ],
+                              ],
                             )
                           : Column(
                               children: currentEntry.todos.map((todo) => Padding(

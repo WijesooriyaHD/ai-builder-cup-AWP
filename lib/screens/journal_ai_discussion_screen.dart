@@ -89,9 +89,16 @@ class _JournalAiDiscussionScreenState extends State<JournalAiDiscussionScreen> {
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
-      WellnessPalSnackBar.show(context,
-          message: "Error connecting to AI: $e", isError: true);
+      // Show the real reason both inline (so the conversation reflects it) and
+      // via a snackbar. `e` is already a friendly Exception message from
+      // AIService.discussJournalEntry.
+      final reason = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _messages.add(ChatMessage(text: reason, isAi: true));
+        _isLoading = false;
+      });
+      _scrollToBottom();
+      WellnessPalSnackBar.show(context, message: reason, isError: true);
     }
   }
 

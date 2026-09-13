@@ -48,9 +48,9 @@ class AIService {
   static const List<String> _validIntensityLevels = ['low', 'medium', 'high'];
 
   static const List<String> _fallbackPrompts = [
-    'How are you feeling today?',
-    'Where is your body asking for extra care?',
-    'What would feel supportive today?',
+    "What's weighing on my mind today?",
+    'How have my sleep and energy been lately?',
+    'What would help me feel more balanced right now?',
   ];
 
   final FirebaseAI _ai;
@@ -532,28 +532,57 @@ Respond ONLY with valid JSON in this exact format:
       final reply = await _generateText(
         buffer.toString(),
         temperature: 0.75,
-        maxOutputTokens: 600,
+        // Gemini 2.5 Flash is a "thinking" model that spends output tokens on
+        // internal reasoning before the visible reply, so a low cap truncates
+        // the answer mid-sentence (finish=maxTokens). Give it ample room; the
+        // system instruction still keeps the visible reply short (2–5 sentences).
+        maxOutputTokens: 2048,
         systemInstruction:
-            'You are a warm, insightful wellness companion inside a journaling '
-            'app. You help the user reflect on their own journal entry through '
-            'a wellness lens — emotional wellbeing, self-care, stress, energy, '
-            'sleep, relationships, and healthy habits. Ground every reply in '
-            'the specific content of their entry and the conversation; never '
-            'give generic filler. Be supportive and non-judgmental, ask one '
-            'gentle follow-up question when useful, and offer small, doable '
-            'suggestions. Do not give medical diagnoses or clinical advice — '
-            'suggest professional support for serious concerns. Reply in plain '
-            'text (short paragraphs, no code fences), 2–5 sentences.',
+            'You are a warm, insightful wellness coach inside a journaling app. '
+            'Your goal is to help the user understand what is really going on '
+            'and move toward practical, wellness-focused help — covering '
+            'emotional wellbeing, stress, sleep, energy, movement, nutrition, '
+            'relationships, and healthy habits.\n'
+            'How to respond:\n'
+            '- Ground every reply in the specific content of their entry and the '
+            'conversation; reference their own words. Never give generic filler.\n'
+            '- Early in the conversation, focus on UNDERSTANDING before advising: '
+            'ask one focused, clarifying question at a time to pinpoint the real '
+            'issue (e.g. what triggered it, when it happens, how it affects sleep '
+            'or energy, what they have already tried).\n'
+            '- Once the picture is clear, offer 1–2 small, concrete, doable '
+            'wellness suggestions tailored to what they shared, and check in on '
+            'how those land.\n'
+            '- Be supportive and non-judgmental. Do not give medical diagnoses or '
+            'clinical advice; gently suggest professional support for serious or '
+            'persistent concerns.\n'
+            '- Reply in plain text (short paragraphs, no code fences), 2–5 '
+            'sentences, and usually end with one gentle question that moves the '
+            'conversation forward.',
         timeout: const Duration(seconds: 20),
       );
       if (reply == null || reply.trim().isEmpty) return null;
       return ContentSafetyFilter.sanitize(reply.trim());
     } on TimeoutException catch (_) {
       debugPrint('⏱️ AIService.discussJournalEntry timed out');
-      return null;
+      throw Exception(
+          'The request timed out. Please check your connection and try again.');
     } catch (e) {
       debugPrint('❌ AIService.discussJournalEntry error: $e');
-      return null;
+      // Surface a clearer reason for the most common failure: Firebase AI Logic
+      // rejects calls when App Check is not satisfied (e.g. an unregistered
+      // debug token), which otherwise shows as a generic "trouble responding".
+      final msg = e.toString();
+      if (msg.contains('App Check') ||
+          msg.contains('app_check') ||
+          msg.contains('attestation') ||
+          msg.contains('PERMISSION_DENIED') ||
+          msg.contains('403')) {
+        throw Exception(
+            'AI is unavailable: App Check verification failed. In debug builds, '
+            'register the printed App Check debug token in the Firebase console.');
+      }
+      rethrow;
     }
   }
 
@@ -588,11 +617,14 @@ $contextBlock
 
 CONSTRAINTS:
 - Each prompt is a single gentle, open-ended question (under 15 words).
+- Write from the USER'S OWN first-person point of view — these are questions
+  the user asks themselves. Use "I", "my", "me" (e.g. "How does my body feel
+  right now?"). Never use "you" or "your".
 - Calm, supportive, non-judgmental tone.
 - Do NOT use clinical or therapeutic language.
 
 Respond ONLY with a JSON array of exactly 3 strings, e.g.:
-["How are you feeling today?", "What would feel supportive?", "Where do you need care?"]''';
+["How does my body feel right now?", "What is draining my energy today?", "What would help me feel more balanced?"]''';
   }
 
   // ---------------------------------------------------------------------------
@@ -618,7 +650,9 @@ Respond ONLY with a JSON array of exactly 3 strings, e.g.:
       final text = await _generateText(
         prompt,
         temperature: 0.7,
-        maxOutputTokens: 200,
+        // Ample room so internal "thinking" tokens don't truncate the visible
+        // insight (Gemini 2.5 Flash). The prompt keeps it to 30–80 words.
+        maxOutputTokens: 1024,
         systemInstruction:
             'You are a supportive wellness companion. Respond only with plain '
             'text, no JSON or formatting.',
@@ -662,6 +696,25 @@ CONSTRAINTS:
 Respond ONLY with the insight text (no JSON, no quotes, no labels). Just the plain text insight.''';
   }
 
+  /// Prompt for a supportive insight about a user's journal REFLECTION (not a
+  /// daily plan). [reflectionSummary] contains the entry title/body.
+  String _buildReflectionInsightPrompt(String reflectionSummary) {
+    return '''You are a supportive wellness companion. The user has written the reflection below. Respond directly to what they shared with a brief, warm, personalized insight.
+
+REFLECTION:
+$reflectionSummary
+
+CONSTRAINTS:
+- Your response must be between 30 and 80 words.
+- Speak to the specifics of what they wrote — acknowledge how they seem to feel and reflect their own words back gently. Do NOT describe a plan or to-do list.
+- Offer one small, encouraging wellness-focused observation or gentle suggestion.
+- Use a calm, supportive, non-judgmental tone. Speak directly to the user using "you" and "your".
+- Do NOT use clinical or therapeutic language (avoid: diagnose, treat, therapy, therapist, disorder, symptom, condition, clinical).
+- Do NOT mention calorie counts, step counts, streaks, or productivity metrics.
+
+Respond ONLY with the insight text (no JSON, no quotes, no labels).''';
+  }
+
   /// Generates a supportive AI insight for a reflection journal entry.
   ///
   /// Enforces a 10-second timeout per Requirement 8.4.
@@ -678,11 +731,13 @@ Respond ONLY with the insight text (no JSON, no quotes, no labels). Just the pla
       }
       summary.writeln('Reflection: $entryContent');
 
-      final prompt = _buildInsightPrompt(summary.toString().trim());
+      final prompt = _buildReflectionInsightPrompt(summary.toString().trim());
       final text = await _generateText(
         prompt,
         temperature: 0.7,
-        maxOutputTokens: 200,
+        // Ample room so the model's internal "thinking" tokens don't truncate
+        // the visible insight (Gemini 2.5 Flash). The prompt keeps it concise.
+        maxOutputTokens: 1024,
         systemInstruction:
             'You are a supportive wellness companion. Respond only with plain '
             'text, no JSON or formatting.',
