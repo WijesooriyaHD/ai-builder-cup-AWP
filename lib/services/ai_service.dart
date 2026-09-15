@@ -814,6 +814,102 @@ Respond ONLY with the insight text (no JSON, no quotes, no labels).''';
   }
 
   // ---------------------------------------------------------------------------
+  // Action "how to" lesson
+  // ---------------------------------------------------------------------------
+
+  /// Generates a friendly, lesson-style walkthrough of HOW to perform a single
+  /// wellness action (e.g. "Pilates core flow"), so the user gets clarity on
+  /// exactly what to do. Grounded in the action's [actionTitle], its
+  /// [category]/[intensity]/[durationMinutes], and — when known — the inferred
+  /// wellness [method] label.
+  ///
+  /// This backs the Premium "How to do this" section on the Action Detail
+  /// screen. Returns the sanitized lesson text, or throws a friendly
+  /// [Exception] on timeout / App Check failure so the UI can surface a clear
+  /// reason (mirrors [discussJournalEntry]).
+  Future<String?> explainAction({
+    required String actionTitle,
+    required String category,
+    required String intensity,
+    required int durationMinutes,
+    String? method,
+  }) async {
+    final buffer = StringBuffer();
+    buffer.writeln('The user wants to learn how to do this wellness action '
+        'from their daily plan:');
+    buffer.writeln('- Action: $actionTitle');
+    if (method != null && method.trim().isNotEmpty) {
+      buffer.writeln('- Wellness method: $method');
+    }
+    buffer.writeln('- Category: $category');
+    buffer.writeln('- Intensity: $intensity');
+    buffer.writeln('- Suggested duration: $durationMinutes minutes');
+    buffer.writeln();
+    buffer.writeln('Teach them, step by step, how to do this action well in '
+        'the suggested time. Keep it practical and easy to follow for a '
+        'beginner.');
+
+    try {
+      final lesson = await _generateText(
+        buffer.toString(),
+        temperature: 0.7,
+        // Gemini 2.5 Flash spends output tokens on internal reasoning before
+        // the visible reply, so give it ample room to avoid mid-lesson
+        // truncation. The system instruction keeps the lesson concise.
+        maxOutputTokens: 2048,
+        systemInstruction:
+            'You are a warm, encouraging personal wellness coach giving a '
+            'short, beginner-friendly lesson on how to perform one wellness '
+            'activity. Talk like a caring, down-to-earth guide.\n'
+            'STRUCTURE:\n'
+            '- Open with one warm sentence framing what the activity is and '
+            'what it is good for.\n'
+            '- Then give clear, numbered steps (a short ordered list) that walk '
+            'the user through doing it in the suggested time.\n'
+            '- End with one or two gentle tips (form, breathing, or how to make '
+            'it easier/harder) and a brief encouraging closing line.\n'
+            'TONE & STYLE:\n'
+            '- Warm, friendly, and genuinely encouraging. Everyday language and '
+            'contractions ("you\'ll", "let\'s"). Simple markdown is fine '
+            '(numbered list, short bold labels); no headings or code fences.\n'
+            'SAFETY & POSITIVITY (must always follow):\n'
+            '- Every instruction must be POSITIVE, gentle, and safe. Only ever '
+            'suggest low-risk, healthy movements/practices suitable for a '
+            'beginner. Remind them to move within a comfortable range and stop '
+            'if anything hurts.\n'
+            '- Never suggest anything that could harm the user\'s health or '
+            'safety — no extreme intensity, fasting, over-exercise, substances, '
+            'or risky positions.\n'
+            '- Do NOT give medical, clinical, or diagnostic advice. If the '
+            'activity may not suit everyone, gently suggest checking with a '
+            'trusted professional.\n'
+            '- Do NOT use clinical or therapeutic language (avoid: diagnose, '
+            'treat, therapy, therapist, disorder, symptom, condition, clinical).',
+        timeout: const Duration(seconds: 20),
+      );
+      if (lesson == null || lesson.trim().isEmpty) return null;
+      return ContentSafetyFilter.sanitize(lesson.trim());
+    } on TimeoutException catch (_) {
+      debugPrint('⏱️ AIService.explainAction timed out');
+      throw Exception(
+          'The request timed out. Please check your connection and try again.');
+    } catch (e) {
+      debugPrint('❌ AIService.explainAction error: $e');
+      final msg = e.toString();
+      if (msg.contains('App Check') ||
+          msg.contains('app_check') ||
+          msg.contains('attestation') ||
+          msg.contains('PERMISSION_DENIED') ||
+          msg.contains('403')) {
+        throw Exception(
+            'AI is unavailable: App Check verification failed. In debug builds, '
+            'register the printed App Check debug token in the Firebase console.');
+      }
+      rethrow;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Weekly summary
   // ---------------------------------------------------------------------------
 
