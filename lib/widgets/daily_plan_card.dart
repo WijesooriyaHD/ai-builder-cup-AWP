@@ -13,6 +13,8 @@ import '../providers/app_state.dart';
 import '../providers/check_in_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../screens/action_detail_screen.dart';
+import '../services/notification_service.dart';
+import '../services/storage_service.dart';
 import '../utils/pro_modal_utils.dart';
 import 'frosted_container.dart';
 
@@ -46,6 +48,16 @@ class _DailyPlanCardState extends State<DailyPlanCard>
   OverlayEntry? _celebrationOverlay;
   Timer? _celebrationTimer;
 
+  final StorageService _storage = StorageService();
+
+  /// The one-time reminder set for today's plan, if any (`[hour, minute]`).
+  /// Null when no reminder is set. Persisted so the alarm icon reflects the
+  /// correct state after switching tabs or restarting the app.
+  List<int>? _reminder;
+
+  /// Date key ("yyyy-MM-dd") the reminder is scoped to, so it clears each day.
+  String get _planDateKey => widget.plan.date.toIso8601String().split('T').first;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +65,17 @@ class _DailyPlanCardState extends State<DailyPlanCard>
       vsync: this,
       duration: const Duration(seconds: 3),
     );
+    _loadReminder();
+  }
+
+  Future<void> _loadReminder() async {
+    try {
+      final stored = await _storage.loadPlanReminder(_planDateKey);
+      if (!mounted || stored == null) return;
+      setState(() => _reminder = stored);
+    } catch (_) {
+      // Non-fatal: absence just shows the reminder as off.
+    }
   }
 
   @override
@@ -225,6 +248,118 @@ class _DailyPlanCardState extends State<DailyPlanCard>
     }
   }
 
+  bool get _hasReminder => _reminder != null;
+
+  String _reminderLabel(BuildContext context) {
+    if (_reminder == null) return '';
+    return TimeOfDay(hour: _reminder![0], minute: _reminder![1]).format(context);
+  }
+
+  /// Opens the reminder flow. If a reminder already exists, offers to edit or
+  /// remove it; otherwise goes straight to the time picker. Mirrors the habit
+  /// builder UX, but schedules a ONE-TIME (non-repeating) reminder for today.
+  Future<void> _onReminderPressed() async {
+    if (_hasReminder) {
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.alarm_on_rounded),
+                title: Text('Reminder at ${_reminderLabel(sheetContext)}'),
+                subtitle: const Text('One-time, today only'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('Change time'),
+                onTap: () => Navigator.pop(sheetContext, 'edit'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.alarm_off_rounded, color: Colors.red),
+                title: const Text('Remove reminder',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () => Navigator.pop(sheetContext, 'remove'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (action == 'remove') {
+        await NotificationService().cancelPlanReminder();
+        await _storage.clearPlanReminder(_planDateKey);
+        if (mounted) setState(() => _reminder = null);
+        return;
+      }
+      if (action != 'edit') return; // dismissed
+    }
+
+    if (!mounted) return;
+    await _pickTimeAndSchedule();
+  }
+
+  Future<void> _pickTimeAndSchedule() async {
+    final initial = _reminder != null
+        ? TimeOfDay(hour: _reminder![0], minute: _reminder![1])
+        : const TimeOfDay(hour: 9, minute: 0);
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: 'Remind me to do this today',
+    );
+    if (picked == null || !mounted) return;
+
+    // A one-time reminder can only be for a time still ahead today.
+    final now = TimeOfDay.now();
+    final pickedMinutes = picked.hour * 60 + picked.minute;
+    final nowMinutes = now.hour * 60 + now.minute;
+    if (pickedMinutes <= nowMinutes) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Please choose a time later today so the reminder can still fire.'),
+        ),
+      );
+      return;
+    }
+
+    // Ensure notification permission before scheduling.
+    final notifier = NotificationService();
+    final granted = await notifier.hasNotificationPermission()
+        ? true
+        : await notifier.requestPermission();
+
+    final scheduled = await notifier.schedulePlanReminderOnce(
+      hour: picked.hour,
+      minute: picked.minute,
+      focusLabel: widget.plan.todaysFocus,
+      assumeAuthorized: granted,
+    );
+
+    // Persist + reflect in the UI only when it actually scheduled.
+    if (scheduled != null) {
+      await _storage.savePlanReminder(_planDateKey, picked.hour, picked.minute);
+      if (mounted) setState(() => _reminder = [picked.hour, picked.minute]);
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          !granted
+              ? 'Reminder saved, but notifications are disabled. Enable them in Settings to be reminded.'
+              : (scheduled == null
+                  ? 'Couldn\'t set that reminder. Please pick a time later today.'
+                  : 'Reminder set for ${picked.format(context)} today.'),
+        ),
+      ),
+    );
+  }
+
   void _onActionCardTapped(WellnessAction action) {
     // Navigate to action detail; back returns to Home in one step (Req 4.4)
     Navigator.of(context).push(
@@ -288,6 +423,25 @@ class _DailyPlanCardState extends State<DailyPlanCard>
             ),
           ),
         ),
+        // One-time reminder (alarm) — off by default, mirrors habit builder.
+        if (!plan.allActionsCompleted)
+          IconButton(
+            onPressed: _onReminderPressed,
+            icon: Icon(
+              _hasReminder ? Icons.alarm_on_rounded : Icons.alarm_add_rounded,
+              color: _hasReminder
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withOpacity(0.4),
+              size: 22,
+            ),
+            tooltip: _hasReminder
+                ? 'Reminder at ${_reminderLabel(context)} (tap to change)'
+                : 'Set a one-time reminder',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            splashRadius: 20,
+          ),
+        if (!plan.allActionsCompleted) const SizedBox(width: 12),
         if (!plan.allActionsCompleted)
           _isRegenerating
               ? const SizedBox(

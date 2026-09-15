@@ -743,6 +743,39 @@ class StorageService {
     return prefs.getString('$_actionLessonKeyPrefix$actionKey');
   }
 
+  // --- TODAY'S PLAN ONE-TIME REMINDER (local only) ---
+  //
+  // Remembers the one-time reminder the user set for a given plan date so the
+  // alarm icon can reflect the "on" state after switching tabs or restarting.
+  // Stored as "HH:mm" under a date-scoped key; a new day naturally has no value.
+  static const String _planReminderKeyPrefix = 'bloom_plan_reminder_';
+
+  Future<void> savePlanReminder(String planDate, int hour, int minute) async {
+    final prefs = await _getPrefs;
+    final value = '${hour.toString().padLeft(2, '0')}:'
+        '${minute.toString().padLeft(2, '0')}';
+    await prefs.setString('$_planReminderKeyPrefix$planDate', value);
+  }
+
+  Future<void> clearPlanReminder(String planDate) async {
+    final prefs = await _getPrefs;
+    await prefs.remove('$_planReminderKeyPrefix$planDate');
+  }
+
+  /// Returns the stored reminder as `[hour, minute]`, or null if none set for
+  /// [planDate].
+  Future<List<int>?> loadPlanReminder(String planDate) async {
+    final prefs = await _getPrefs;
+    final value = prefs.getString('$_planReminderKeyPrefix$planDate');
+    if (value == null) return null;
+    final parts = value.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return [hour, minute];
+  }
+
 
   Future<bool> hasSeedData() async =>
       (await _getPrefs).getBool(_hasSeedDataKey) ?? false;

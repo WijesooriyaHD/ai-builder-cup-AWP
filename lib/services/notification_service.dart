@@ -474,6 +474,88 @@ class NotificationService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Today's Plan reminder (one-time, non-repeating)
+  //
+  // A single, one-shot reminder to do today's wellness plan. Unlike habit /
+  // meditation reminders this does NOT repeat — it fires once at the chosen
+  // time today and is gone. Uses a single fixed id so setting a new time just
+  // replaces the previous one.
+  // ---------------------------------------------------------------------------
+
+  /// Fixed notification id for the one-time Today's Plan reminder.
+  static const int _planReminderNotificationId = 50000;
+
+  /// Schedules a one-time (non-repeating) reminder for today's plan at
+  /// [hour]:[minute] local time. If that time has already passed today, the
+  /// caller should decide how to handle it; here we simply schedule for the
+  /// next occurrence of that wall-clock time today only when it's still ahead.
+  ///
+  /// Returns the resolved [tz.TZDateTime] it was scheduled for, or null if the
+  /// time is in the past today or permission is missing.
+  Future<tz.TZDateTime?> schedulePlanReminderOnce({
+    required int hour,
+    required int minute,
+    String? focusLabel,
+    bool? assumeAuthorized,
+  }) async {
+    if (!_isInitialized) {
+      debugPrint('⚠️ NotificationService not initialized');
+      return null;
+    }
+
+    // Replace any existing plan reminder.
+    await cancelPlanReminder();
+
+    final hasPermission =
+        assumeAuthorized ?? await hasNotificationPermission();
+    if (!hasPermission) {
+      debugPrint('⚠️ Notification permission not granted, skipping plan reminder');
+      return null;
+    }
+
+    final now = tz.TZDateTime.now(tz.local);
+    final scheduled = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
+
+    // One-time within the same day: don't schedule a time already in the past.
+    if (!scheduled.isAfter(now)) {
+      debugPrint('⚠️ Plan reminder time already passed today; not scheduling');
+      return null;
+    }
+
+    final body = (focusLabel != null && focusLabel.trim().isNotEmpty)
+        ? 'Time for your plan: ${focusLabel.trim()} 🌿'
+        : 'Take a moment for today\'s wellness plan. 🌿';
+
+    await _plugin.zonedSchedule(
+      _planReminderNotificationId,
+      'Today\'s Plan reminder ⏰',
+      body,
+      scheduled,
+      _meditationDetails,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: null, // One-shot — never repeats.
+    );
+
+    debugPrint('🔔 One-time plan reminder scheduled for $scheduled');
+    return scheduled;
+  }
+
+  /// Cancels the one-time Today's Plan reminder if scheduled.
+  Future<void> cancelPlanReminder() async {
+    if (!_isInitialized) return;
+    await _plugin.cancel(_planReminderNotificationId);
+  }
+
   /// Computes the next occurrence of [weekday] (1=Mon … 7=Sun) at [hour]:[minute]
   /// in the user's local timezone.
   tz.TZDateTime _nextWeekdayTime(int weekday, int hour, int minute) {
