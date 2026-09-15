@@ -8,6 +8,7 @@ import '../models/wellness_enums.dart';
 import '../models/wellness_method.dart';
 import '../providers/app_state.dart';
 import '../services/ai_service.dart';
+import '../services/storage_service.dart';
 import '../utils/pro_modal_utils.dart';
 import '../utils/wellnesspal_snackbar.dart';
 import '../widgets/frosted_container.dart';
@@ -33,7 +34,34 @@ class _ActionDetailScreenState extends State<ActionDetailScreen> {
   bool _isGeneratingLesson = false;
   String? _lessonError;
 
+  final StorageService _storage = StorageService();
+
   WellnessAction get action => widget.action;
+
+  /// Stable content key for caching the lesson. Uses the action's content
+  /// (title + duration + category + intensity) rather than its [id], so the
+  /// same activity resolves to the same guide even across plan regenerations.
+  String get _actionKey {
+    final raw = '${action.title}|${action.durationMinutes}|'
+        '${action.category.name}|${action.intensityLevel.name}';
+    return raw.toLowerCase().hashCode.toRadixString(16);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCachedLesson();
+  }
+
+  Future<void> _loadCachedLesson() async {
+    try {
+      final cached = await _storage.loadActionLesson(_actionKey);
+      if (!mounted || cached == null || cached.trim().isEmpty) return;
+      setState(() => _lesson = cached);
+    } catch (_) {
+      // Non-fatal: a missing cache just means the user regenerates on demand.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,6 +333,11 @@ class _ActionDetailScreenState extends State<ActionDetailScreen> {
           _lesson = lesson;
         }
       });
+
+      // Persist so the guide survives tab switches / app restarts.
+      if (lesson != null && lesson.trim().isNotEmpty) {
+        await _storage.saveActionLesson(_actionKey, lesson);
+      }
     } catch (e) {
       if (!mounted) return;
       final reason = e.toString().replaceFirst('Exception: ', '');

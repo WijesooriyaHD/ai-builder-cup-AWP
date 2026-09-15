@@ -725,6 +725,24 @@ class StorageService {
   Future<String?> loadWidgetIntentionId() async =>
       (await SharedPreferences.getInstance()).getString(_widgetIntentionIdKey);
 
+  // --- ACTION "HOW TO" LESSONS (local only) ---
+  //
+  // Caches AI-generated "how to do this" walkthroughs for a wellness action,
+  // keyed by a stable content key (see ActionDetailScreen). Persisting locally
+  // keeps the guide available when the user switches tabs or restarts the app,
+  // without re-calling the model.
+  static const String _actionLessonKeyPrefix = 'bloom_action_lesson_';
+
+  Future<void> saveActionLesson(String actionKey, String lesson) async {
+    final prefs = await _getPrefs;
+    await prefs.setString('$_actionLessonKeyPrefix$actionKey', lesson);
+  }
+
+  Future<String?> loadActionLesson(String actionKey) async {
+    final prefs = await _getPrefs;
+    return prefs.getString('$_actionLessonKeyPrefix$actionKey');
+  }
+
 
   Future<bool> hasSeedData() async =>
       (await _getPrefs).getBool(_hasSeedDataKey) ?? false;
