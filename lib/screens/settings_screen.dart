@@ -11,6 +11,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../providers/app_state.dart';
 import '../providers/check_in_state.dart';
 import '../providers/personalization_state.dart';
+import '../models/wellness_method.dart';
 import '../providers/wellness_plan_state.dart';
 import '../services/auth_service.dart';
 import '../services/voice_command_service.dart';
@@ -118,6 +119,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context,
                 title: "AI Voice",
                 child: _buildAiVoiceSelector(context, appState),
+              ),
+              const SizedBox(height: 16),
+
+              _buildCard(
+                context,
+                title: "Preferred Wellness Methods",
+                child: _WellnessMethodsSelector(appState: appState),
               ),
               const SizedBox(height: 16),
 
@@ -1684,5 +1692,148 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Storage folder may not exist — that's fine
       debugPrint('Storage cleanup note: $e');
     }
+  }
+}
+
+/// Settings section letting the user customize their preferred wellness
+/// methods at any time. Minimum 3 required to save (no maximum). Changes are
+/// persisted via [AppState.setPreferredMethods] and immediately influence
+/// future Today's Plan generation — no need to repeat onboarding.
+class _WellnessMethodsSelector extends StatefulWidget {
+  final AppState appState;
+  const _WellnessMethodsSelector({required this.appState});
+
+  @override
+  State<_WellnessMethodsSelector> createState() =>
+      _WellnessMethodsSelectorState();
+}
+
+class _WellnessMethodsSelectorState extends State<_WellnessMethodsSelector> {
+  late Set<String> _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.appState.preferredMethods.toSet();
+  }
+
+  bool get _meetsMin => _selected.length >= kMinWellnessMethods;
+
+  /// Whether the current selection differs from what's already saved.
+  bool get _isDirty {
+    final saved = widget.appState.preferredMethods.toSet();
+    return !(saved.length == _selected.length &&
+        saved.containsAll(_selected));
+  }
+
+  void _toggle(String id) {
+    setState(() {
+      if (_selected.contains(id)) {
+        _selected.remove(id);
+      } else {
+        _selected.add(id);
+      }
+    });
+  }
+
+  void _save() {
+    if (!_meetsMin) return;
+    widget.appState.setPreferredMethods(_selected.toList());
+    FocusScope.of(context).unfocus();
+    WellnessPalSnackBar.show(context, message: 'Wellness preferences saved');
+    setState(() {}); // Refresh dirty state.
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final count = _selected.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Choose the wellness approaches you enjoy most. We\'ll prioritize '
+          'them when creating your daily plans.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurface.withOpacity(0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _meetsMin
+              ? '$count method${count == 1 ? '' : 's'} selected'
+              : 'Select at least $kMinWellnessMethods wellness methods.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: _meetsMin ? theme.colorScheme.primary : theme.colorScheme.error,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: kWellnessMethods.map((method) {
+            final isSelected = _selected.contains(method.id);
+            return GestureDetector(
+              onTap: () => _toggle(method.id),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outline.withOpacity(0.3),
+                    width: isSelected ? 2 : 1,
+                  ),
+                  color: isSelected
+                      ? theme.colorScheme.primary.withOpacity(0.08)
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      method.icon,
+                      size: 18,
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      method.label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    if (isSelected) ...[
+                      const SizedBox(width: 6),
+                      Icon(Icons.check_circle,
+                          size: 16, color: theme.colorScheme.primary),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: (_meetsMin && _isDirty) ? _save : null,
+            child: const Text('Save preferences'),
+          ),
+        ),
+      ],
+    );
   }
 }

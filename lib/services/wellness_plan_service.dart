@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/daily_plan.dart';
 import '../models/wellness_enums.dart';
+import '../models/wellness_method.dart';
 
 /// Service responsible for loading, saving, and managing Daily Wellness Plans.
 ///
@@ -162,7 +163,12 @@ class WellnessPlanService {
   ///
   /// The [timeRange] should be one of the [AvailableTimeRange] enum `.name`
   /// values (e.g., "under10", "range10_20", etc.).
-  Future<DailyPlan> selectFallbackPlan(int energyTier, String timeRange, {String? excludeId}) async {
+  Future<DailyPlan> selectFallbackPlan(
+    int energyTier,
+    String timeRange, {
+    String? excludeId,
+    List<String> preferredMethods = const [],
+  }) async {
     final plans = await _loadFallbackPlans();
 
     // Step 1: Filter by energy tier
@@ -201,6 +207,31 @@ class WellnessPlanService {
             .toList();
         if (expandedFiltered.isNotEmpty) {
           finalCandidates = expandedFiltered;
+        }
+      }
+    }
+
+    // Step 3b: Prefer plans whose actions match the user's preferred wellness
+    // methods (by keyword). Only narrows when at least one candidate matches,
+    // so behavior is unchanged when no method-matching plan exists.
+    if (preferredMethods.isNotEmpty) {
+      final keywords = <String>[];
+      for (final id in preferredMethods) {
+        final method = wellnessMethodById(id);
+        if (method != null) keywords.addAll(method.keywords);
+      }
+      if (keywords.isNotEmpty) {
+        final methodMatches = finalCandidates.where((p) {
+          final actions = (p['actions'] as List?) ?? const [];
+          for (final a in actions) {
+            final title =
+                (a is Map ? (a['title']?.toString() ?? '') : '').toLowerCase();
+            if (keywords.any((k) => title.contains(k))) return true;
+          }
+          return false;
+        }).toList();
+        if (methodMatches.isNotEmpty) {
+          finalCandidates = methodMatches;
         }
       }
     }

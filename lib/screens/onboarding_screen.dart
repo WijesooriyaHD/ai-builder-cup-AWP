@@ -11,7 +11,9 @@ import 'package:country_picker/country_picker.dart';
 import '../models/wellness_enums.dart';
 import '../features/meal_planner/domain/meal_planner_models.dart';
 import '../models/wellness_intention.dart';
+import '../models/wellness_method.dart';
 import '../models/check_in.dart';
+import '../providers/app_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../widgets/frosted_container.dart';
 import '../theme/app_theme.dart';
@@ -66,6 +68,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // Step 3: Intentions
   final Set<_IntentionOption> _selectedIntentions = {};
 
+  // Step 4: Preferred wellness methods (stable ids; minimum 3, no maximum).
+  final Set<String> _selectedMethods = {};
+
   // Loading state for completion
   bool _isCompleting = false;
 
@@ -97,7 +102,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _loadPersistedStep() async {
     final prefs = await SharedPreferences.getInstance();
     final savedStep = prefs.getInt(_onboardingStepKey) ?? 0;
-    if (savedStep > 0 && savedStep < 5) {
+    if (savedStep > 0 && savedStep < 6) {
       setState(() {
         _currentStep = savedStep;
       });
@@ -116,7 +121,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goToNextStep() {
-    if (_currentStep < 4) {
+    if (_currentStep < 5) {
       final nextStep = _currentStep + 1;
       _pageController.animateToPage(
         nextStep,
@@ -158,8 +163,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return _selectedIntentions.isNotEmpty;
   }
 
+  bool get _canProceedFromStep4 {
+    // Minimum 3 preferred wellness methods, no maximum.
+    return _selectedMethods.length >= kMinWellnessMethods;
+  }
+
   bool get _canComplete {
-    return _selectedIntentions.isNotEmpty && !_isCompleting;
+    return _selectedIntentions.isNotEmpty &&
+        _canProceedFromStep4 &&
+        !_isCompleting;
   }
 
   Future<void> _completeOnboarding() async {
@@ -181,6 +193,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final mealPlannerProfile =
           UserProfile(nationality: _nationality, gender: _gender).toMap();
 
+      final preferredMethods = _selectedMethods.toList();
+
       // Write user profile data to Firestore
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'display_name': displayName,
@@ -188,6 +202,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'nationality': _nationality,
         'gender': _gender,
         'meal_planner_profile': mealPlannerProfile,
+        'preferred_methods': preferredMethods,
         'onboarding_completed': true,
         'onboarding_completed_at': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -225,6 +240,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_onboardingStepKey);
 
+      // Persist preferred methods into local + cloud settings via AppState so
+      // the single source of truth (used by Today's Plan) is populated
+      // immediately, and future plans personalize from day one.
+      if (mounted) {
+        context.read<AppState>().setPreferredMethods(preferredMethods);
+      }
+
       // Trigger plan generation (10s path with fallback per Req 1.8/1.9)
       if (mounted) {
         final planState = context.read<WellnessPlanState>();
@@ -237,6 +259,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           uid,
           emptyCheckIn,
           intentions: createdIntentions,
+          preferredMethods: preferredMethods,
         );
       }
 
@@ -274,7 +297,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Row(
-                children: List.generate(5, (index) {
+                children: List.generate(6, (index) {
                   return Expanded(
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -300,6 +323,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   _buildNameStep(theme),
                   _buildAgeRangeStep(theme),
                   _buildIntentionsStep(theme),
+                  _buildPreferredMethodsStep(theme),
                   _buildCompletionStep(theme),
                 ],
               ),
@@ -749,7 +773,152 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ─── Step 4: Completion ─────────────────────────────────────────────
+  // ─── Step 4: Preferred wellness methods ─────────────────────────────
+
+  Widget _buildPreferredMethodsStep(ThemeData theme) {
+    final count = _selectedMethods.length;
+    final meetsMin = count >= kMinWellnessMethods;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 32),
+          Text(
+            'Choose your preferred wellness methods',
+            style: theme.textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Choose the wellness approaches you enjoy most. '
+            'We\'ll prioritize them when creating your daily plans.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            meetsMin
+                ? '$count method${count == 1 ? '' : 's'} selected'
+                : 'Select at least $kMinWellnessMethods wellness methods.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: meetsMin
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.error,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: FrostedContainer(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ListView.builder(
+                  itemCount: kWellnessMethods.length,
+                  itemBuilder: (context, index) {
+                    final method = kWellnessMethods[index];
+                    final isSelected = _selectedMethods.contains(method.id);
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Semantics(
+                        button: true,
+                        selected: isSelected,
+                        label:
+                            'Wellness method: ${method.label}${isSelected ? ", selected" : ""}',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedMethods.remove(method.id);
+                                } else {
+                                  _selectedMethods.add(method.id);
+                                }
+                              });
+                            },
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.borderRadius / 2),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(
+                                    AppTheme.borderRadius / 2),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.outline
+                                          .withOpacity(0.3),
+                                  width: isSelected ? 2 : 1,
+                                ),
+                                color: isSelected
+                                    ? theme.colorScheme.primary
+                                        .withOpacity(0.08)
+                                    : null,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    method.icon,
+                                    color: isSelected
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurface
+                                            .withOpacity(0.7),
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      method.label,
+                                      style: theme.textTheme.bodyLarge?.copyWith(
+                                        fontWeight: isSelected
+                                            ? FontWeight.w600
+                                            : FontWeight.normal,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    Icon(
+                                      Icons.check_circle,
+                                      color: theme.colorScheme.primary,
+                                      size: 22,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _goToPreviousStep,
+                child: const Text('Back'),
+              ),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: _canProceedFromStep4 ? _goToNextStep : null,
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  // ─── Step 5: Completion ─────────────────────────────────────────────
 
   Widget _buildCompletionStep(ThemeData theme) {
     return Padding(

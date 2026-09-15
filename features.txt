@@ -1,0 +1,809 @@
+Implement a complete Preferred Wellness Methods + Premium Personalized Today’s Plan feature in AI Wellness Pal.
+
+The goal is to make Today’s Plan feel like a personalized wellness coach centered around the user’s preferred wellness methods such as Pilates, Yoga, Walking, Stretching, Mobility, Meditation, etc.
+
+Do NOT create a separate or duplicate Today’s Plan system. Extend the existing Today’s Plan generation architecture, state management, models, persistence, Gemini prompt, validation, fallback logic, and UI.
+
+Before making changes, inspect the existing codebase and identify the current implementations for:
+
+* User profile/model
+* Registration/onboarding
+* Profile Settings
+* Daily Check-in
+* WellnessPlanState
+* AIService
+* generatePlan(...)
+* _buildPlanPrompt
+* _enforcePlanConstraints
+* Recent plan history
+* Cycle context
+* Travel context
+* Premium/subscription state
+* All 9 Life Toolkit tools and their available data
+* Existing fallback plans
+* Existing Home Today’s Plan card
+* Home-screen widget integration
+
+Reuse the existing architecture wherever possible. Do not create duplicate providers, services, models, or persistence systems unnecessarily.
+
+⸻
+
+1. Preferred Wellness Methods — Onboarding
+
+Add a new onboarding step:
+
+Choose Your Preferred Wellness Methods
+
+Description:
+
+“Choose the wellness approaches you enjoy most. We’ll prioritize them when creating your daily plans.”
+
+Display selectable cards for:
+
+* Pilates
+* Yoga
+* Walking
+* Mobility
+* Stretching
+* Strength Training
+* Recovery & Relaxation
+* Meditation
+* Breathing Exercises
+* Mindful Movement
+
+Each method should have an appropriate icon and use the existing AI Wellness Pal design system.
+
+Selection Rules
+
+The user must select at least 3 methods.
+
+There is NO maximum selection limit.
+
+Users can select:
+
+* 3 methods
+* 4 methods
+* 5 methods
+* 6 methods
+* Or more
+
+Do not restrict users to exactly 3.
+
+The Continue button must remain disabled until at least 3 methods are selected.
+
+Display the number selected, for example:
+
+“3 methods selected”
+
+or:
+
+“6 methods selected”
+
+If fewer than 3 are selected, show:
+
+“Select at least 3 wellness methods.”
+
+If the user selects more than 3, there should be no warning or error.
+
+Users should be able to freely select and deselect methods.
+
+However, prevent the user from saving/continuing if the final selection contains fewer than 3 methods.
+
+Use:
+
+* Clear selected/unselected states
+* Smooth selection animations
+* Accessible touch targets
+* Light Mode
+* Dark Mode
+* Existing AI Wellness Pal typography, spacing, cards, and visual language
+
+⸻
+
+2. Store Preferred Wellness Methods
+
+Persist the selected methods in the user’s profile using stable identifiers.
+
+Example:
+
+{
+  "preferredMethods": [
+    "pilates",
+    "yoga",
+    "stretching",
+    "walking",
+    "mobility"
+  ]
+}
+
+Do not depend on display names for internal logic.
+
+Use stable IDs/enums such as:
+
+* pilates
+* yoga
+* walking
+* mobility
+* stretching
+* strength_training
+* recovery_relaxation
+* meditation
+* breathing
+* mindful_movement
+
+Follow the project’s existing data-model and Firebase persistence conventions.
+
+⸻
+
+3. Profile Settings
+
+Add:
+
+Profile → Settings → Wellness Preferences
+
+Create a section:
+
+Preferred Wellness Methods
+
+Show all available methods and clearly indicate the user’s current selections.
+
+Users must be able to customize their preferences at any time.
+
+Selection rules remain:
+
+* Minimum: 3
+* Maximum: None
+
+The user can select as many methods as they want.
+
+Do not force the user back to exactly 3.
+
+The Save button should be disabled if fewer than 3 methods are selected.
+
+Show:
+
+“Select at least 3 wellness methods.”
+
+when necessary.
+
+Changes should immediately affect future Today’s Plan generation.
+
+The user should NOT need to repeat onboarding.
+
+⸻
+
+4. Today’s Plan — Extend Existing Pipeline
+
+Extend the existing Today’s Plan generation pipeline.
+
+Do not replace the current system.
+
+Today’s Plan should continue using:
+
+Existing Inputs
+
+* Daily Check-in
+* Wellness Intentions
+* Recent Plan History
+* Cycle Context, when available
+* Travel Context, when available
+
+New Input
+
+* Preferred Wellness Methods
+
+Premium-only Input
+
+* Relevant data from the 9 Life Toolkit tools
+
+The final planning context is:
+
+Daily Check-in
++
+Wellness Intentions
++
+Recent History
++
+Preferred Wellness Methods
++
+Optional Cycle Context
++
+Optional Travel Context
++
+Premium Life Toolkit Data
+↓
+Gemini
+↓
+Constraint Validation
+↓
+Today's Plan
+
+⸻
+
+5. Preferred Wellness Methods — AI Behavior
+
+Preferred Wellness Methods should become a strong personalization signal.
+
+However, selecting many methods does NOT mean the AI must use every method in one day’s plan.
+
+For example, a user may select:
+
+* Pilates
+* Yoga
+* Walking
+* Stretching
+* Mobility
+* Meditation
+* Breathing
+
+Gemini should treat these as the user’s preferred wellness toolkit.
+
+For each individual day, select the most appropriate method(s) based on:
+
+1. Daily Check-in
+2. Energy
+3. Mood
+4. Recovery
+5. Available time
+6. Wellness Intentions
+7. Recent Plan History
+8. Preferred Wellness Methods
+9. Premium Life Toolkit data, if applicable
+
+The AI should maintain variety across the user’s preferred methods.
+
+Do not repeatedly generate the same method if other preferred methods are suitable.
+
+⸻
+
+6. Example Preferred Method Behavior
+
+If the user prefers:
+
+* Pilates
+* Yoga
+* Stretching
+
+and has:
+
+Energy: 2/5
+Recovery: Sore
+Available time: 20 minutes
+
+Possible recommendations:
+
+* Gentle Pilates Breathing Flow
+* Restorative Yoga Flow
+* Full Body Stretch
+
+Avoid:
+
+* HIIT
+* High-intensity circuits
+* Advanced strength training
+
+If the user has:
+
+Energy: 5/5
+Recovery: Well-rested
+Available time: 40 minutes
+
+Possible recommendations:
+
+* Dynamic Pilates Core Flow
+* Power Yoga Flow
+* Mobility & Strength Session
+
+The AI must still obey all existing safety and time constraints.
+
+⸻
+
+7. Recent History
+
+Continue using the existing recent plan history, preferably the last 7 days.
+
+Use it to understand:
+
+* Previously recommended actions
+* Completed actions
+* Skipped actions
+* Recently used wellness methods
+
+Use this information to prevent unnecessary repetition.
+
+For example, if the user prefers:
+
+* Pilates
+* Yoga
+* Walking
+* Stretching
+
+A possible sequence could be:
+
+Monday:
+Pilates
+
+Tuesday:
+Yoga
+
+Wednesday:
+Walking
+
+Thursday:
+Stretching
+
+Friday:
+Pilates
+
+The AI should prioritize the user’s preferred methods while maintaining variety.
+
+Do not repeatedly generate the exact same action unless there is a good reason.
+
+⸻
+
+8. Daily Check-in
+
+Continue using the existing check-in information:
+
+* Energy: 1–5
+* Mood
+* Recovery status
+* Available time
+
+The check-in must influence the intensity and type of Today’s Plan.
+
+For low energy/recovery:
+
+Prefer:
+
+* Gentle Pilates
+* Restorative Yoga
+* Stretching
+* Mobility
+* Breathing
+* Recovery
+
+For higher energy:
+
+Appropriate higher-intensity activities can be considered while still respecting the user’s preferences and available time.
+
+⸻
+
+9. Cycle Context
+
+Keep Cycle Context optional.
+
+If the user has enabled cycle-aware recommendations and relevant data exists, it can be included as an additional planning signal.
+
+Do NOT make cycle tracking mandatory during onboarding.
+
+If no cycle information is available, do not include Cycle Context in the Gemini prompt.
+
+⸻
+
+10. Travel Context
+
+Keep Travel Context optional.
+
+If relevant travel information exists, use it to adapt the Today’s Plan.
+
+For example, during travel:
+
+* Bodyweight Pilates
+* Yoga
+* Walking
+* Mobility
+* Stretching
+
+may be preferred over equipment-dependent activities.
+
+If no travel context exists, exclude it from the Gemini prompt.
+
+⸻
+
+11. Premium Life Toolkit Personalization
+
+AI Wellness Pal contains 9 tools/features in the Life Toolkit.
+
+Data from these tools can provide additional context for Today’s Plan.
+
+IMPORTANT:
+
+Using Life Toolkit data for Today’s Plan generation is a PREMIUM USER FEATURE.
+
+Today’s Plan itself must NOT become Premium-only.
+
+Free users should still receive a useful, personalized Today’s Plan.
+
+The Premium benefit is deeper personalization using Life Toolkit data.
+
+⸻
+
+12. Free User Today’s Plan
+
+For Free users, Today’s Plan may use:
+
+* Daily Check-in
+* Wellness Intentions
+* Recent History
+* Preferred Wellness Methods
+* Cycle Context, when available
+* Travel Context, when available
+
+Do NOT include Life Toolkit data in the Gemini request for Free users.
+
+The Life Toolkit data must be excluded BEFORE the Gemini prompt is constructed.
+
+Do not send Life Toolkit data to Gemini and simply tell Gemini to ignore it.
+
+⸻
+
+13. Premium User Today’s Plan
+
+For Premium users, Today’s Plan may use:
+
+* Daily Check-in
+* Wellness Intentions
+* Recent History
+* Preferred Wellness Methods
+* Cycle Context, when available
+* Travel Context, when available
+* Relevant data from the 9 Life Toolkit tools
+
+Before building the Gemini prompt:
+
+1. Determine whether the user has an active Premium entitlement.
+2. If Premium, collect relevant available Life Toolkit data.
+3. If Free, exclude all Life Toolkit data.
+
+Use the project’s existing subscription/entitlement architecture.
+
+Do not create a second subscription system.
+
+⸻
+
+14. Intelligent Use of the 9 Life Toolkit
+
+For Premium users, do NOT blindly send all data from all 9 tools to Gemini.
+
+Only include data that can meaningfully improve Today’s Plan.
+
+The AI should use relevant information intelligently.
+
+Examples:
+
+Nutrition
+
+Relevant nutrition information may influence:
+
+* Energy-supporting recommendations
+* Recovery
+* Wellness-related actions
+
+Do not force nutrition data into every plan.
+
+Hydration
+
+If hydration is behind target, the plan may include:
+
+* Hydration reminder
+* Water break
+* Light movement + hydration break
+
+Sleep
+
+If recent sleep data indicates poor sleep:
+
+Prefer:
+
+* Gentle Pilates
+* Restorative Yoga
+* Mobility
+* Stretching
+* Breathing
+* Recovery
+
+and reduce unnecessary intensity.
+
+If sleep is good, normal activity can be considered alongside check-in data.
+
+Activity
+
+Use recent activity to:
+
+* Avoid unnecessary repetition
+* Avoid excessive movement
+* Balance the user’s recent activity
+
+Meditation / Mindfulness
+
+Relevant mindfulness data can influence:
+
+* Meditation
+* Breathing
+* Stress relief
+* Mindful movement
+
+Habit Builder
+
+Use relevant habit progress to reinforce active habits.
+
+Example:
+
+If the user has an active hydration challenge, Today’s Plan may include a hydration action.
+
+Sleep Coach
+
+Use relevant sleep information to adjust intensity and recovery recommendations.
+
+Other Life Toolkit Features
+
+Use data from the remaining Life Toolkit features only when it provides meaningful personalization.
+
+Do NOT force every tool into every Today’s Plan.
+
+⸻
+
+15. Gemini Prompt Structure
+
+Update the existing _buildPlanPrompt so the Gemini prompt clearly separates the context.
+
+Use a structure similar to:
+
+USER CHECK-IN
+Energy:
+Mood:
+Recovery:
+Available Time:
+WELLNESS INTENTIONS
+...
+PREFERRED WELLNESS METHODS
+...
+RECENT PLAN HISTORY
+...
+CYCLE CONTEXT
+...
+TRAVEL CONTEXT
+...
+PREMIUM LIFE TOOLKIT CONTEXT
+...
+
+Important:
+
+The PREMIUM LIFE TOOLKIT CONTEXT section must only exist for Premium users.
+
+For Free users, this entire section must be absent.
+
+Tell Gemini:
+
+“The user has selected the following preferred wellness methods. Prioritize these methods when appropriate, but do not attempt to use every selected method in one plan. Choose the most appropriate method based on the user’s current check-in, available time, recovery status, wellness intentions, recent history, and other available context.”
+
+For Premium users also instruct:
+
+“Use relevant Life Toolkit information to improve personalization. Do not force every Life Toolkit feature into the plan.”
+
+⸻
+
+16. Existing Plan Constraints
+
+Preserve all existing Today’s Plan constraints.
+
+The AI must generate:
+
+* Exactly 2–4 wellness actions
+* Total duration must not exceed the user’s available time
+* Valid id
+* Valid title
+* Valid durationMinutes
+* Valid category
+* Valid intensityLevel
+* Short todaysFocus
+* Optional aiInsight
+
+Maintain the existing:
+
+* JSON-only response
+* Calm tone
+* Supportive tone
+* Non-clinical language
+* Content safety filtering
+* Existing category validation
+* Existing intensity validation
+* Existing duration validation
+
+Do not weaken any existing safety or validation rules.
+
+⸻
+
+17. Constraint Priority
+
+When different signals conflict, use this priority:
+
+1. Safety and existing plan constraints
+2. Available time
+3. Energy and recovery
+4. Relevant Premium Life Toolkit information
+5. Wellness Intentions
+6. Preferred Wellness Methods
+7. Recent history and variety
+8. Optional contextual information
+
+Preferred methods should strongly influence the plan but must never override safety, recovery, or available time.
+
+⸻
+
+18. Fallback Plans
+
+Update the existing curated fallback system so Preferred Wellness Methods are also considered.
+
+If Gemini fails, times out, or returns invalid data:
+
+* Continue using the existing fallback mechanism.
+* Select a fallback plan appropriate to energy and available time.
+* Prefer the user’s selected wellness methods where possible.
+* Maintain the existing 2–4 action requirement.
+* Maintain all duration and intensity constraints.
+
+Examples:
+
+Pilates
+
+* Gentle Pilates Core
+* Pilates Breathing
+* Posture Alignment
+* Beginner Pilates Flow
+
+Yoga
+
+* Restorative Yoga
+* Gentle Yoga Flow
+* Yoga Mobility
+* Evening Yoga Stretch
+
+Walking
+
+* 10-Minute Walk
+* Walking Break
+* Mindful Walk
+* Light Outdoor Movement
+
+Stretching
+
+* Full Body Stretch
+* Neck & Shoulder Release
+* Evening Stretch
+* Mobility Stretch
+
+Meditation / Breathing
+
+* Short Breathing Exercise
+* Guided Meditation
+* Mindfulness Reset
+* Body Scan
+
+Use the user’s selected methods when constructing the fallback.
+
+⸻
+
+19. Home Today’s Plan
+
+The existing Home Today’s Plan card should continue to display the generated:
+
+* Today’s Focus
+* Actions
+* Durations
+* Categories/intensity where currently supported
+* AI insight where currently supported
+
+Do not redesign the entire Home screen.
+
+The generated plan should continue syncing with the existing home-screen widget functionality.
+
+Preferred Wellness Methods and Premium Life Toolkit personalization should happen behind the existing Today’s Plan experience.
+
+⸻
+
+20. Data Architecture
+
+Use the existing project architecture.
+
+Before creating new code, inspect:
+
+* User profile model
+* Firebase user data
+* Existing state management
+* Subscription state
+* Life Toolkit providers
+* Today’s Plan models
+* AIService
+* Existing plan generation flow
+* Existing fallback plan implementation
+
+Reuse existing classes and providers whenever possible.
+
+Do not create duplicate sources of truth.
+
+Preferred Wellness Methods should have one authoritative source in the user profile/state.
+
+⸻
+
+21. Premium Data Privacy
+
+For Free users:
+
+* Do not include Life Toolkit data in Gemini requests.
+* Do not expose Life Toolkit information through Today’s Plan AI context.
+
+For Premium users:
+
+* Only provide relevant Life Toolkit information.
+* Prefer summarized/structured data rather than unnecessary raw data.
+* Do not expose unnecessary private information in the generated AI insight.
+
+Follow the existing Firebase security and privacy architecture.
+
+⸻
+
+22. UI Requirements
+
+Use the existing AI Wellness Pal design system.
+
+The new UI should feel:
+
+* Premium
+* Calm
+* Modern
+* Wellness-focused
+* Minimal
+* Personalized
+
+Support:
+
+* Light Mode
+* Dark Mode
+* Responsive layouts
+* Smooth animations
+* Accessible touch targets
+* Existing typography
+* Existing spacing
+* Existing cards/components
+* Existing icons where appropriate
+
+Do not introduce an unrelated visual design language.
+
+⸻
+
+23. Testing Requirements
+
+After implementation, verify all of the following:
+
+1. A new user can select exactly 3 methods.
+2. A user can select more than 3 methods.
+3. There is no maximum selection limit.
+4. Continue remains disabled with fewer than 3 methods.
+5. Selected methods persist after app restart.
+6. Preferred methods appear correctly in Profile Settings.
+7. Users can modify their preferences at any time.
+8. Users cannot save fewer than 3 methods.
+9. Today’s Plan uses Preferred Wellness Methods.
+10. The AI does not attempt to use every selected method in a single plan.
+11. Recent history prevents unnecessary repetition.
+12. Low energy prevents inappropriate high-intensity recommendations.
+13. Available time is always respected.
+14. Cycle Context remains optional.
+15. Travel Context remains optional.
+16. Free users receive a complete personalized Today’s Plan.
+17. Free users’ Life Toolkit data is NOT sent to Gemini.
+18. Premium users receive enhanced Today’s Plan personalization.
+19. Premium users’ relevant Life Toolkit data is included correctly.
+20. Premium plans do not blindly use all 9 Life Toolkit tools.
+21. Gemini failures still produce valid fallback plans.
+22. Fallback plans respect Preferred Wellness Methods.
+23. Existing Today’s Plan functionality continues working.
+24. Existing Home-screen widget synchronization continues working.
+25. Light Mode works correctly.
+26. Dark Mode works correctly.
+27. Existing Premium/subscription functionality remains intact.
+28. Existing Life Toolkit functionality remains intact.
+
+Implement this as a complete production-ready feature integrated into the existing AI Wellness Pal codebase. Do not remove or break any existing functionality.

@@ -14,6 +14,7 @@ import '../providers/wellness_plan_state.dart';
 import '../services/ai_service.dart';
 import '../services/voice_command_service.dart';
 import '../services/app_navigation_service.dart';
+import '../services/toolkit_context_builder.dart';
 import 'voice_orb.dart';
 
 // Tool + tab screens reachable by voice.
@@ -344,13 +345,15 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
 
     final checkInState = context.read<CheckInState>();
     final planState = context.read<WellnessPlanState>();
+    final preferredMethods = context.read<AppState>().preferredMethods;
 
     final updated = await checkInState.updateEnergyAndRecovery(
       energyScore: energyScore,
       recoveryStatus: recoveryStatus,
       availableTime: availableTime,
     );
-    await planState.regeneratePlan(userId, updated);
+    await planState.regeneratePlan(userId, updated,
+        preferredMethods: preferredMethods);
   }
 
   void _refreshPlan() {
@@ -368,10 +371,12 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
 
     final checkInState = context.read<CheckInState>();
     final planState = context.read<WellnessPlanState>();
+    final preferredMethods = appState.preferredMethods;
 
     final checkIn = checkInState.todaysCheckIn;
     if (checkIn != null) {
-      planState.regeneratePlan(userId, checkIn);
+      planState.regeneratePlan(userId, checkIn,
+          preferredMethods: preferredMethods);
     } else {
       // Use a default check-in for regeneration
       final defaultCheckIn = CheckIn(
@@ -380,7 +385,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
         energyScore: 3,
         availableTime: AvailableTimeRange.range20_40,
       );
-      planState.regeneratePlan(userId, defaultCheckIn);
+      planState.regeneratePlan(userId, defaultCheckIn,
+          preferredMethods: preferredMethods);
     }
   }
 
@@ -437,9 +443,22 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
       skippedFields: skipped,
     );
 
+    // Capture personalization inputs synchronously (BuildContext must not be
+    // used inside the async .then callback).
+    final appState = context.read<AppState>();
+    final preferredMethods = appState.preferredMethods;
+    final cycleContext = appState.cyclePhaseContext;
+    final travelContext = appState.travelContext;
+    final premiumToolkitContext = ToolkitContextBuilder.build(context);
+
     // Submit and generate plan
     checkInState.submitCheckIn(checkIn).then((_) {
-      planState.generatePlan(userId, checkIn);
+      planState.generatePlan(userId, checkIn,
+          intentions: appState.intentions,
+          cycleContext: cycleContext,
+          travelContext: travelContext,
+          preferredMethods: preferredMethods,
+          premiumToolkitContext: premiumToolkitContext);
     });
 
     _voiceService.resetCheckInFlow();

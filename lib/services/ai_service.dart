@@ -13,6 +13,7 @@ import '../models/journal_entry.dart';
 import '../models/voice_command.dart';
 import '../models/wellness_enums.dart';
 import '../models/wellness_intention.dart';
+import '../models/wellness_method.dart';
 import 'content_safety_filter.dart';
 
 /// Service that generates AI-powered wellness content using Firebase AI Logic
@@ -187,10 +188,19 @@ class AIService {
     required List<DailyPlan> recentPlans,
     String? cycleContext,
     String? travelContext,
+    List<String> preferredMethods = const [],
+    String? premiumToolkitContext,
   }) async {
     try {
       final prompt = _buildPlanPrompt(
-          checkIn, intentions, recentPlans, cycleContext, travelContext);
+        checkIn,
+        intentions,
+        recentPlans,
+        cycleContext: cycleContext,
+        travelContext: travelContext,
+        preferredMethods: preferredMethods,
+        premiumToolkitContext: premiumToolkitContext,
+      );
 
       final decoded = await _generateJson(
         prompt,
@@ -251,10 +261,12 @@ class AIService {
   String _buildPlanPrompt(
     CheckIn checkIn,
     List<WellnessIntention> intentions,
-    List<DailyPlan> recentPlans, [
+    List<DailyPlan> recentPlans, {
     String? cycleContext,
     String? travelContext,
-  ]) {
+    List<String> preferredMethods = const [],
+    String? premiumToolkitContext,
+  }) {
     final energyLabel = checkIn.energyScore != null
         ? 'Energy: ${checkIn.energyScore}/5'
         : 'Energy: not provided';
@@ -302,6 +314,34 @@ class AIService {
           }).join('\n')
         : 'No recent plan history';
 
+    // PREFERRED WELLNESS METHODS — a strong personalization signal. The AI
+    // should prioritize these but need NOT use every selected method in one
+    // day; it picks the most appropriate for today's context and maintains
+    // variety across days (using recent history).
+    final methodLabels = wellnessMethodLabels(preferredMethods);
+    final preferredMethodsSection = methodLabels.isNotEmpty
+        ? '\n\nPREFERRED WELLNESS METHODS:\n'
+            '${methodLabels.map((m) => '- $m').join('\n')}\n'
+            'The user selected the above preferred wellness methods. Prioritize '
+            'these methods when appropriate, but do NOT attempt to use every '
+            'selected method in one plan. Choose the most appropriate method(s) '
+            'based on the current check-in, available time, recovery status, '
+            'wellness intentions, and recent history. Maintain variety across '
+            'the preferred methods over time and avoid repeating the exact same '
+            'action as recent days unless there is a good reason.'
+        : '';
+
+    // PREMIUM LIFE TOOLKIT CONTEXT — present ONLY when the caller supplies it
+    // (Premium users). For Free users this section is entirely absent.
+    final premiumSection = (premiumToolkitContext != null &&
+            premiumToolkitContext.trim().isNotEmpty)
+        ? '\n\nPREMIUM LIFE TOOLKIT CONTEXT:\n'
+            '${premiumToolkitContext.trim()}\n'
+            'Use relevant Life Toolkit information above to improve '
+            'personalization. Do NOT force every Life Toolkit feature into the '
+            'plan — only use what meaningfully helps today.'
+        : '';
+
     return '''You are a supportive wellness planning assistant. Generate a personalized daily wellness plan.
 
 USER STATE:
@@ -314,7 +354,7 @@ WELLNESS INTENTIONS:
 $intentionsList
 
 RECENT PLAN HISTORY (last 7 days):
-$recentPlansSummary
+$recentPlansSummary$preferredMethodsSection$premiumSection
 
 CONSTRAINTS:
 - Generate exactly $actionCount wellness actions.

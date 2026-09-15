@@ -22,6 +22,7 @@ import 'add_journal_entry_screen.dart';
 import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/storage_service.dart';
+import '../services/toolkit_context_builder.dart';
 import '../widgets/ai_wellness_insight_card.dart';
 import '../widgets/custom_tab_switcher.dart';
 import '../widgets/daily_plan_card.dart';
@@ -164,12 +165,17 @@ class _HomeScreenState extends State<HomeScreen>
     final checkIn = checkInState.todaysCheckIn;
     if (checkIn != null) {
       final appState = Provider.of<AppState>(context, listen: false);
+      // Premium-only Life Toolkit context (null for Free users). Built
+      // synchronously before the await so BuildContext isn't used across it.
+      final premiumToolkitContext = ToolkitContextBuilder.build(context);
       await planState.generatePlan(
         user.uid,
         checkIn,
         intentions: appState.intentions,
         cycleContext: appState.cyclePhaseContext,
         travelContext: appState.travelContext,
+        preferredMethods: appState.preferredMethods,
+        premiumToolkitContext: premiumToolkitContext,
       );
     }
   }
@@ -986,6 +992,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     final checkInState = Provider.of<CheckInState>(context, listen: false);
     final planState = Provider.of<WellnessPlanState>(context, listen: false);
+    final preferredMethods =
+        Provider.of<AppState>(context, listen: false).preferredMethods;
 
     final updated = await checkInState.updateEnergyAndRecovery(
       energyScore: energyScore,
@@ -993,7 +1001,8 @@ class _HomeScreenState extends State<HomeScreen>
       availableTime: availableTime,
     );
 
-    await planState.regeneratePlan(user.uid, updated);
+    await planState.regeneratePlan(user.uid, updated,
+        preferredMethods: preferredMethods);
   }
 
   Widget _buildEditSheet<T>(

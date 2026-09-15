@@ -44,6 +44,7 @@ class StorageService {
   static const String _lastActiveDateKey = 'bloom_last_active_date';
   static const String _pinnedCardsKey = 'bloom_pinned_cards';
   static const String _aiVoiceKey = 'bloom_ai_voice';
+  static const String _preferredMethodsKey = 'bloom_preferred_methods';
   static const String _periodDataKey = 'bloom_period_data';
   static const String _weightDataKey = 'bloom_weight_data';
 
@@ -291,6 +292,7 @@ class StorageService {
     bool? showMap,
     String? instagram,
     String? aiVoice,
+    List<String>? preferredMethods,
     bool syncToCloud = true,
   }) async {
     final prefs = await _getPrefs;
@@ -304,6 +306,9 @@ class StorageService {
     if (showMap != null) await prefs.setBool(_showMapKey, showMap);
     if (instagram != null) await prefs.setString('bloom_instagram', instagram);
     if (aiVoice != null) await prefs.setString(_aiVoiceKey, aiVoice);
+    if (preferredMethods != null) {
+      await prefs.setStringList(_preferredMethodsKey, preferredMethods);
+    }
 
     // Skip the cloud write until the app has loaded authoritative cloud
     // settings, to avoid a pre-sync default overwriting them.
@@ -335,6 +340,7 @@ class StorageService {
         if (showGarden != null) data['show_garden'] = showGarden;
         if (showAchievements != null) data['show_achievements'] = showAchievements;
         if (showMap != null) data['show_map'] = showMap;
+        if (preferredMethods != null) data['preferred_methods'] = preferredMethods;
 
         await _db
             .collection('users')
@@ -399,6 +405,7 @@ class StorageService {
       'showMap': prefs.getBool(_showMapKey) ?? true,
       'instagram': prefs.getString('bloom_instagram'),
       'aiVoice': prefs.getString(_aiVoiceKey) ?? 'default',
+      'preferredMethods': prefs.getStringList(_preferredMethodsKey) ?? <String>[],
     };
 
     if (cloudProfile != null) {
@@ -417,6 +424,10 @@ class StorageService {
       settings['showAchievements'] =
           cloudProfile['show_achievements'] ?? settings['showAchievements'];
       settings['showMap'] = cloudProfile['show_map'] ?? settings['showMap'];
+      if (cloudProfile['preferred_methods'] is List) {
+        settings['preferredMethods'] =
+            List<String>.from(cloudProfile['preferred_methods'] as List);
+      }
 
       if (cloudProfile['unlocked_achievements'] != null) {
         final List<String> cloudUnlocked =

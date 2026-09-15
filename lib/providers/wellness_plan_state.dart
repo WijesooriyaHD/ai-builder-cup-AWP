@@ -146,6 +146,8 @@ class WellnessPlanState extends ChangeNotifier {
     List<WellnessIntention> intentions = const [],
     String? cycleContext,
     String? travelContext,
+    List<String> preferredMethods = const [],
+    String? premiumToolkitContext,
   }) async {
     _isGenerating = true;
     _generationError = null;
@@ -166,6 +168,8 @@ class WellnessPlanState extends ChangeNotifier {
         recentPlans: _recentPlans,
         cycleContext: cycleContext,
         travelContext: travelContext,
+        preferredMethods: preferredMethods,
+        premiumToolkitContext: premiumToolkitContext,
       );
 
       if (plan != null) {
@@ -181,6 +185,7 @@ class WellnessPlanState extends ChangeNotifier {
           checkIn.energyTier,
           checkIn.availableTime?.name ?? AvailableTimeRange.range20_40.name,
           userId,
+          preferredMethods: preferredMethods,
         );
       }
     } catch (e) {
@@ -193,6 +198,7 @@ class WellnessPlanState extends ChangeNotifier {
         checkIn.energyTier,
         checkIn.availableTime?.name ?? AvailableTimeRange.range20_40.name,
         userId,
+        preferredMethods: preferredMethods,
       );
     } finally {
       _isGenerating = false;
@@ -205,7 +211,11 @@ class WellnessPlanState extends ChangeNotifier {
   /// Unlike [generatePlan], this skips the AI service entirely and
   /// selects a different curated plan from the fallback pool, guaranteeing
   /// a visibly different plan each time the user taps refresh.
-  Future<void> regeneratePlan(String userId, CheckIn checkIn) async {
+  Future<void> regeneratePlan(
+    String userId,
+    CheckIn checkIn, {
+    List<String> preferredMethods = const [],
+  }) async {
     _isGenerating = true;
     _generationError = null;
     _isFallbackBannerVisible = false;
@@ -216,6 +226,7 @@ class WellnessPlanState extends ChangeNotifier {
         checkIn.energyTier,
         checkIn.availableTime?.name ?? AvailableTimeRange.range20_40.name,
         userId,
+        preferredMethods: preferredMethods,
       );
     } catch (e) {
       debugPrint('❌ WellnessPlanState.regeneratePlan error: $e');
@@ -345,14 +356,16 @@ class WellnessPlanState extends ChangeNotifier {
   Future<void> _applyFallbackPlan(
     int energyTier,
     String timeRange,
-    String userId,
-  ) async {
+    String userId, {
+    List<String> preferredMethods = const [],
+  }) async {
     try {
       final currentPlanId = _todaysPlan?.id;
       final fallback = await _planService.selectFallbackPlan(
         energyTier,
         timeRange,
         excludeId: currentPlanId,
+        preferredMethods: preferredMethods,
       );
       _todaysPlan = fallback;
       _isFallbackBannerVisible = true;

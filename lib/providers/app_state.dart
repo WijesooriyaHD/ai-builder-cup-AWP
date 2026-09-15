@@ -103,6 +103,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   int _totalCheckIns = 0;
   String? _instagramUsername;
   String _aiVoice = 'default';
+  List<String> _preferredMethods = const [];
   
   List<Dream> get dreams => _dreams;
   /// Semantic alias for [_dreams] — maps each Dream to a [WellnessIntention]
@@ -131,6 +132,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String? get instagramUsername => _instagramUsername;
   /// The selected AI assistant voice id (see kAiVoices).
   String get aiVoice => _aiVoice;
+  /// Stable ids of the user's preferred wellness methods (see kWellnessMethods).
+  /// Drives Today's Plan personalization. May be empty for pre-existing users.
+  List<String> get preferredMethods => List.unmodifiable(_preferredMethods);
   int get activityPoints => (AchievementService().totalUnlocked * 100) + (_travelMemories.length * 50) + (_currentStreak * 10); // Updated formula to match storage service
 
   // Settings
@@ -339,6 +343,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Sets the user's preferred wellness methods (stable ids). Persists locally
+  /// and to the cloud, and immediately influences future Today's Plan
+  /// generation. No premium gating — available to all users.
+  void setPreferredMethods(List<String> methodIds) {
+    _preferredMethods = List<String>.from(methodIds);
+    _saveSettings();
+    notifyListeners();
+  }
+
   /// Selects the AI assistant voice. Throws [PremiumFeatureException] if the
   /// chosen voice requires Premium and the user is not subscribed.
   void setAiVoice(String voiceId) {
@@ -365,6 +378,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       showMap: _showMap,
       instagram: _instagramUsername,
       aiVoice: _aiVoice,
+      preferredMethods: _preferredMethods,
       // Don't push settings to the cloud until the authoritative cloud values
       // have been loaded, so a transient pre-sync default can't overwrite them.
       syncToCloud: _cloudSettingsLoaded,
@@ -1355,6 +1369,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _showMap = settings['showMap'] ?? true;
     _instagramUsername = settings['instagram'];
     _aiVoice = settings['aiVoice'] as String? ?? 'default';
+    final methods = settings['preferredMethods'];
+    if (methods is List) {
+      _preferredMethods = methods.map((e) => e.toString()).toList();
+    }
   }
 
   Future<void> _syncWithCloudInBackground() async {

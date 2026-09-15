@@ -217,7 +217,8 @@ class _DailyPlanCardState extends State<DailyPlanCard>
 
     setState(() => _isRegenerating = true);
 
-    await planState.regeneratePlan(userId, checkIn);
+    await planState.regeneratePlan(userId, checkIn,
+        preferredMethods: appState.preferredMethods);
 
     if (mounted) {
       setState(() => _isRegenerating = false);

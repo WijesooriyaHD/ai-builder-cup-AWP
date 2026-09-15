@@ -8,6 +8,7 @@ import '../models/wellness_enums.dart';
 import '../providers/app_state.dart';
 import '../providers/check_in_state.dart';
 import '../providers/wellness_plan_state.dart';
+import '../services/toolkit_context_builder.dart';
 import '../theme/app_theme.dart';
 import '../widgets/frosted_container.dart';
 
@@ -118,6 +119,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final planState = context.read<WellnessPlanState>();
     final appState = context.read<AppState>();
     final intentions = appState.intentions;
+    final preferredMethods = appState.preferredMethods;
+    // Premium-only Life Toolkit context, assembled synchronously (BuildContext
+    // must not cross the async gap). Returns null for Free users.
+    final premiumToolkitContext = ToolkitContextBuilder.build(context);
     try {
       await checkInState.submitCheckIn(checkIn);
       // Trigger plan generation after successful check-in (Requirement 3.1)
@@ -128,7 +133,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
         planState.generatePlan(userId, checkIn,
             intentions: intentions,
             cycleContext: appState.cyclePhaseContext,
-            travelContext: appState.travelContext);
+            travelContext: appState.travelContext,
+            preferredMethods: preferredMethods,
+            premiumToolkitContext: premiumToolkitContext);
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
@@ -149,6 +156,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     // User is exiting without completing — call skipCheckIn
     final checkInState = context.read<CheckInState>();
     final planState = context.read<WellnessPlanState>();
+    final preferredMethods = context.read<AppState>().preferredMethods;
     await checkInState.skipCheckIn();
 
     // A skipped check-in still needs a plan; generate one from the reused/
@@ -157,7 +165,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
     final checkIn = checkInState.todaysCheckIn;
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (checkIn != null && userId != null) {
-      planState.generatePlan(userId, checkIn);
+      planState.generatePlan(userId, checkIn,
+          preferredMethods: preferredMethods);
     }
 
     if (mounted) {

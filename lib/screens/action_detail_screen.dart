@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../models/wellness_action.dart';
 import '../models/wellness_enums.dart';
+import '../models/wellness_method.dart';
 import '../widgets/frosted_container.dart';
 
 /// Detail view for a single [WellnessAction].
@@ -18,6 +19,10 @@ class ActionDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // Infer the wellness method from the action title (e.g. "Pilates core
+    // flow" -> Pilates). Only shown when a keyword match is found.
+    final method = wellnessMethodForText(action.title);
 
     return Scaffold(
       appBar: AppBar(
@@ -82,6 +87,14 @@ class ActionDetailScreen extends StatelessWidget {
                       label: 'Category',
                       value: _categoryLabel(action.category),
                     ),
+                    if (method != null) ...[
+                      const Divider(height: 24),
+                      _DetailRow(
+                        icon: method.icon,
+                        label: 'Wellness Method',
+                        value: method.label,
+                      ),
+                    ],
                     const Divider(height: 24),
                     _DetailRow(
                       icon: Icons.speed_rounded,
