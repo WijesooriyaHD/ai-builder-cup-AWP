@@ -64,12 +64,7 @@ class _HabitBuilderScreenState extends State<HabitBuilderScreen>
   }
 
   void _openAddSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _AddHabitSheet(),
-    );
+    showAddHabitSheet(context);
   }
 
   @override
@@ -832,8 +827,46 @@ class _ToolTile extends StatelessWidget {
 // Add Habit Bottom Sheet
 // =============================================================================
 
+/// Opens the "Add a Habit" bottom sheet.
+///
+/// Optional prefill lets other screens (e.g. Wellness Intentions) open the
+/// sheet with the Custom form pre-populated:
+/// - [initialTabIndex] 0 = Suggestions, 1 = Custom.
+/// - [initialTitle] pre-fills the habit name.
+/// - [initialTool] pre-selects the related tool dropdown.
+/// - [initialDescription] pre-fills the habit description/notes.
+void showAddHabitSheet(
+  BuildContext context, {
+  int initialTabIndex = 0,
+  String? initialTitle,
+  HabitTool? initialTool,
+  String? initialDescription,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _AddHabitSheet(
+      initialTabIndex: initialTabIndex,
+      initialTitle: initialTitle,
+      initialTool: initialTool,
+      initialDescription: initialDescription,
+    ),
+  );
+}
+
 class _AddHabitSheet extends StatefulWidget {
-  const _AddHabitSheet();
+  const _AddHabitSheet({
+    this.initialTabIndex = 0,
+    this.initialTitle,
+    this.initialTool,
+    this.initialDescription,
+  });
+
+  final int initialTabIndex;
+  final String? initialTitle;
+  final HabitTool? initialTool;
+  final String? initialDescription;
 
   @override
   State<_AddHabitSheet> createState() => _AddHabitSheetState();
@@ -846,7 +879,11 @@ class _AddHabitSheetState extends State<_AddHabitSheet>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
+    _tab = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
+    );
   }
 
   @override
@@ -898,9 +935,13 @@ class _AddHabitSheetState extends State<_AddHabitSheet>
               height: 380,
               child: TabBarView(
                 controller: _tab,
-                children: const [
-                  _SuggestionsTab(),
-                  _CustomHabitForm(),
+                children: [
+                  const _SuggestionsTab(),
+                  _CustomHabitForm(
+                    initialTitle: widget.initialTitle,
+                    initialTool: widget.initialTool,
+                    initialDescription: widget.initialDescription,
+                  ),
                 ],
               ),
             ),
@@ -1030,7 +1071,15 @@ class _SuggestionsTabState extends State<_SuggestionsTab> {
 // =============================================================================
 
 class _CustomHabitForm extends StatefulWidget {
-  const _CustomHabitForm();
+  const _CustomHabitForm({
+    this.initialTitle,
+    this.initialTool,
+    this.initialDescription,
+  });
+
+  final String? initialTitle;
+  final HabitTool? initialTool;
+  final String? initialDescription;
 
   @override
   State<_CustomHabitForm> createState() => _CustomHabitFormState();
@@ -1040,9 +1089,24 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
   final _titleCtrl = TextEditingController();
   final _targetCtrl = TextEditingController();
   final _unitCtrl = TextEditingController();
-  HabitTool _tool = HabitTool.custom;
+  late HabitTool _tool;
   HabitFrequency _freq = HabitFrequency.daily;
   bool _saving = false;
+
+  /// Description carried from a prefill (e.g. an intention step). Not shown as
+  /// a field to keep the form simple, but saved with the habit.
+  String? _description;
+
+  @override
+  void initState() {
+    super.initState();
+    // Apply any prefill from the caller (e.g. a Wellness Intention step).
+    if (widget.initialTitle != null) {
+      _titleCtrl.text = widget.initialTitle!;
+    }
+    _tool = widget.initialTool ?? HabitTool.custom;
+    _description = widget.initialDescription;
+  }
 
   @override
   void dispose() {
@@ -1060,6 +1124,7 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
         _unitCtrl.text.trim().isEmpty ? null : _unitCtrl.text.trim();
     await context.read<HabitBuilderState>().createHabit(
           title: _titleCtrl.text.trim(),
+          description: _description,
           tool: _tool,
           frequency: _freq,
           targetValue: target,

@@ -6,11 +6,14 @@ import 'package:intl/intl.dart';
 import '../models/wellness_intention.dart';
 import '../models/wellness_enums.dart';
 import '../models/challenge_step.dart';
+import '../features/habit_builder/domain/habit_models.dart';
 import '../providers/app_state.dart';
 import '../services/ai_service.dart';
 import '../services/auth_service.dart';
+import '../utils/wellnesspal_snackbar.dart';
 import '../widgets/frosted_container.dart';
 import '../utils/icon_resolver.dart';
+import 'habit_builder_screen.dart';
 
 /// Detail screen for a single [WellnessIntention].
 ///
@@ -537,13 +540,89 @@ class _WellnessIntentionDetailScreenState
                     ),
                 ],
               )
-            // Edit affordance hint when not rearranging.
+            // Overflow menu (3 dots) when not rearranging — add-as-habit / edit.
             else
-              Icon(Icons.more_horiz_rounded,
-                  size: 18, color: Colors.grey.shade400),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert_rounded,
+                    size: 20, color: Colors.grey.shade500),
+                tooltip: 'Step options',
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                onSelected: (value) {
+                  switch (value) {
+                    case 'habit':
+                      _addStepAsHabit(intention, step);
+                      break;
+                    case 'edit':
+                      _showEditStepDialog(context, intention, step, themeColor);
+                      break;
+                  }
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem<String>(
+                    value: 'habit',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.playlist_add_check_rounded),
+                      title: Text('Add as a habit'),
+                    ),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'edit',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.edit_rounded),
+                      title: Text('Edit task'),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Maps an intention's wellness [category] to the closest Habit Builder tool,
+  /// so the Custom habit form's "Related tool" is sensibly pre-filled.
+  HabitTool _habitToolForCategory(WellnessCategory category) {
+    switch (category) {
+      case WellnessCategory.sleep:
+        return HabitTool.sleep;
+      case WellnessCategory.stress:
+      case WellnessCategory.mindfulness:
+      case WellnessCategory.mentalClarity:
+        return HabitTool.meditation;
+      case WellnessCategory.movement:
+      case WellnessCategory.energy:
+        return HabitTool.calorieBudget;
+      case WellnessCategory.flexibility:
+      case WellnessCategory.recovery:
+      case WellnessCategory.general:
+        return HabitTool.custom;
+    }
+  }
+
+  /// Opens the Habit Builder "Add a Habit" sheet on the Custom tab, pre-filled
+  /// from this intention [step] so the user only has to confirm.
+  void _addStepAsHabit(WellnessIntention intention, ChallengeStep step) {
+    final descriptionParts = <String>[
+      'From intention: ${intention.title}',
+      if (step.durationMinutes > 0) 'Suggested: ${step.durationMinutes} min',
+    ];
+
+    showAddHabitSheet(
+      context,
+      initialTabIndex: 1, // Custom tab
+      initialTitle: step.title,
+      initialTool: _habitToolForCategory(intention.category),
+      initialDescription: descriptionParts.join(' • '),
+    );
+
+    WellnessPalSnackBar.show(
+      context,
+      message: 'Review and confirm your new habit',
+      icon: Icons.playlist_add_check_rounded,
     );
   }
 
