@@ -45,6 +45,22 @@ class VoiceCommandService extends ChangeNotifier {
   // goal (we prompt for the one required field, then create it).
   bool _awaitingIntentionTitle = false;
 
+  // Short-term memory of the habit the user most recently created/referenced
+  // by voice, so follow-ups like "change it to 7:30" resolve to the right
+  // habit. Set by the UI layer after a successful voice habit creation.
+  String? _lastHabitId;
+  String? _lastHabitTitle;
+
+  /// Remembers the habit the user just acted on by voice (used to resolve
+  /// pronoun follow-ups like "change it to 7:30"). Pass nulls to clear.
+  void rememberLastHabit(String? id, String? title) {
+    _lastHabitId = id;
+    _lastHabitTitle = title;
+  }
+
+  /// The id of the last habit referenced by voice, or null.
+  String? get lastHabitId => _lastHabitId;
+
   // Guards against processing the same utterance twice. Both the recognizer's
   // finalResult callback and stopListening() can fire for one utterance; this
   // ensures we only handle (and speak) it once.
@@ -420,6 +436,22 @@ class VoiceCommandService extends ChangeNotifier {
   /// natural-language understanding. If the AI is unavailable/errors/unsure,
   /// the original `unknown` command is used so the assistant still responds.
   Future<VoiceCommand> _parseCommand(String text) async {
+    // 0. Context-aware fast path: when a habit is in context and the user says
+    //    a short follow-up with a time ("change it to 7:30", "make it 7 pm",
+    //    "set it to 8am"), resolve it deterministically to updateHabitReminder.
+    //    This runs BEFORE the keyword parser (which would otherwise mis-match a
+    //    time phrase) and doesn't depend on the AI.
+    if (_lastHabitId != null) {
+      final reminder = _tryParseReminderChange(text);
+      if (reminder != null) {
+        return VoiceCommand(
+          type: VoiceCommandType.updateHabitReminder,
+          params: reminder,
+          rawText: text,
+        );
+      }
+    }
+
     // 1. Fast local keyword matching (offline-safe, no latency).
     final localCommand = _parser.parse(text);
     if (localCommand.type != VoiceCommandType.unknown) {
@@ -427,8 +459,19 @@ class VoiceCommandService extends ChangeNotifier {
     }
 
     // 2. Local parser was unsure — ask the AI for a flexible interpretation.
+    //    Give it the recent conversation transcript + short-term context (the
+    //    last habit) so pronoun follow-ups resolve to the right target.
     try {
-      final aiCommand = await _aiService.parseVoiceCommand(text);
+      final aiCommand = await _aiService.parseVoiceCommand(
+        text,
+        // Exclude the current utterance (already appended to _messages).
+        history: _recentHistory(dropLast: 1),
+        recentContext: _lastHabitTitle != null
+            ? 'The user just created/updated a habit named "$_lastHabitTitle". '
+                'If they refer to "it" or "that habit" with only a new time, '
+                'they mean this habit.'
+            : null,
+      );
       if (aiCommand != null) return aiCommand;
     } catch (e) {
       debugPrint('VoiceCommandService: AI parse failed: $e');
@@ -436,6 +479,54 @@ class VoiceCommandService extends ChangeNotifier {
 
     // 3. Neither matched — return the unknown command (handler shows help).
     return localCommand;
+  }
+
+  /// Attempts to read a reminder-time-change follow-up from [text] when a
+  /// habit is already in context. Returns `{reminderHour, reminderMinute}` in
+  /// 24-hour form, or null if the utterance isn't a time change.
+  ///
+  /// Recognizes forms like: "7:30", "7.30", "7 30", "7", with optional am/pm,
+  /// optionally preceded by change/reschedule/reminder/set/make wording.
+  /// A bare number without am/pm or a "change/set" verb is NOT treated as a
+  /// time change (to avoid hijacking unrelated numbers).
+  Map<String, dynamic>? _tryParseReminderChange(String text) {
+    final n = text.toLowerCase().trim();
+
+    // Match a clock time: hour[:.  ]minute? with optional am/pm.
+    final m = RegExp(
+      r'\b(\d{1,2})\s*(?::|\.|\s)?\s*(\d{2})?\s*(a\.?m\.?|p\.?m\.?)?\b',
+    ).firstMatch(n);
+    if (m == null) return null;
+
+    var hour = int.tryParse(m.group(1) ?? '');
+    if (hour == null || hour > 23) return null;
+    final minute = int.tryParse(m.group(2) ?? '0') ?? 0;
+    if (minute > 59) return null;
+
+    final ampm = m.group(3)?.replaceAll('.', '');
+    final hasAmPm = ampm != null && ampm.isNotEmpty;
+
+    // Signals that this utterance is about changing the reminder/time.
+    const changeWords = [
+      'change', 'reschedule', 'move', 'make it', 'set it', 'set the',
+      'reminder', 'remind', 'instead', 'update', 'switch it', 'at ',
+    ];
+    final hasChangeWord = changeWords.any(n.contains);
+
+    // Require either an am/pm token or an explicit change/time word so we
+    // don't treat random numbers as a reschedule.
+    if (!hasAmPm && !hasChangeWord) return null;
+
+    // Apply am/pm to get 24-hour.
+    if (hasAmPm) {
+      final isPm = ampm.startsWith('p');
+      if (isPm && hour < 12) hour += 12;
+      if (!isPm && hour == 12) hour = 0;
+    }
+    // If no am/pm and the hour is a small daytime-ish number that clearly reads
+    // as evening in context is ambiguous; keep as-is (24h interpretation).
+
+    return {'reminderHour': hour, 'reminderMinute': minute};
   }
 
   /// Handles a parsed command and generates a response.
@@ -500,6 +591,24 @@ class VoiceCommandService extends ChangeNotifier {
           return command;
         } else {
           response = "Sure — what habit would you like to add?";
+        }
+        break;
+      case VoiceCommandType.updateHabitReminder:
+        // Change the reminder time of the habit currently in context.
+        if (_lastHabitId != null) {
+          // Hand off to the UI to reschedule; it speaks the final
+          // confirmation (with the resolved time and permission state).
+          response = "Updating the reminder for "
+              "${_lastHabitTitle ?? 'your habit'}.";
+          _lastCommand = command;
+          _addAssistantMessage(response);
+          await speak(response);
+          notifyListeners();
+          return command;
+        } else {
+          response =
+              "I'm not sure which habit you mean. You can say something like "
+              "\"remind me about swimming at 7:30 pm\".";
         }
         break;
       case VoiceCommandType.openChallenges:
@@ -648,11 +757,16 @@ class VoiceCommandService extends ChangeNotifier {
     return command;
   }
 
-  /// Asks the AI for a conversational reply to a free-form question.
+  /// Asks the AI for a conversational reply to a free-form question, giving it
+  /// the recent transcript so the reply stays in context.
   /// Returns null if the AI is unavailable so the caller can use a fallback.
   Future<String?> _generateConversationalReply(String question) async {
     try {
-      return await _aiService.generateVoiceReply(question);
+      return await _aiService.generateVoiceReply(
+        question,
+        // Exclude the current utterance (already appended to _messages).
+        history: _recentHistory(dropLast: 1),
+      );
     } catch (e) {
       debugPrint('VoiceCommandService: conversational reply failed: $e');
       return null;
@@ -854,6 +968,27 @@ class VoiceCommandService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Message helpers
   // ---------------------------------------------------------------------------
+
+  /// Builds the recent conversation transcript for the AI, as an ordered list
+  /// of {'role': 'user'|'assistant', 'text': ...} turns.
+  ///
+  /// Keeps only the last [maxTurns] messages so the context stays small/fast,
+  /// and drops the final [dropLast] messages (used to exclude the current
+  /// utterance, which is added to [_messages] before parsing).
+  List<Map<String, String>> _recentHistory({
+    int maxTurns = 8,
+    int dropLast = 0,
+  }) {
+    final end = (_messages.length - dropLast).clamp(0, _messages.length);
+    final start = (end - maxTurns).clamp(0, end);
+    return _messages
+        .sublist(start, end)
+        .map((m) => {
+              'role': m.isUser ? 'user' : 'assistant',
+              'text': m.text,
+            })
+        .toList();
+  }
 
   void _addUserMessage(String text) {
     _messages.add(VoiceMessage.user(text));

@@ -21,6 +21,7 @@ enum VoiceCommandType {
 
   // Habit commands
   createHabit,
+  updateHabitReminder,
 
   // Navigation commands (tabs)
   openSettings,

@@ -193,6 +193,16 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
         }
         break;
 
+      case VoiceCommandType.updateHabitReminder:
+        final rh = command.params['reminderHour'];
+        final rm = command.params['reminderMinute'];
+        final hour = rh is int ? rh : (rh is num ? rh.toInt() : null);
+        final minute = rm is int ? rm : (rm is num ? rm.toInt() : null);
+        if (hour != null && minute != null) {
+          _updateHabitReminderByVoice(hour, minute);
+        }
+        break;
+
       // ── Tab navigation ──────────────────────────────────────────────────
       case VoiceCommandType.openHome:
         _goToTab(AppTab.home);
@@ -354,6 +364,10 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
         activeDays: activeDays,
       );
 
+      // Remember this habit so follow-ups like "change it to 7:30" resolve
+      // to it.
+      _voiceService.rememberLastHabit(habit.id, habit.title);
+
       // Schedule the reminder on the newly created habit.
       if (hasReminder) {
         await habitState.setReminder(habit.id, reminderHour, reminderMinute);
@@ -394,6 +408,51 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
     final period = hour >= 12 ? 'PM' : 'AM';
     final h12 = hour % 12 == 0 ? 12 : hour % 12;
     return '$h12:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  /// Reschedules the reminder of the habit last referenced by voice (resolved
+  /// via VoiceCommandService memory) to [hour]:[minute]. Handles the case where
+  /// the remembered habit no longer exists, and requests notification
+  /// permission before scheduling.
+  Future<void> _updateHabitReminderByVoice(int hour, int minute) async {
+    final habitId = _voiceService.lastHabitId;
+    if (habitId == null) {
+      _voiceService.speak(
+          "I'm not sure which habit you mean. Try creating one first, or open "
+          "the Habit Builder to set a reminder.");
+      return;
+    }
+
+    final habitState = context.read<HabitBuilderState>();
+    // Confirm the habit still exists (it may have been deleted).
+    final exists = habitState.habits.any((h) => h.id == habitId);
+    if (!exists) {
+      _voiceService.rememberLastHabit(null, null);
+      _voiceService.speak(
+          "I couldn't find that habit anymore. You can set a reminder from the "
+          "Habit Builder.");
+      return;
+    }
+
+    final notifier = NotificationService();
+    final granted = await notifier.hasNotificationPermission()
+        ? true
+        : await notifier.requestPermission();
+
+    try {
+      await habitState.setReminder(habitId, hour, minute);
+    } catch (e) {
+      _voiceService.speak(
+          "Sorry, I couldn't update that reminder right now. Please try again.");
+      return;
+    }
+
+    if (!mounted) return;
+    final timePhrase = _formatSpokenTime(hour, minute);
+    _voiceService.speak(granted
+        ? 'Done. I\'ve moved the reminder to $timePhrase.'
+        : 'I set the reminder to $timePhrase, but notifications are off — '
+            'enable them in Settings to be reminded.');
   }
 
   /// Creates a wellness intention from a voice command (title is the only

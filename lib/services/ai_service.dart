@@ -979,6 +979,7 @@ Respond ONLY with the summary text (no JSON, no labels).''';
     'submitCheckIn',
     'logIntention',
     'createHabit',
+    'updateHabitReminder',
     'openSettings',
     'openCheckIn',
     'openJournal',
@@ -1074,7 +1075,19 @@ Respond ONLY with the summary text (no JSON, no labels).''';
   /// The returned command uses the exact param keys the voice handler expects:
   /// `score` (int 1-5), `mood`, `status`, `time`, `color`+`colorName`,
   /// `enabled` (bool).
-  Future<VoiceCommand?> parseVoiceCommand(String speech) async {
+  ///
+  /// [recentContext] is optional short-term conversation memory (e.g. "The
+  /// user just created a habit named 'Swimming'.") so follow-up utterances
+  /// like "change it to 7:30" can be resolved to the right target.
+  ///
+  /// [history] is the recent turn-by-turn transcript
+  /// ({'role': 'user'|'assistant', 'text': ...}); it gives the classifier the
+  /// same conversational context a person would have.
+  Future<VoiceCommand?> parseVoiceCommand(
+    String speech, {
+    String? recentContext,
+    List<Map<String, String>> history = const [],
+  }) async {
     if (speech.trim().isEmpty) return null;
 
     final schema = Schema.object(
@@ -1179,7 +1192,7 @@ Respond ONLY with the summary text (no JSON, no labels).''';
       ],
     );
 
-    const systemInstruction =
+    final systemInstruction =
         'You map a user\'s spoken input in a wellness app to ONE command. '
         'Commands: setThemeDark/setThemeLight (dark/light mode), setAccentColor '
         '(change accent color; set colorName), increaseTextSize/decreaseTextSize/'
@@ -1200,6 +1213,12 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         'and remind me at 5:30 pm" -> habitReminderHour 17, habitReminderMinute '
         '30. Use createHabit (not openHabitBuilder) whenever the user wants to '
         'ADD/CREATE a habit), '
+        'updateHabitReminder (change/reschedule the reminder time of an '
+        'EXISTING habit already in context — set habitReminderHour (24-hour) '
+        'and habitReminderMinute to the NEW time. Use this for follow-ups that '
+        'only give a new time, e.g. right after creating a habit the user says '
+        '"change it to 7:30" or "make it 7 pm" -> updateHabitReminder with the '
+        'new time. The RECENT CONTEXT below tells you which habit "it" means), '
         'openSettings/openCheckIn/openJournal/openHome (navigation), '
         'openIntentions (wellness intentions tab), '
         'openHabitBuilder (only to VIEW/open the habit builder / my habits tab, '
@@ -1233,8 +1252,15 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         systemInstruction: Content.system(systemInstruction),
       );
 
+      final transcript = _formatVoiceHistory(history);
+      final contextBlock =
+          (recentContext != null && recentContext.trim().isNotEmpty)
+              ? 'RECENT CONTEXT: ${recentContext.trim()}\n'
+              : '';
       final response = await model
-          .generateContent([Content.text('User said: "$speech"')])
+          .generateContent([
+            Content.text('$transcript${contextBlock}User said: "$speech"')
+          ])
           .timeout(const Duration(seconds: _promptTimeoutSeconds));
 
       final raw = response.text?.trim();
@@ -1274,12 +1300,39 @@ Respond ONLY with the summary text (no JSON, no labels).''';
   /// Kept short (suitable for text-to-speech) and in a warm wellness-companion
   /// tone. Returns `null` on timeout/error so the caller can fall back to a
   /// canned message.
-  Future<String?> generateVoiceReply(String question) async {
+  /// Formats a rolling voice transcript into a compact text block for the
+  /// prompt. Returns '' when [history] is empty. Only the most recent turns
+  /// are kept (the caller already trims), and long lines are clipped so the
+  /// context stays small and fast.
+  String _formatVoiceHistory(List<Map<String, String>> history) {
+    if (history.isEmpty) return '';
+    final buffer = StringBuffer('Conversation so far:\n');
+    for (final turn in history) {
+      final who = turn['role'] == 'assistant' ? 'Assistant' : 'User';
+      var line = (turn['text'] ?? '').trim();
+      if (line.isEmpty) continue;
+      if (line.length > 200) line = '${line.substring(0, 200)}…';
+      buffer.writeln('$who: $line');
+    }
+    buffer.writeln();
+    return buffer.toString();
+  }
+
+  ///
+  /// [history] is an ordered list of prior turns as
+  /// {'role': 'user'|'assistant', 'text': ...} so the reply stays in context
+  /// (e.g. "how about tomorrow?" refers to what was just discussed).
+  Future<String?> generateVoiceReply(
+    String question, {
+    List<Map<String, String>> history = const [],
+  }) async {
     if (question.trim().isEmpty) return null;
     try {
+      final transcript = _formatVoiceHistory(history);
       final text = await _generateText(
-        'The user said to the voice assistant: "$question"\n\n'
-        'Reply helpfully. Always finish your sentences completely.',
+        '${transcript}The user said to the voice assistant: "$question"\n\n'
+        'Reply helpfully, staying consistent with the conversation so far. '
+        'Always finish your sentences completely.',
         temperature: 0.7,
         // Gemini 2.5 Flash is a "thinking" model that spends output tokens on
         // internal reasoning before the visible answer, so a low cap can
@@ -1295,7 +1348,9 @@ Respond ONLY with the summary text (no JSON, no labels).''';
             'markdown, lists, or emojis. Do NOT give medical, legal, or '
             'financial advice, and avoid clinical language. If the request is '
             'something the app can do (themes, check-in, journal, plans), gently '
-            'guide them.',
+            'guide them. Use the conversation so far for context — resolve '
+            'follow-ups like "it", "that", or "how about tomorrow?" from the '
+            'earlier turns, and don\'t repeat yourself.',
         timeout: const Duration(seconds: _promptTimeoutSeconds),
       );
       if (text == null) return null;
@@ -1371,6 +1426,14 @@ Respond ONLY with the summary text (no JSON, no labels).''';
           result['reminderMinute'] = minute.toInt();
         }
         return result;
+      case VoiceCommandType.updateHabitReminder:
+        final h = data['habitReminderHour'];
+        final m = data['habitReminderMinute'];
+        if (h is num && h >= 0 && h <= 23 &&
+            m is num && m >= 0 && m <= 59) {
+          return {'reminderHour': h.toInt(), 'reminderMinute': m.toInt()};
+        }
+        return {};
       case VoiceCommandType.logWater:
         final ml = data['amountMl'];
         return (ml is num && ml > 0) ? {'amountMl': ml.round()} : {};
