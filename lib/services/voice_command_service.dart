@@ -487,6 +487,21 @@ class VoiceCommandService extends ChangeNotifier {
       case VoiceCommandType.openHabitBuilder:
         response = "Opening your habit builder.";
         break;
+      case VoiceCommandType.createHabit:
+        final habitTitle = command.params['title'] as String?;
+        if (habitTitle != null && habitTitle.trim().isNotEmpty) {
+          // We have the habit name — hand off to the UI to create it; the UI
+          // speaks the final confirmation (with the habit + frequency).
+          response = "Creating your habit: $habitTitle.";
+          _lastCommand = command;
+          _addAssistantMessage(response);
+          await speak(response);
+          notifyListeners();
+          return command;
+        } else {
+          response = "Sure — what habit would you like to add?";
+        }
+        break;
       case VoiceCommandType.openChallenges:
         response = "Opening your wellness challenges.";
         break;

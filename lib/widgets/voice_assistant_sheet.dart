@@ -28,6 +28,8 @@ import '../features/sleep/presentation/sleep_coach_screen.dart';
 import '../features/meditation/presentation/meditation_home_screen.dart';
 import '../features/meditation/presentation/breathing_screen.dart';
 import '../features/meditation/presentation/guided_meditation_screen.dart';
+import '../features/habit_builder/domain/habit_models.dart';
+import '../features/habit_builder/presentation/habit_builder_state.dart';
 import '../screens/period_tracker_screen.dart';
 import '../screens/weight_tracker_screen.dart';
 import '../screens/travel_screen.dart';
@@ -172,6 +174,20 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
         }
         break;
 
+      // ── Habit creation ──────────────────────────────────────────────────
+      case VoiceCommandType.createHabit:
+        final habitTitle = command.params['title'] as String?;
+        if (habitTitle != null && habitTitle.trim().isNotEmpty) {
+          _createHabitByVoice(
+            habitTitle.trim(),
+            command.params['frequency'] as String?,
+          );
+        } else {
+          // No habit name understood — fall back to opening the tab.
+          _goToTab(AppTab.habitBuilder);
+        }
+        break;
+
       // ── Tab navigation ──────────────────────────────────────────────────
       case VoiceCommandType.openHome:
         _goToTab(AppTab.home);
@@ -281,6 +297,55 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
       _voiceService.speak(
           "Sorry, I couldn't log your water right now. Please try again.");
     }
+  }
+
+  /// Creates a habit from a voice command and confirms it out loud, instead of
+  /// just opening the Habit Builder. [frequencyName] is one of daily/weekdays/
+  /// weekends (defaults to daily).
+  Future<void> _createHabitByVoice(String title, String? frequencyName) async {
+    // Resolve the frequency + matching active days.
+    HabitFrequency frequency;
+    List<int> activeDays;
+    switch (frequencyName) {
+      case 'weekdays':
+        frequency = HabitFrequency.weekdays;
+        activeDays = const [1, 2, 3, 4, 5];
+        break;
+      case 'weekends':
+        frequency = HabitFrequency.weekends;
+        activeDays = const [6, 7];
+        break;
+      case 'daily':
+      default:
+        frequency = HabitFrequency.daily;
+        activeDays = const [1, 2, 3, 4, 5, 6, 7];
+        break;
+    }
+
+    try {
+      await context.read<HabitBuilderState>().createHabit(
+            title: title,
+            tool: HabitTool.custom,
+            frequency: frequency,
+            activeDays: activeDays,
+          );
+    } catch (e) {
+      _voiceService.speak(
+          "Sorry, I couldn't create that habit right now. Please try again.");
+      return;
+    }
+
+    if (!mounted) return;
+
+    // A friendly spoken confirmation naming the habit + how often it repeats.
+    final freqPhrase = frequency == HabitFrequency.weekdays
+        ? 'on weekdays'
+        : frequency == HabitFrequency.weekends
+            ? 'on weekends'
+            : 'every day';
+    _voiceService.speak(
+        'Done. I\'ve added "$title" to your habits, $freqPhrase. '
+        'You\'ll find it in the Habit Builder.');
   }
 
   /// Creates a wellness intention from a voice command (title is the only

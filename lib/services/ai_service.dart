@@ -978,6 +978,7 @@ Respond ONLY with the summary text (no JSON, no labels).''';
     'setAvailableTime',
     'submitCheckIn',
     'logIntention',
+    'createHabit',
     'openSettings',
     'openCheckIn',
     'openJournal',
@@ -1002,6 +1003,13 @@ Respond ONLY with the summary text (no JSON, no labels).''';
     'howAmI',
     'help',
     'unknown',
+  ];
+
+  /// Habit repeat frequencies the voice parser may return for createHabit.
+  static const List<String> _voiceHabitFrequencyValues = [
+    'daily',
+    'weekdays',
+    'weekends',
   ];
 
   static const List<String> _voiceMoodValues = [
@@ -1112,6 +1120,20 @@ Respond ONLY with the summary text (no JSON, no labels).''';
               'learn yoga". Null if not provided.',
           nullable: true,
         ),
+        'habitTitle': Schema.string(
+          description:
+              'The habit name, only for createHabit. Extract a concise, '
+              'actionable habit, e.g. "Play badminton" from "create a daily '
+              'habit of playing badminton". Null if not provided.',
+          nullable: true,
+        ),
+        'habitFrequency': Schema.enumString(
+          enumValues: _voiceHabitFrequencyValues,
+          description:
+              'How often the habit repeats, only for createHabit: "daily", '
+              '"weekdays", or "weekends". Default to "daily" if unstated.',
+          nullable: true,
+        ),
         'amountMl': Schema.integer(
           description:
               'Water amount in millilitres, only for logWater. Convert litres '
@@ -1131,6 +1153,8 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         'colorName',
         'enabled',
         'title',
+        'habitTitle',
+        'habitFrequency',
         'amountMl',
       ],
     );
@@ -1147,9 +1171,15 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         'to the goal, e.g. "add an intention to learn yoga" -> title "Learn '
         'Yoga"; if they want to add an intention but give no goal, still '
         'return logIntention with title null), '
+        'createHabit (create/add/start a recurring HABIT to track — set '
+        'habitTitle to the activity and habitFrequency to daily/weekdays/'
+        'weekends, e.g. "create a daily habit of playing badminton" -> '
+        'habitTitle "Play badminton", habitFrequency "daily". Use createHabit '
+        '(not openHabitBuilder) whenever the user wants to ADD/CREATE a habit), '
         'openSettings/openCheckIn/openJournal/openHome (navigation), '
         'openIntentions (wellness intentions tab), '
-        'openHabitBuilder (habit builder / my habits tab), '
+        'openHabitBuilder (only to VIEW/open the habit builder / my habits tab, '
+        'not to create one), '
         'openChallenges (wellness challenges), refreshPlan (new daily plan). '
         'Tool navigation: openNutritionCoach (nutrition/food logging), '
         'openMealPlanner (meal plans), openCalorieBudget (calories), '
@@ -1299,6 +1329,15 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         return (title is String && title.trim().isNotEmpty)
             ? {'title': title.trim()}
             : {};
+      case VoiceCommandType.createHabit:
+        final habitTitle = data['habitTitle'];
+        if (habitTitle is! String || habitTitle.trim().isEmpty) return {};
+        final freq = data['habitFrequency'];
+        final result = <String, dynamic>{'title': habitTitle.trim()};
+        if (freq is String && _voiceHabitFrequencyValues.contains(freq)) {
+          result['frequency'] = freq;
+        }
+        return result;
       case VoiceCommandType.logWater:
         final ml = data['amountMl'];
         return (ml is num && ml > 0) ? {'amountMl': ml.round()} : {};

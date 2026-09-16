@@ -19,6 +19,9 @@ enum VoiceCommandType {
   // Wellness intention commands
   logIntention,
 
+  // Habit commands
+  createHabit,
+
   // Navigation commands (tabs)
   openSettings,
   openCheckIn,

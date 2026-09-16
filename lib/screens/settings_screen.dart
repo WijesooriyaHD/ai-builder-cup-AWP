@@ -11,7 +11,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../providers/app_state.dart';
 import '../providers/check_in_state.dart';
 import '../providers/personalization_state.dart';
-import '../models/wellness_method.dart';
 import '../providers/wellness_plan_state.dart';
 import '../services/auth_service.dart';
 import '../services/voice_command_service.dart';
@@ -115,17 +114,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSubscriptionSection(context),
               const SizedBox(height: 16),
 
+              // Home Screen Widget — moved here from the profile sheet.
               _buildCard(
                 context,
-                title: "AI Voice",
-                child: _buildAiVoiceSelector(context, appState),
+                title: "Home Screen Widget",
+                child: _buildWidgetsSection(context),
               ),
               const SizedBox(height: 16),
 
               _buildCard(
                 context,
-                title: "Preferred Wellness Methods",
-                child: _WellnessMethodsSelector(appState: appState),
+                title: "AI Voice",
+                child: _buildAiVoiceSelector(context, appState),
               ),
               const SizedBox(height: 16),
 
@@ -224,6 +224,241 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         },
       ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Home Screen Widget (moved here from the profile sheet)
+  // ---------------------------------------------------------------------------
+
+  /// Tappable row that opens the Today's Plan home-screen widget sheet.
+  Widget _buildWidgetsSection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () => _showHomeWidgetsBottomSheet(context),
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.dashboard_rounded,
+                size: 20, color: Theme.of(context).primaryColor),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Today's Plan Widget",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  "Add Today's Plan to your home screen",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: isDark ? Colors.white24 : Colors.grey.shade400,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHomeWidgetsBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
+        final primary = Theme.of(sheetContext).primaryColor;
+        final plan =
+            Provider.of<WellnessPlanState>(sheetContext, listen: false)
+                .todaysPlan;
+
+        return Container(
+          margin: const EdgeInsets.all(16),
+          // Cap the sheet so it never exceeds the screen; the content scrolls
+          // if it's taller than the available space.
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
+          ),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? Theme.of(sheetContext).cardColor : Colors.white,
+            borderRadius: BorderRadius.circular(32),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white24 : Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.today_rounded,
+                          color: primary, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        "Today's Plan Widget",
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  "Add the Today's Plan widget to your phone's home screen to "
+                  "see your daily wellness actions and tick them off — right "
+                  "from your home screen. It stays in sync with the app "
+                  "automatically.",
+                  style: TextStyle(
+                      color: Colors.grey.shade600, fontSize: 14, height: 1.45),
+                ),
+                const SizedBox(height: 20),
+                // Live preview of what the widget currently shows.
+                _buildWidgetPreview(sheetContext, plan, primary, isDark),
+                const SizedBox(height: 20),
+                // How-to hint.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 16, color: Colors.grey.shade500),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Long-press your home screen, tap Widgets, and add "
+                        "\"AI Wellness\" to place it.",
+                        style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 12,
+                            height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// A compact preview mirroring what the native Today's Plan widget shows.
+  Widget _buildWidgetPreview(
+      BuildContext context, dynamic plan, Color primary, bool isDark) {
+    final hasPlan = plan != null && (plan.actions as List).isNotEmpty;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+            color: isDark ? Colors.white10 : Colors.grey.shade200),
+      ),
+      child: hasPlan
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  plan.todaysFocus as String,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: primary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 10),
+                ...(plan.actions as List).take(3).map((a) {
+                  final done = a.isCompleted as bool;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          done
+                              ? Icons.check_box_rounded
+                              : Icons.check_box_outline_blank_rounded,
+                          size: 18,
+                          color: done ? primary : Colors.grey.shade400,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            a.title as String,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              decoration:
+                                  done ? TextDecoration.lineThrough : null,
+                              color: done
+                                  ? Colors.grey
+                                  : Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.color,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            )
+          : Row(
+              children: [
+                Icon(Icons.today_rounded,
+                    color: Colors.grey.shade400, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Complete your check-in to see your plan on the widget.',
+                    style: TextStyle(
+                        color: Colors.grey.shade500, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
@@ -1695,145 +1930,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-/// Settings section letting the user customize their preferred wellness
-/// methods at any time. Minimum 3 required to save (no maximum). Changes are
-/// persisted via [AppState.setPreferredMethods] and immediately influence
-/// future Today's Plan generation — no need to repeat onboarding.
-class _WellnessMethodsSelector extends StatefulWidget {
-  final AppState appState;
-  const _WellnessMethodsSelector({required this.appState});
 
-  @override
-  State<_WellnessMethodsSelector> createState() =>
-      _WellnessMethodsSelectorState();
-}
-
-class _WellnessMethodsSelectorState extends State<_WellnessMethodsSelector> {
-  late Set<String> _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = widget.appState.preferredMethods.toSet();
-  }
-
-  bool get _meetsMin => _selected.length >= kMinWellnessMethods;
-
-  /// Whether the current selection differs from what's already saved.
-  bool get _isDirty {
-    final saved = widget.appState.preferredMethods.toSet();
-    return !(saved.length == _selected.length &&
-        saved.containsAll(_selected));
-  }
-
-  void _toggle(String id) {
-    setState(() {
-      if (_selected.contains(id)) {
-        _selected.remove(id);
-      } else {
-        _selected.add(id);
-      }
-    });
-  }
-
-  void _save() {
-    if (!_meetsMin) return;
-    widget.appState.setPreferredMethods(_selected.toList());
-    FocusScope.of(context).unfocus();
-    WellnessPalSnackBar.show(context, message: 'Wellness preferences saved');
-    setState(() {}); // Refresh dirty state.
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final count = _selected.length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Choose the wellness approaches you enjoy most. We\'ll prioritize '
-          'them when creating your daily plans.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.7),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _meetsMin
-              ? '$count method${count == 1 ? '' : 's'} selected'
-              : 'Select at least $kMinWellnessMethods wellness methods.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: _meetsMin ? theme.colorScheme.primary : theme.colorScheme.error,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: kWellnessMethods.map((method) {
-            final isSelected = _selected.contains(method.id);
-            return GestureDetector(
-              onTap: () => _toggle(method.id),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.outline.withOpacity(0.3),
-                    width: isSelected ? 2 : 1,
-                  ),
-                  color: isSelected
-                      ? theme.colorScheme.primary.withOpacity(0.08)
-                      : null,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      method.icon,
-                      size: 18,
-                      color: isSelected
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      method.label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    if (isSelected) ...[
-                      const SizedBox(width: 6),
-                      Icon(Icons.check_circle,
-                          size: 16, color: theme.colorScheme.primary),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: (_meetsMin && _isDirty) ? _save : null,
-            child: const Text('Save preferences'),
-          ),
-        ),
-      ],
-    );
-  }
-}
