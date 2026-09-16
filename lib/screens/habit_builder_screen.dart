@@ -465,7 +465,6 @@ class _HabitManageTile extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E2124) : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -476,7 +475,15 @@ class _HabitManageTile extends StatelessWidget {
               offset: const Offset(0, 2)),
         ],
       ),
-      child: Row(
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => showEditHabitSheet(context, habit),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
         children: [
           Text(habit.tool.emoji, style: const TextStyle(fontSize: 22)),
           const SizedBox(width: 14),
@@ -539,7 +546,10 @@ class _HabitManageTile extends StatelessWidget {
                 color: Colors.red.withOpacity(0.7)),
             onPressed: () => _confirmDelete(context),
           ),
-        ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -855,6 +865,58 @@ void showAddHabitSheet(
   );
 }
 
+/// Opens the "Edit Habit" bottom sheet for an existing [habit], pre-filled with
+/// its current values. Saving updates the habit in place (id/log/streak kept).
+void showEditHabitSheet(BuildContext context, Habit habit) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _EditHabitSheet(habit: habit),
+  );
+}
+
+/// Bottom sheet wrapper that hosts the [_CustomHabitForm] in edit mode.
+class _EditHabitSheet extends StatelessWidget {
+  const _EditHabitSheet({required this.habit});
+
+  final Habit habit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+        decoration: BoxDecoration(
+            color: theme.cardColor, borderRadius: BorderRadius.circular(28)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text('Edit Habit',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Flexible(child: _CustomHabitForm(editHabit: habit)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AddHabitSheet extends StatefulWidget {
   const _AddHabitSheet({
     this.initialTabIndex = 0,
@@ -1075,11 +1137,16 @@ class _CustomHabitForm extends StatefulWidget {
     this.initialTitle,
     this.initialTool,
     this.initialDescription,
+    this.editHabit,
   });
 
   final String? initialTitle;
   final HabitTool? initialTool;
   final String? initialDescription;
+
+  /// When non-null, the form edits this existing habit (updates it) instead of
+  /// creating a new one, and is pre-filled from its current values.
+  final Habit? editHabit;
 
   @override
   State<_CustomHabitForm> createState() => _CustomHabitFormState();
@@ -1093,19 +1160,68 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
   HabitFrequency _freq = HabitFrequency.daily;
   bool _saving = false;
 
+  /// ISO weekdays (1=Mon … 7=Sun) selected when [_freq] is
+  /// [HabitFrequency.custom]. Defaults to weekdays as a friendly starting point.
+  final Set<int> _customDays = {1, 2, 3, 4, 5};
+
+  /// Short labels for the 7-day picker, indexed by ISO weekday (Mon..Sun).
+  static const List<String> _weekdayLabels = [
+    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun',
+  ];
+
+  /// Resolves the concrete active weekdays to persist for the chosen frequency,
+  /// so `Habit.isScheduledToday` shows the habit on exactly the right days.
+  List<int> _activeDaysForFrequency() {
+    switch (_freq) {
+      case HabitFrequency.daily:
+        return const [1, 2, 3, 4, 5, 6, 7];
+      case HabitFrequency.weekdays:
+        return const [1, 2, 3, 4, 5];
+      case HabitFrequency.weekends:
+        return const [6, 7];
+      case HabitFrequency.custom:
+        final days = _customDays.toList()..sort();
+        return days;
+    }
+  }
+
   /// Description carried from a prefill (e.g. an intention step). Not shown as
   /// a field to keep the form simple, but saved with the habit.
   String? _description;
 
+  bool get _isEditing => widget.editHabit != null;
+
   @override
   void initState() {
     super.initState();
-    // Apply any prefill from the caller (e.g. a Wellness Intention step).
-    if (widget.initialTitle != null) {
-      _titleCtrl.text = widget.initialTitle!;
+    final edit = widget.editHabit;
+    if (edit != null) {
+      // Editing an existing habit: pre-fill every field from it.
+      _titleCtrl.text = edit.title;
+      _tool = edit.tool;
+      _freq = edit.frequency;
+      _description = edit.description;
+      if (edit.targetValue != null) {
+        // Show whole numbers without a trailing ".0".
+        _targetCtrl.text = edit.targetValue! % 1 == 0
+            ? edit.targetValue!.toInt().toString()
+            : edit.targetValue!.toString();
+      }
+      if (edit.targetUnit != null) _unitCtrl.text = edit.targetUnit!;
+      if (edit.frequency == HabitFrequency.custom &&
+          edit.activeDays.isNotEmpty) {
+        _customDays
+          ..clear()
+          ..addAll(edit.activeDays);
+      }
+    } else {
+      // Apply any prefill from the caller (e.g. a Wellness Intention step).
+      if (widget.initialTitle != null) {
+        _titleCtrl.text = widget.initialTitle!;
+      }
+      _tool = widget.initialTool ?? HabitTool.custom;
+      _description = widget.initialDescription;
     }
-    _tool = widget.initialTool ?? HabitTool.custom;
-    _description = widget.initialDescription;
   }
 
   @override
@@ -1118,26 +1234,120 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
 
   Future<void> _save() async {
     if (_titleCtrl.text.trim().isEmpty) return;
+
+    // For custom frequency, require at least one selected day.
+    if (_freq == HabitFrequency.custom && _customDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one day for a custom habit.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
     final target = double.tryParse(_targetCtrl.text.trim());
     final unit =
         _unitCtrl.text.trim().isEmpty ? null : _unitCtrl.text.trim();
-    await context.read<HabitBuilderState>().createHabit(
+    final state = context.read<HabitBuilderState>();
+
+    final edit = widget.editHabit;
+    if (edit != null) {
+      // Update the existing habit in place, preserving id/log/streak/reminder/
+      // active state. Built directly (not via copyWith) so clearing an optional
+      // target or unit actually removes it (copyWith keeps old values on null).
+      await state.updateHabit(
+        Habit(
+          id: edit.id,
           title: _titleCtrl.text.trim(),
-          description: _description,
+          description: edit.description,
           tool: _tool,
           frequency: _freq,
+          activeDays: _activeDaysForFrequency(),
           targetValue: target,
           targetUnit: unit,
-        );
+          isActive: edit.isActive,
+          reminderHour: edit.reminderHour,
+          reminderMinute: edit.reminderMinute,
+          log: edit.log,
+        ),
+      );
+    } else {
+      await state.createHabit(
+        title: _titleCtrl.text.trim(),
+        description: _description,
+        tool: _tool,
+        frequency: _freq,
+        activeDays: _activeDaysForFrequency(),
+        targetValue: target,
+        targetUnit: unit,
+      );
+    }
     if (mounted) {
       setState(() => _saving = false);
       Navigator.pop(context);
     }
   }
 
+  /// A row of 7 selectable day chips shown only for custom frequency.
+  Widget _buildDaySelector(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Text(
+          'Repeat on',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(7, (i) {
+            final weekday = i + 1; // 1=Mon … 7=Sun
+            final selected = _customDays.contains(weekday);
+            return GestureDetector(
+              onTap: () => setState(() {
+                if (selected) {
+                  _customDays.remove(weekday);
+                } else {
+                  _customDays.add(weekday);
+                }
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.primary.withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  _weekdayLabels[i].substring(0, 1),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: selected
+                        ? Colors.white
+                        : theme.colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
@@ -1185,6 +1395,8 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
                 .toList(),
             onChanged: (v) => setState(() => _freq = v!),
           ),
+          // Day picker — only for "Custom days".
+          if (_freq == HabitFrequency.custom) _buildDaySelector(theme),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -1234,8 +1446,8 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
                       height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : const Text('Add habit',
-                      style: TextStyle(
+                  : Text(_isEditing ? 'Save changes' : 'Add habit',
+                      style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 15)),
             ),
           ),

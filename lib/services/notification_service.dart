@@ -423,12 +423,18 @@ class NotificationService {
   /// Schedules a daily habit reminder at [hour]:[minute] on the given ISO
   /// [weekdays] (1=Mon … 7=Sun). Cancels existing occurrences first, so it's
   /// safe to call on every save. If [weekdays] is empty it only cancels.
+  ///
+  /// When [skipToday] is true, today's reminder is suppressed (e.g. because the
+  /// habit is already completed): today's weekday occurrence is scheduled to
+  /// begin next week instead of firing again today. The weekly repeat then
+  /// resumes normally. Other weekdays are unaffected.
   Future<void> scheduleHabitReminder({
     required String habitId,
     required String label,
     required int hour,
     required int minute,
     required List<int> weekdays,
+    bool skipToday = false,
     bool? assumeAuthorized,
   }) async {
     if (!_isInitialized) {
@@ -447,8 +453,21 @@ class NotificationService {
       return;
     }
 
+    final now = tz.TZDateTime.now(tz.local);
+
     for (final weekday in weekdays) {
-      final scheduled = _nextWeekdayTime(weekday, hour, minute);
+      var scheduled = _nextWeekdayTime(weekday, hour, minute);
+
+      // Suppress today's reminder when requested: if the first occurrence lands
+      // today (same date), push it a week out so nothing fires again today.
+      // The weekly repeat still resumes on schedule afterward.
+      if (skipToday &&
+          scheduled.year == now.year &&
+          scheduled.month == now.month &&
+          scheduled.day == now.day) {
+        scheduled = scheduled.add(const Duration(days: 7));
+      }
+
       await _plugin.zonedSchedule(
         _habitNotificationId(habitId, weekday),
         '$label ⏰',
@@ -463,7 +482,8 @@ class NotificationService {
     }
 
     debugPrint('🔔 Habit reminder "$label" scheduled for weekdays '
-        '$weekdays at $hour:${minute.toString().padLeft(2, '0')}');
+        '$weekdays at $hour:${minute.toString().padLeft(2, '0')}'
+        '${skipToday ? " (today skipped)" : ""}');
   }
 
   /// Cancels every weekday occurrence for a habit reminder.

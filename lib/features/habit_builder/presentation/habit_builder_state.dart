@@ -52,6 +52,20 @@ class HabitBuilderState extends ChangeNotifier {
     notifyListeners();
     // Populate the home-screen "Today's Habits" widget on load.
     await _pushHabitsToWidget();
+    // Re-arm reminders so today's skip state is correct after an app restart
+    // or a midnight rollover (a habit completed yesterday gets its reminder
+    // back today; one already done today stays suppressed).
+    await _rearmReminders();
+  }
+
+  /// Re-syncs reminders for all habits that have one, applying today's skip
+  /// state. Cheap: only touches habits with a reminder configured.
+  Future<void> _rearmReminders() async {
+    for (final h in _habits) {
+      if (h.hasReminder && h.isActive) {
+        await _syncReminder(h);
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -305,6 +319,8 @@ class HabitBuilderState extends ChangeNotifier {
       hour: hour,
       minute: minute,
       weekdays: _weekdaysFor(updated),
+      // If the habit is already done today, don't fire the reminder today.
+      skipToday: updated.isCompletedToday,
     );
   }
 
@@ -347,6 +363,8 @@ class HabitBuilderState extends ChangeNotifier {
     _habits[idx] = h.copyWith(log: newLog);
     notifyListeners();
     await _save();
+    // Suppress today's reminder now that it's done.
+    await _syncReminder(_habits[idx]);
   }
 
   /// Removes the completion for today (undo).
@@ -359,6 +377,23 @@ class HabitBuilderState extends ChangeNotifier {
     _habits[idx] = h.copyWith(log: newLog);
     notifyListeners();
     await _save();
+    // Restore today's reminder since the habit is no longer complete.
+    await _syncReminder(_habits[idx]);
+  }
+
+  /// Reschedules a habit's reminder (if it has one) so today's occurrence is
+  /// skipped when the habit is already completed today, and restored otherwise.
+  /// A no-op for habits without a reminder.
+  Future<void> _syncReminder(Habit habit) async {
+    if (!habit.hasReminder) return;
+    await NotificationService().scheduleHabitReminder(
+      habitId: habit.id,
+      label: habit.title,
+      hour: habit.reminderHour!,
+      minute: habit.reminderMinute!,
+      weekdays: _weekdaysFor(habit),
+      skipToday: habit.isCompletedToday,
+    );
   }
 
   /// Toggle today's completion status.

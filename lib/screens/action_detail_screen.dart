@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:provider/provider.dart';
 
+import '../features/habit_builder/domain/habit_models.dart';
 import '../models/wellness_action.dart';
 import '../models/wellness_enums.dart';
 import '../models/wellness_method.dart';
@@ -12,6 +13,7 @@ import '../services/storage_service.dart';
 import '../utils/pro_modal_utils.dart';
 import '../utils/wellnesspal_snackbar.dart';
 import '../widgets/frosted_container.dart';
+import 'habit_builder_screen.dart';
 
 /// Detail view for a single [WellnessAction].
 ///
@@ -78,6 +80,13 @@ class _ActionDetailScreenState extends State<ActionDetailScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.playlist_add_check_rounded),
+            tooltip: 'Add as a habit',
+            onPressed: () => _addActionAsHabit(method),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -347,6 +356,50 @@ class _ActionDetailScreenState extends State<ActionDetailScreen> {
       });
       WellnessPalSnackBar.show(context, message: reason, isError: true);
     }
+  }
+
+  /// Maps an action's wellness [category] to the closest Habit Builder tool,
+  /// so the Custom habit form's "Related tool" is sensibly pre-filled.
+  HabitTool _habitToolForCategory(WellnessCategory category) {
+    switch (category) {
+      case WellnessCategory.sleep:
+        return HabitTool.sleep;
+      case WellnessCategory.stress:
+      case WellnessCategory.mindfulness:
+      case WellnessCategory.mentalClarity:
+        return HabitTool.meditation;
+      case WellnessCategory.movement:
+      case WellnessCategory.energy:
+        return HabitTool.calorieBudget;
+      case WellnessCategory.flexibility:
+      case WellnessCategory.recovery:
+      case WellnessCategory.general:
+        return HabitTool.custom;
+    }
+  }
+
+  /// Opens the Habit Builder "Add a Habit" sheet on the Custom tab, pre-filled
+  /// from this action so the user only has to review and confirm.
+  void _addActionAsHabit(WellnessMethod? method) {
+    final descriptionParts = <String>[
+      if (method != null) 'Wellness method: ${method.label}',
+      'Category: ${_categoryLabel(action.category)}',
+      if (action.durationMinutes > 0) 'Suggested: ${action.durationMinutes} min',
+    ];
+
+    showAddHabitSheet(
+      context,
+      initialTabIndex: 1, // Custom tab
+      initialTitle: action.title,
+      initialTool: _habitToolForCategory(action.category),
+      initialDescription: descriptionParts.join(' • '),
+    );
+
+    WellnessPalSnackBar.show(
+      context,
+      message: 'Review and confirm your new habit',
+      icon: Icons.playlist_add_check_rounded,
+    );
   }
 
   IconData _categoryIcon(WellnessCategory category) {
