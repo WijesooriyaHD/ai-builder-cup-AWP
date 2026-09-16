@@ -14,6 +14,7 @@ import '../providers/wellness_plan_state.dart';
 import '../services/ai_service.dart';
 import '../services/voice_command_service.dart';
 import '../services/app_navigation_service.dart';
+import '../services/notification_service.dart';
 import '../services/toolkit_context_builder.dart';
 import 'voice_orb.dart';
 
@@ -178,9 +179,13 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
       case VoiceCommandType.createHabit:
         final habitTitle = command.params['title'] as String?;
         if (habitTitle != null && habitTitle.trim().isNotEmpty) {
+          final rh = command.params['reminderHour'];
+          final rm = command.params['reminderMinute'];
           _createHabitByVoice(
             habitTitle.trim(),
             command.params['frequency'] as String?,
+            reminderHour: rh is int ? rh : (rh is num ? rh.toInt() : null),
+            reminderMinute: rm is int ? rm : (rm is num ? rm.toInt() : null),
           );
         } else {
           // No habit name understood — fall back to opening the tab.
@@ -301,8 +306,14 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
 
   /// Creates a habit from a voice command and confirms it out loud, instead of
   /// just opening the Habit Builder. [frequencyName] is one of daily/weekdays/
-  /// weekends (defaults to daily).
-  Future<void> _createHabitByVoice(String title, String? frequencyName) async {
+  /// weekends (defaults to daily). When [reminderHour]/[reminderMinute] are
+  /// given, a daily reminder is scheduled at that time too.
+  Future<void> _createHabitByVoice(
+    String title,
+    String? frequencyName, {
+    int? reminderHour,
+    int? reminderMinute,
+  }) async {
     // Resolve the frequency + matching active days.
     HabitFrequency frequency;
     List<int> activeDays;
@@ -322,13 +333,31 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
         break;
     }
 
+    final habitState = context.read<HabitBuilderState>();
+    final hasReminder = reminderHour != null && reminderMinute != null;
+
+    // If a reminder was requested, make sure notifications are permitted
+    // BEFORE scheduling (setReminder silently skips scheduling otherwise).
+    var reminderGranted = false;
+    if (hasReminder) {
+      final notifier = NotificationService();
+      reminderGranted = await notifier.hasNotificationPermission()
+          ? true
+          : await notifier.requestPermission();
+    }
+
     try {
-      await context.read<HabitBuilderState>().createHabit(
-            title: title,
-            tool: HabitTool.custom,
-            frequency: frequency,
-            activeDays: activeDays,
-          );
+      final habit = await habitState.createHabit(
+        title: title,
+        tool: HabitTool.custom,
+        frequency: frequency,
+        activeDays: activeDays,
+      );
+
+      // Schedule the reminder on the newly created habit.
+      if (hasReminder) {
+        await habitState.setReminder(habit.id, reminderHour, reminderMinute);
+      }
     } catch (e) {
       _voiceService.speak(
           "Sorry, I couldn't create that habit right now. Please try again.");
@@ -337,15 +366,34 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
 
     if (!mounted) return;
 
-    // A friendly spoken confirmation naming the habit + how often it repeats.
+    // A friendly spoken confirmation naming the habit + how often it repeats,
+    // and the reminder time when one was set.
     final freqPhrase = frequency == HabitFrequency.weekdays
         ? 'on weekdays'
         : frequency == HabitFrequency.weekends
             ? 'on weekends'
             : 'every day';
-    _voiceService.speak(
-        'Done. I\'ve added "$title" to your habits, $freqPhrase. '
-        'You\'ll find it in the Habit Builder.');
+
+    final buffer = StringBuffer('Done. I\'ve added "$title" to your habits, '
+        '$freqPhrase.');
+    if (hasReminder) {
+      final timePhrase = _formatSpokenTime(reminderHour, reminderMinute);
+      buffer.write(reminderGranted
+          ? ' I\'ll remind you at $timePhrase.'
+          : ' I set a reminder for $timePhrase, but notifications are off — '
+              'enable them in Settings to be reminded.');
+    } else {
+      buffer.write(' You\'ll find it in the Habit Builder.');
+    }
+    _voiceService.speak(buffer.toString());
+  }
+
+  /// Formats a 24-hour [hour]/[minute] as a spoken 12-hour string like
+  /// "5:30 PM" (used in the voice confirmation).
+  String _formatSpokenTime(int hour, int minute) {
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final h12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '$h12:${minute.toString().padLeft(2, '0')} $period';
   }
 
   /// Creates a wellness intention from a voice command (title is the only

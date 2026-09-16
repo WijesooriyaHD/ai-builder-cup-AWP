@@ -2391,6 +2391,139 @@ class _WellnessMethodsSelectorState extends State<_WellnessMethodsSelector> {
 
   bool get _meetsMin => _selected.length >= kMinWellnessMethods;
 
+  // Chip geometry constants — kept in sync with _buildMethodChip so width
+  // measurement matches what's actually rendered.
+  static const double _chipHSpacing = 8; // gap between chips in a row
+  static const double _chipRunSpacing = 8; // gap between rows
+  static const double _chipHPadding = 12; // horizontal padding inside a chip
+  static const double _chipIconSize = 18;
+  static const double _chipIconGap = 8; // gap between icon and label
+  static const double _chipCheckWidth = 6 + 16; // gap + check icon (selected)
+  static const double _chipBorder = 2; // max border width (both sides ≈ 2)
+
+  /// Measures the rendered width of a chip for [method] given its selected
+  /// state (selected chips are bold and show a trailing check).
+  double _chipWidth(WellnessMethod method, ThemeData theme, bool isSelected) {
+    final textStyle = theme.textTheme.bodyMedium?.copyWith(
+      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+    );
+    final tp = TextPainter(
+      text: TextSpan(text: method.label, style: textStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    var w = _chipHPadding * 2 +
+        _chipIconSize +
+        _chipIconGap +
+        tp.width +
+        _chipBorder;
+    if (isSelected) w += _chipCheckWidth;
+    return w.ceilToDouble();
+  }
+
+  /// Packs all method chips into the fewest rows that fit [maxWidth] using a
+  /// first-fit-decreasing strategy: widest chips are placed first so smaller
+  /// ones fill the gaps, minimizing the number of rows (and the section
+  /// height). Falls back gracefully when a single chip exceeds [maxWidth].
+  Widget _buildPackedChips(ThemeData theme, double maxWidth) {
+    // Precompute each chip's width in its current selected state.
+    final items = kWellnessMethods.map((m) {
+      final selected = _selected.contains(m.id);
+      return (method: m, width: _chipWidth(m, theme, selected), selected: selected);
+    }).toList()
+      // Widest first for a tighter first-fit-decreasing packing.
+      ..sort((a, b) => b.width.compareTo(a.width));
+
+    final rows = <List<({WellnessMethod method, double width, bool selected})>>[];
+    final rowWidths = <double>[];
+
+    for (final item in items) {
+      var placed = false;
+      for (var i = 0; i < rows.length; i++) {
+        final used = rowWidths[i] + _chipHSpacing + item.width;
+        if (used <= maxWidth) {
+          rows[i].add(item);
+          rowWidths[i] = used;
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        rows.add([item]);
+        rowWidths.add(item.width);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) const SizedBox(height: _chipRunSpacing),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              for (var j = 0; j < rows[i].length; j++) ...[
+                if (j > 0) const SizedBox(width: _chipHSpacing),
+                _buildMethodChip(theme, rows[i][j].method),
+              ],
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMethodChip(ThemeData theme, WellnessMethod method) {
+    final isSelected = _selected.contains(method.id);
+    return GestureDetector(
+      onTap: () => _toggle(method.id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(
+            horizontal: _chipHPadding, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline.withOpacity(0.3),
+            width: isSelected ? 2 : 1,
+          ),
+          color: isSelected
+              ? theme.colorScheme.primary.withOpacity(0.08)
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              method.icon,
+              size: _chipIconSize,
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface.withOpacity(0.7),
+            ),
+            const SizedBox(width: _chipIconGap),
+            Text(
+              method.label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurface,
+              ),
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.check_circle,
+                  size: 16, color: theme.colorScheme.primary),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Whether the current selection differs from what's already saved.
   bool get _isDirty {
     final saved = widget.appState.preferredMethods.toSet();
@@ -2442,60 +2575,13 @@ class _WellnessMethodsSelectorState extends State<_WellnessMethodsSelector> {
           ),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: kWellnessMethods.map((method) {
-            final isSelected = _selected.contains(method.id);
-            return GestureDetector(
-              onTap: () => _toggle(method.id),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isSelected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.outline.withOpacity(0.3),
-                    width: isSelected ? 2 : 1,
-                  ),
-                  color: isSelected
-                      ? theme.colorScheme.primary.withOpacity(0.08)
-                      : null,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      method.icon,
-                      size: 18,
-                      color: isSelected
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      method.label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
-                        color: isSelected
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    if (isSelected) ...[
-                      const SizedBox(width: 6),
-                      Icon(Icons.check_circle,
-                          size: 16, color: theme.colorScheme.primary),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
+        // Measured first-fit bin-packing: each chip's real width is computed
+        // against the available row width and chips are packed greedily so the
+        // fewest rows are used (tightest possible layout for variable widths).
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return _buildPackedChips(theme, constraints.maxWidth);
+          },
         ),
         const SizedBox(height: 16),
         SizedBox(

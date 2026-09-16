@@ -1134,6 +1134,24 @@ Respond ONLY with the summary text (no JSON, no labels).''';
               '"weekdays", or "weekends". Default to "daily" if unstated.',
           nullable: true,
         ),
+        'habitReminderHour': Schema.integer(
+          description:
+              'Reminder time HOUR in 24-hour format (0-23), only for '
+              'createHabit when the user asks to schedule/remind at a time. '
+              'Convert 12-hour speech to 24-hour, e.g. "5:30 pm" -> 17, '
+              '"8 am" -> 8. Null if no time is stated.',
+          nullable: true,
+          minimum: 0,
+          maximum: 23,
+        ),
+        'habitReminderMinute': Schema.integer(
+          description:
+              'Reminder time MINUTE (0-59), only for createHabit when a time '
+              'is stated, e.g. "5:30 pm" -> 30, "8 am" -> 0. Null if no time.',
+          nullable: true,
+          minimum: 0,
+          maximum: 59,
+        ),
         'amountMl': Schema.integer(
           description:
               'Water amount in millilitres, only for logWater. Convert litres '
@@ -1155,6 +1173,8 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         'title',
         'habitTitle',
         'habitFrequency',
+        'habitReminderHour',
+        'habitReminderMinute',
         'amountMl',
       ],
     );
@@ -1174,8 +1194,12 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         'createHabit (create/add/start a recurring HABIT to track — set '
         'habitTitle to the activity and habitFrequency to daily/weekdays/'
         'weekends, e.g. "create a daily habit of playing badminton" -> '
-        'habitTitle "Play badminton", habitFrequency "daily". Use createHabit '
-        '(not openHabitBuilder) whenever the user wants to ADD/CREATE a habit), '
+        'habitTitle "Play badminton", habitFrequency "daily". If the user asks '
+        'to schedule/remind it at a time, set habitReminderHour (24-hour) and '
+        'habitReminderMinute, e.g. "create a daily habit of playing badminton '
+        'and remind me at 5:30 pm" -> habitReminderHour 17, habitReminderMinute '
+        '30. Use createHabit (not openHabitBuilder) whenever the user wants to '
+        'ADD/CREATE a habit), '
         'openSettings/openCheckIn/openJournal/openHome (navigation), '
         'openIntentions (wellness intentions tab), '
         'openHabitBuilder (only to VIEW/open the habit builder / my habits tab, '
@@ -1336,6 +1360,15 @@ Respond ONLY with the summary text (no JSON, no labels).''';
         final result = <String, dynamic>{'title': habitTitle.trim()};
         if (freq is String && _voiceHabitFrequencyValues.contains(freq)) {
           result['frequency'] = freq;
+        }
+        // Optional reminder time — only include when BOTH hour and minute are
+        // valid, so a partial/garbled time doesn't schedule a wrong reminder.
+        final hour = data['habitReminderHour'];
+        final minute = data['habitReminderMinute'];
+        if (hour is num && hour >= 0 && hour <= 23 &&
+            minute is num && minute >= 0 && minute <= 59) {
+          result['reminderHour'] = hour.toInt();
+          result['reminderMinute'] = minute.toInt();
         }
         return result;
       case VoiceCommandType.logWater:
