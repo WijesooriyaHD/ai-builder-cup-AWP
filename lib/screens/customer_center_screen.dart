@@ -232,8 +232,23 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
 
   Future<void> _showPaywall() async {
     try {
-      final result = await RevenueCatUI.presentPaywall();
-      
+      // Guarded, single entry point — presents the default offering's paywall
+      // (the three stage-variations are served server-side by RevenueCat).
+      final result = await _revenueCatService.presentPaywall();
+
+      if (result == null) {
+        // Paywall couldn't be shown (not configured / no offering).
+        if (mounted) {
+          WellnessPalSnackBar.show(
+            context,
+            message:
+                'Subscriptions aren\'t available right now. Please try again later.',
+            icon: Icons.info_outline_rounded,
+          );
+        }
+        return;
+      }
+
       if (result == PaywallResult.purchased || result == PaywallResult.restored) {
         // Refresh local UI state
         await _loadSubscriptionStatus();

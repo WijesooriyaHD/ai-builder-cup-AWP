@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 
+import '../config/feature_flags.dart';
+import 'conversation_mode_sheet.dart';
 import '../models/voice_command.dart';
 import '../models/check_in.dart';
 import '../models/wellness_enums.dart';
@@ -682,6 +684,33 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
                   ),
                 ),
                 const Spacer(),
+                // Premium real-time "Conversation Mode" entry (flag-gated).
+                // Hidden entirely unless the feature flag is on; Free-user
+                // gating is handled inside ConversationModeSheet.open.
+                if (FeatureFlags.liveConversationMode)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: TextButton.icon(
+                      onPressed: () {
+                        // Close this sheet, then open Conversation Mode on the
+                        // root navigator (captured before popping).
+                        final rootContext =
+                            Navigator.of(context, rootNavigator: true).context;
+                        final nav = Navigator.of(context);
+                        if (nav.canPop()) nav.pop();
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          ConversationModeSheet.open(rootContext);
+                        });
+                      },
+                      icon: const Icon(Icons.graphic_eq_rounded, size: 18),
+                      label: const Text('Talk'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                      ),
+                    ),
+                  ),
                 if (_voiceService.isInCheckInFlow)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

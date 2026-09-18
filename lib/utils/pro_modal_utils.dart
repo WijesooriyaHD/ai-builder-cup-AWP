@@ -1,7 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
+
+import '../providers/app_state.dart';
 import '../screens/customer_center_screen.dart';
+import '../services/revenue_cat_service.dart';
 
 class ProModalUtils {
+  /// Single entry point for every "Upgrade to Premium" action.
+  ///
+  /// Presents the RevenueCat-hosted paywall (default offering) DIRECTLY instead
+  /// of routing through the "Manage Subscription" screen first. Refreshes Pro
+  /// status on a successful purchase/restore. Falls back to the Customer Center
+  /// only if the paywall can't be shown (e.g. offerings not configured yet).
+  static Future<void> openUpgrade(BuildContext context) async {
+    final rc = RevenueCatService();
+    final result = await rc.presentPaywall();
+
+    if (result == PaywallResult.purchased || result == PaywallResult.restored) {
+      if (context.mounted) {
+        await context.read<AppState>().updateProStatus(forceRefresh: true);
+      }
+      return;
+    }
+
+    // Paywall couldn't be presented (null): fall back to the manage screen so
+    // the user still has an actionable path (e.g. Restore Purchases).
+    if (result == null && context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const CustomerCenterScreen()),
+      );
+    }
+  }
+
   static void showProStatusModal(BuildContext context, bool isPro) {
     showModalBottomSheet(
       context: context,
@@ -295,10 +327,7 @@ class ProModalUtils {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const CustomerCenterScreen()),
-                  );
+                  openUpgrade(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B9D),
@@ -410,11 +439,7 @@ class ProModalUtils {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const CustomerCenterScreen()),
-                  );
+                  openUpgrade(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B9D),
@@ -444,6 +469,20 @@ class ProModalUtils {
           ],
         ),
       ),
+    );
+  }
+
+  /// Upsell for the Premium real-time voice "Conversation Mode". Thin wrapper
+  /// over [showFeatureUpsellModal] with copy tailored to the feature.
+  static void showConversationModeUpsell(BuildContext context) {
+    showFeatureUpsellModal(
+      context,
+      title: 'Talk with your Pal',
+      message:
+          'Conversation Mode lets you have a natural, back-and-forth spoken '
+          'chat with your wellness pal — real-time, hands-free, with a lifelike '
+          'voice. Upgrade to Premium to unlock it.',
+      icon: Icons.graphic_eq_rounded,
     );
   }
 
@@ -518,10 +557,7 @@ class ProModalUtils {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const CustomerCenterScreen()),
-                  );
+                  openUpgrade(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B9D),

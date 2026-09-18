@@ -17,6 +17,8 @@ import 'services/check_in_service.dart';
 import 'services/personalization_service.dart';
 import 'services/notification_service.dart';
 import 'services/voice_command_service.dart';
+import 'services/live_conversation_service.dart';
+import 'services/record_pcm_audio_io.dart';
 import 'services/app_navigation_service.dart';
 import 'features/nutrition/presentation/nutrition_state.dart';
 import 'features/meal_planner/presentation/meal_planner_state.dart';
@@ -148,6 +150,12 @@ class BloomApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => PersonalizationState()),
         ChangeNotifierProvider(create: (_) => VoiceCommandService()),
+        // Premium "Conversation Mode" (Gemini Live). Idle until started; only
+        // reachable through the feature-flag-gated UI, so registering it here
+        // is inert in production.
+        ChangeNotifierProvider(
+            create: (_) =>
+                LiveConversationService(audioIO: RecordPcmAudioIO())),
         ChangeNotifierProvider(create: (_) => AppNavigationService()),
         ChangeNotifierProvider(create: (_) => NutritionState()),
         ChangeNotifierProvider(create: (_) => MealPlannerState()),
