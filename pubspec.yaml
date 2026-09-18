@@ -73,7 +73,6 @@ dependencies:
   google_sign_in: ^7.2.0
   firebase_ai: ^2.3.0
   firebase_app_check: ^0.3.2+10
-  firebase_remote_config: ^5.1.3
   mobile_scanner: ^7.4.0
   health: ^13.3.1
   # Premium "Conversation Mode" (Gemini Live) audio pipeline.

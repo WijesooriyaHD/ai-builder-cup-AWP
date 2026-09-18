@@ -1,4 +1,5 @@
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -12,9 +13,36 @@ class RevenueCatService {
   factory RevenueCatService() => _instance;
   RevenueCatService._internal();
 
-  static const String _iosApiKey = 'test_XblNGHDinPqDqxmWppeJYlbJIwy';
-  static const String _androidApiKey = 'test_XblNGHDinPqDqxmWppeJYlbJIwy';
+  // Real RevenueCat *public SDK* keys are supplied at build time via
+  // --dart-define so secrets don't live in source. Pass them like:
+  //   flutter run --dart-define=REVENUECAT_IOS_KEY=appl_xxx \
+  //               --dart-define=REVENUECAT_ANDROID_KEY=goog_xxx
+  // The `test_` fallbacks only work in debug (RevenueCat preview mode) and
+  // CANNOT fetch real store products or show a real paywall on a device.
+  static const String _iosApiKey = String.fromEnvironment(
+    'REVENUECAT_IOS_KEY',
+    defaultValue: 'test_XblNGHDinPqDqxmWppeJYlbJIwy',
+  );
+  static const String _androidApiKey = String.fromEnvironment(
+    'REVENUECAT_ANDROID_KEY',
+    defaultValue: 'test_XblNGHDinPqDqxmWppeJYlbJIwy',
+  );
   static const String proEntitlementId = 'ai_wellness_pal_pro';
+
+  /// TEST-ONLY override to unlock all Premium features WITHOUT a real purchase.
+  ///
+  /// Enable by building with: `--dart-define=FORCE_PRO=true`.
+  /// When set, [hasProAccess] returns true and [getSubscriptionStatus] reports
+  /// an active plan, so every Premium gate in the app is open. This exists so
+  /// Premium features can be tested on a device without RevenueCat/store setup.
+  ///
+  /// SAFETY: it's off unless the flag is explicitly passed, so a normal
+  /// production build (which never passes it) is completely unaffected.
+  static const bool _forcePro =
+      bool.fromEnvironment('FORCE_PRO', defaultValue: false);
+
+  /// Whether the test-only force-Pro override is active.
+  static bool get isForcedPro => _forcePro;
 
   /// SharedPreferences key for cached entitlement state (Req 13.6)
   static const String _cachedIsProKey = 'rc_cached_is_pro';
@@ -133,6 +161,8 @@ class RevenueCatService {
 
   /// Get active subscription status
   Future<SubscriptionStatus> getSubscriptionStatus() async {
+    // TEST-ONLY: report an active plan when force-Pro is on.
+    if (_forcePro) return SubscriptionStatus.other;
     try {
       final customerInfo = await getCustomerInfo();
       final hasAccess = customerInfo.entitlements.active.containsKey(proEntitlementId);
@@ -162,6 +192,11 @@ class RevenueCatService {
   /// On error, falls back to cached entitlement state from SharedPreferences.
   /// If no cached state exists, defaults to free tier (Req 13.6).
   Future<bool> hasProAccess({bool forceRefresh = false}) async {
+    // TEST-ONLY: unlock everything when built with --dart-define=FORCE_PRO=true.
+    if (_forcePro) {
+      debugPrint('🧪 FORCE_PRO is ON — granting Premium access (test build).');
+      return true;
+    }
     try {
       final customerInfo = await getCustomerInfo(forceRefresh: forceRefresh);
 
@@ -319,6 +354,46 @@ class RevenueCatService {
       return await Purchases.getOfferings();
     } catch (e) {
       debugPrint('❌ Failed to get offerings: $e');
+      return null;
+    }
+  }
+
+  /// Presents the RevenueCat-hosted paywall for the current (default) offering.
+  ///
+  /// This is the single, guarded entry point every "Upgrade" action should use
+  /// so behavior stays consistent and a misconfiguration degrades gracefully
+  /// instead of crashing on a real device:
+  /// - If the SDK isn't configured (e.g. a `test_` key skipped in release),
+  ///   returns null instead of touching native code (which would crash).
+  /// - If there's no current offering with packages (products/paywall not set
+  ///   up), returns null so the caller can show a friendly message rather than
+  ///   present a paywall that will fail.
+  ///
+  /// The three paywall "stages" are variations on the same default offering and
+  /// are served server-side by RevenueCat, so no per-offering routing is needed
+  /// here. Returns the [PaywallResult], or null when a paywall can't be shown.
+  Future<PaywallResult?> presentPaywall() async {
+    if (!_isConfigured) {
+      debugPrint('⚠️ presentPaywall: RevenueCat not configured — skipping.');
+      return null;
+    }
+    try {
+      // Preflight: make sure there's actually something to sell before showing
+      // the paywall (avoids the native failure path on a real device).
+      final offerings = await Purchases.getOfferings();
+      final current = offerings.current;
+      if (current == null || current.availablePackages.isEmpty) {
+        debugPrint('⚠️ presentPaywall: no current offering / packages available.');
+        return null;
+      }
+      // Always show a close button so the user can dismiss the paywall.
+      // (Ignored for v2 paywalls, which provide their own close control.)
+      return await RevenueCatUI.presentPaywall(displayCloseButton: true);
+    } on PlatformException catch (e) {
+      debugPrint('❌ presentPaywall failed: ${e.message}');
+      return null;
+    } catch (e) {
+      debugPrint('❌ presentPaywall error: $e');
       return null;
     }
   }

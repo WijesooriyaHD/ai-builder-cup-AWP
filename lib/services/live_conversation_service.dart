@@ -7,7 +7,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/feature_flags.dart';
-import 'remote_config_service.dart';
 
 /// Lifecycle of a real-time Gemini Live conversation.
 enum LiveConversationState {
@@ -161,9 +160,8 @@ class LiveConversationService extends ChangeNotifier {
             appCheck: FirebaseAppCheck.instance,
             auth: FirebaseAuth.instance,
           );
-      // Resolve the model id: explicit override > Remote Config > constant.
-      final resolvedModel = modelId ??
-          RemoteConfigService.instance.liveModelId(fallback: _defaultModelId);
+      // Resolve the model id: explicit override, else the default constant.
+      final resolvedModel = modelId ?? _defaultModelId;
       final liveModel = ai.liveGenerativeModel(
         model: resolvedModel,
         liveGenerationConfig: LiveGenerationConfig(

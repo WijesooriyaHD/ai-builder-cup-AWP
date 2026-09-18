@@ -18,6 +18,7 @@ import '../data/ai_voices.dart';
 import '../screens/customer_center_screen.dart';
 import '../screens/faq_screen.dart';
 import '../services/revenue_cat_service.dart';
+import '../utils/pro_modal_utils.dart';
 import '../utils/wellnesspal_snackbar.dart';
 import '../widgets/frosted_container.dart';
 import '../theme/wellness_themes.dart';
@@ -1025,11 +1026,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const CustomerCenterScreen()),
-                  );
+                  ProModalUtils.openUpgrade(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primary,
@@ -1405,11 +1402,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const CustomerCenterScreen(),
-                      ),
-                    );
+                    // Non-subscribers go straight to the paywall; existing
+                    // subscribers go to the Manage Subscription screen.
+                    if (status == SubscriptionStatus.none) {
+                      ProModalUtils.openUpgrade(context);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const CustomerCenterScreen(),
+                        ),
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,

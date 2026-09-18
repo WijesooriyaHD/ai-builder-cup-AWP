@@ -16,7 +16,6 @@ import 'services/storage_service.dart';
 import 'services/check_in_service.dart';
 import 'services/personalization_service.dart';
 import 'services/notification_service.dart';
-import 'services/remote_config_service.dart';
 import 'services/voice_command_service.dart';
 import 'services/live_conversation_service.dart';
 import 'services/record_pcm_audio_io.dart';
@@ -117,14 +116,6 @@ void main() async {
     await NotificationService().initialize();
   } catch (e) {
     debugPrint('Failed to initialize NotificationService: $e');
-  }
-
-  // Initialize Remote Config (defaults + background fetch). Fail-safe: never
-  // blocks startup and falls back to code defaults if unavailable.
-  try {
-    await RemoteConfigService.instance.initialize();
-  } catch (e) {
-    debugPrint('Failed to initialize RemoteConfigService: $e');
   }
 
   runApp(const BloomApp());

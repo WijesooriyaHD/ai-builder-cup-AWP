@@ -3,23 +3,24 @@ import 'package:provider/provider.dart';
 
 import '../config/feature_flags.dart';
 import '../features/habit_builder/presentation/habit_builder_state.dart';
-import '../providers/app_state.dart';
 import '../services/live_conversation_service.dart';
 import '../services/live_tool_bridge.dart';
-import '../utils/pro_modal_utils.dart';
 
 /// Premium, real-time "Conversation Mode" bottom sheet powered by the Gemini
 /// Live API. Hands-free, natural back-and-forth voice chat with the wellness
 /// pal.
 ///
-/// Gating: only reachable when [FeatureFlags.liveConversationMode] is on AND
-/// the user is Premium. Free users get an upsell instead of a session.
+/// Gating: reachable when [FeatureFlags.liveConversationMode] is on.
+///
+/// NOTE: The Premium gate is TEMPORARILY DISABLED for testing so Conversation
+/// Mode can be exercised without a subscription. To restore Premium gating,
+/// re-add the isPro check in [open] and pass the real isPro to [start] (see the
+/// TEMP markers below).
 class ConversationModeSheet extends StatefulWidget {
   const ConversationModeSheet({super.key});
 
-  /// Opens Conversation Mode, or the Premium upsell for Free users. Safe to
-  /// call from anywhere; no-ops (with a gentle message) when the feature flag
-  /// is off.
+  /// Opens Conversation Mode. Safe to call from anywhere; no-ops (with a gentle
+  /// message) when the feature flag is off.
   static void open(BuildContext context) {
     if (!FeatureFlags.liveConversationMode) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -27,11 +28,10 @@ class ConversationModeSheet extends StatefulWidget {
       );
       return;
     }
-    final isPro = context.read<AppState>().isPro;
-    if (!isPro) {
-      ProModalUtils.showConversationModeUpsell(context);
-      return;
-    }
+    // TEMP(test): Premium gate disabled. Restore with:
+    //   if (!context.read<AppState>().isPro) {
+    //     ProModalUtils.showConversationModeUpsell(context); return;
+    //   }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -66,14 +66,15 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
 
   Future<void> _start() async {
     final service = context.read<LiveConversationService>();
-    final isPro = context.read<AppState>().isPro;
 
     // Wire tool calling so the pal can create habits / set reminders mid-chat.
     final bridge = LiveToolBridge(context.read<HabitBuilderState>());
     service.tools = bridge.tools;
     service.onToolCall = bridge.handleToolCall;
 
-    await service.start(isPremium: isPro, systemInstruction: _persona);
+    // TEMP(test): pass isPremium: true unconditionally (Premium gate disabled).
+    // Restore with `isPremium: context.read<AppState>().isPro`.
+    await service.start(isPremium: true, systemInstruction: _persona);
   }
 
   Future<void> _end() async {
