@@ -447,6 +447,20 @@ class ProModalUtils {
     );
   }
 
+  /// Upsell for the Premium real-time voice "Conversation Mode". Thin wrapper
+  /// over [showFeatureUpsellModal] with copy tailored to the feature.
+  static void showConversationModeUpsell(BuildContext context) {
+    showFeatureUpsellModal(
+      context,
+      title: 'Talk with your Pal',
+      message:
+          'Conversation Mode lets you have a natural, back-and-forth spoken '
+          'chat with your wellness pal — real-time, hands-free, with a lifelike '
+          'voice. Upgrade to Premium to unlock it.',
+      icon: Icons.graphic_eq_rounded,
+    );
+  }
+
   static void showTravelLimitModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
