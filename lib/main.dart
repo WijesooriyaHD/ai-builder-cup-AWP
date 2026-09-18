@@ -47,16 +47,27 @@ void main() async {
   // simulators/emulators (register the printed debug token in the Firebase
   // console → App Check). Release builds use platform attestation:
   // Play Integrity on Android and App Attest / Device Check on Apple.
+  // Dev-only override: force the App Check *debug* provider even in release
+  // builds. This is needed on free/personal Apple teams, which cannot use
+  // App Attest (a paid Apple Developer Program capability). Enable it by
+  // building with `--dart-define=APPCHECK_DEBUG=true`, then register the
+  // printed debug token in the Firebase console. It is OFF by default, so
+  // production/App Store builds are unaffected and keep using App Attest.
+  const bool forceAppCheckDebug =
+      bool.fromEnvironment('APPCHECK_DEBUG', defaultValue: false);
+
   try {
     // Enable automatic token refresh so the SDK keeps a valid App Check token
     // available for downstream services (including Firebase AI Logic).
     await FirebaseAppCheck.instance.setTokenAutoRefreshEnabled(true);
 
+    final bool useDebugProvider = kDebugMode || forceAppCheckDebug;
+
     await FirebaseAppCheck.instance.activate(
       androidProvider:
-          kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+          useDebugProvider ? AndroidProvider.debug : AndroidProvider.playIntegrity,
       appleProvider:
-          kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
+          useDebugProvider ? AppleProvider.debug : AppleProvider.appAttest,
     );
 
     // Prime an App Check token BEFORE any AI Logic call. Firebase AI Logic
