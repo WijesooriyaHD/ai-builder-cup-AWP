@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import AVFoundation
 import home_widget
 
 @main
@@ -26,6 +27,43 @@ import home_widget
     setenv("FIRAAppCheckDebugToken", "5002195D-47B7-4B69-A59F-9A4C0A94575B", 1)
 
     GeneratedPluginRegistrant.register(with: self)
+
+    // Audio-routing channel for Conversation Mode (Gemini Live).
+    //
+    // flutter_pcm_sound sets the AVAudioSession to `playAndRecord` WITHOUT the
+    // `defaultToSpeaker` option, so on iPhone the model's audio is routed to
+    // the quiet earpiece (receiver) — it plays but is effectively inaudible.
+    // Dart calls `routeToSpeaker` after starting playback to force the session
+    // to play-and-record with speaker output + Bluetooth, so the reply is heard
+    // on the loudspeaker while the mic keeps capturing.
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let audioChannel = FlutterMethodChannel(
+        name: "bloom/audio", binaryMessenger: controller.binaryMessenger)
+      audioChannel.setMethodCallHandler { call, result in
+        if call.method == "routeToSpeaker" {
+          let session = AVAudioSession.sharedInstance()
+          do {
+            // `.voiceChat` mode enables the system's hardware acoustic echo
+            // cancellation (AEC), so the mic doesn't pick up the model's voice
+            // from the loudspeaker and echo it back. Do NOT use `.mixWithOthers`
+            // here — it disables the voice-processing I/O and re-introduces echo.
+            try session.setCategory(
+              .playAndRecord,
+              mode: .voiceChat,
+              options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
+            try session.setActive(true)
+            try session.overrideOutputAudioPort(.speaker)
+            result(true)
+          } catch {
+            result(FlutterError(
+              code: "audio_route_failed",
+              message: error.localizedDescription, details: nil))
+          }
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
 
     // Register the plugin registrant callback so the home_widget background
     // worker (used by the interactive AI Wellness widget toggle on iOS 17+)

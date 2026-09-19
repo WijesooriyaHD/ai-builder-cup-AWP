@@ -227,6 +227,27 @@ class VoiceCommandService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fully releases the microphone and audio session so another feature
+  /// (Conversation Mode / Gemini Live, which uses the `record` plugin) can take
+  /// exclusive control of the mic. Without this, speech_to_text keeps the mic
+  /// open and both capture the loudspeaker at once, causing heavy echo.
+  Future<void> shutdownForHandoff() async {
+    _soundLevel = 0.0;
+    _currentWords = '';
+    try {
+      await _tts.stop();
+    } catch (_) {}
+    try {
+      await _speech.cancel();
+    } catch (_) {}
+    try {
+      // stop() releases the underlying recognizer/audio session on iOS.
+      await _speech.stop();
+    } catch (_) {}
+    _state = VoiceAssistantState.idle;
+    notifyListeners();
+  }
+
   /// Speaks a response using TTS.
   Future<void> speak(String text) async {
     _state = VoiceAssistantState.speaking;

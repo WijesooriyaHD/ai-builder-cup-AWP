@@ -691,12 +691,18 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: TextButton.icon(
-                      onPressed: () {
+                      onPressed: () async {
                         // Close this sheet, then open Conversation Mode on the
                         // root navigator (captured before popping).
                         final rootContext =
                             Navigator.of(context, rootNavigator: true).context;
                         final nav = Navigator.of(context);
+                        // CRITICAL: fully release the Wellness Assistant's mic
+                        // (speech_to_text) and TTS before Conversation Mode's
+                        // `record` capture starts. Otherwise both mic listeners
+                        // are open on the loudspeaker at once, which makes the
+                        // model's audio echo badly.
+                        await _voiceService.shutdownForHandoff();
                         if (nav.canPop()) nav.pop();
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           ConversationModeSheet.open(rootContext);

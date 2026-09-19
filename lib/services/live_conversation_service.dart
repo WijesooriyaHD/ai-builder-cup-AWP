@@ -41,6 +41,14 @@ abstract class LiveAudioIO {
   /// Stops microphone capture.
   Future<void> stopCapture();
 
+  /// Pauses microphone capture (hardware mic off) without ending the stream —
+  /// used for true half-duplex so the model's speaker output cannot be
+  /// captured and echoed back while it's talking.
+  Future<void> pauseCapture();
+
+  /// Resumes microphone capture after [pauseCapture].
+  Future<void> resumeCapture();
+
   /// Plays a chunk of PCM16 audio (24 kHz, mono) returned by the model.
   Future<void> playChunk(Uint8List pcm);
 
@@ -117,6 +125,21 @@ class LiveConversationService extends ChangeNotifier {
   LiveConversationState _state = LiveConversationState.idle;
   LiveConversationState get state => _state;
 
+  // Half-duplex echo control: while the model is speaking we pause the mic (so
+  // the loudspeaker output isn't re-captured and echoed back), resuming on the
+  // model's turnComplete. Two separate audio engines (record + flutter_pcm_sound)
+  // mean iOS hardware AEC can't cancel the echo, so we gate instead.
+  bool _modelSpeaking = false;
+  // Timestamp of the model's most recent audio, used to add a short tail before
+  // the mic resumes so the speaker's trailing audio doesn't leak in.
+  DateTime _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  String _lastTranscript = '';
+
+  /// The latest transcription of the model's spoken reply (from the server's
+  /// output audio transcription). Useful for showing live captions in the UI.
+  String get lastTranscript => _lastTranscript;
+
   String? _lastError;
   String? get lastError => _lastError;
 
@@ -156,6 +179,9 @@ class LiveConversationService extends ChangeNotifier {
 
     _setState(LiveConversationState.connecting);
     _lastError = null;
+    _modelSpeaking = false;
+    _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _lastTranscript = '';
 
     try {
       final granted = await audio.requestPermission();
@@ -173,11 +199,14 @@ class LiveConversationService extends ChangeNotifier {
           FirebaseAI.agentPlatform();
       // Resolve the model id: explicit override, else the default constant.
       final resolvedModel = modelId ?? _defaultModelId;
-      debugPrint('🎙️ LiveConversation: connecting model="$resolvedModel" (global)');
       final liveModel = ai.liveGenerativeModel(
         model: resolvedModel,
         liveGenerationConfig: LiveGenerationConfig(
           responseModalities: [ResponseModalities.audio],
+          // Ask the server for a text transcription of the model's spoken
+          // reply. Exposed via `lastTranscript` so the UI can show captions of
+          // what the model said.
+          outputAudioTranscription: AudioTranscriptionConfig(),
         ),
         tools: tools.isEmpty ? null : tools,
         systemInstruction:
@@ -187,13 +216,14 @@ class LiveConversationService extends ChangeNotifier {
       _session = await liveModel.connect();
       _setState(LiveConversationState.active);
 
-      // Stream mic audio up as PCM inline-data parts. The Live API requires the
-      // input sample rate in the MIME type (raw 16-bit PCM, 16 kHz, LE).
+      // Stream mic audio up as realtime PCM chunks. The Live API expects raw
+      // 16-bit LE PCM at 16 kHz, tagged 'audio/pcm;rate=16000'. firebase_ai
+      // 4.0.0 deprecates sendMediaStream() in favour of sendAudioRealtime(),
+      // which emits the current `realtime_input.audio` shape the model's
+      // voice-activity-detection expects — using the old media_chunks path can
+      // leave the model waiting silently (stuck on "Listening").
       final micStream = audio.startCapture();
-      final mediaChunks = micStream
-          .map((data) => InlineDataPart('audio/pcm;rate=16000', data));
-      // Fire-and-forget; the session consumes the stream until closed.
-      unawaited(_session!.sendMediaStream(mediaChunks));
+      unawaited(_pumpMic(micStream));
 
       // Continuously receive turns. receive() ends its stream when a turn
       // completes, so we re-subscribe for the next turn until the session is
@@ -204,21 +234,48 @@ class LiveConversationService extends ChangeNotifier {
     }
   }
 
+  /// Pumps captured mic PCM chunks to the model as realtime audio input.
+  Future<void> _pumpMic(Stream<Uint8List> micStream) async {
+    final session = _session;
+    if (session == null) return;
+    try {
+      await for (final data in micStream) {
+        if (_state != LiveConversationState.active || _session == null) break;
+        // Half-duplex gate: don't forward mic audio while the model is speaking
+        // (plus a short tail after its last audio chunk) so the loudspeaker
+        // output isn't captured and echoed back. `_modelSpeaking` is cleared on
+        // the server's turnComplete signal (see _onServerResponse), which is
+        // what keeps the conversation flowing turn-to-turn.
+        final sinceAudio =
+            DateTime.now().difference(_lastModelAudioAt).inMilliseconds;
+        if (_modelSpeaking || sinceAudio < 600) {
+          continue;
+        }
+        await session
+            .sendAudioRealtime(InlineDataPart('audio/pcm;rate=16000', data));
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('LiveConversationService: mic pump error: $e');
+    }
+  }
+
   /// Drives the receive stream turn-by-turn until the session ends.
   Future<void> _receiveLoop() async {
     final session = _session;
     if (session == null) return;
     try {
-      while (_state == LiveConversationState.active && _session != null) {
-        await for (final response in session.receive()) {
-          await _onServerResponse(response);
-        }
-        // Turn complete — loop to receive the next one (unless we're closing).
+      // receive() is a long-lived stream for the whole session in firebase_ai
+      // 4.0.0 (it does NOT end per turn), so turn boundaries must be detected
+      // from the `turnComplete` message field, handled in _onServerResponse.
+      await for (final response in session.receive()) {
+        if (_state != LiveConversationState.active || _session == null) break;
+        await _onServerResponse(response);
       }
     } catch (e) {
-      // Log the full error (incl. WebSocket closeReason when present) so the
-      // exact cause of a 1008 policy-violation close is visible in the console.
-      debugPrint('❌ LiveConversationService receive error: $e');
+      // The error (incl. any WebSocket closeReason) is surfaced to the UI.
+      if (kDebugMode) {
+        debugPrint('LiveConversationService: receive error: $e');
+      }
       if (_state == LiveConversationState.active) {
         _fail('Live session error: $e');
       }
@@ -235,14 +292,53 @@ class LiveConversationService extends ChangeNotifier {
       if (message is LiveServerContent) {
         // Model asked to interrupt (user barged in) — stop current playback.
         if (message.interrupted == true) {
+          _modelSpeaking = false;
           await audio.stopPlayback();
+          unawaited(audio.resumeCapture());
           return;
+        }
+        // Turn finished: re-open the mic so the user can speak again. This is
+        // the signal that keeps the back-and-forth going (receive() itself does
+        // not end per turn). Without handling this the mic stays gated after the
+        // first reply and the model appears to "stop replying".
+        if (message.turnComplete == true) {
+          _modelSpeaking = false;
+          _lastModelAudioAt = DateTime.now();
+          // Resume the mic after a short tail so the speaker's trailing audio
+          // finishes playing before the mic re-opens (prevents a final echo).
+          final resumeAudio = audio;
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (_state == LiveConversationState.active && !_modelSpeaking) {
+              unawaited(resumeAudio.resumeCapture());
+            }
+          });
+        }
+        // Capture the model's output transcription for optional UI captions.
+        final outT = message.outputTranscription?.text;
+        if (outT != null && outT.trim().isNotEmpty) {
+          _lastTranscript = outT.trim();
+          notifyListeners();
+        }
+        // As soon as the model produces ANY turn content it has taken the floor:
+        // pause the mic so its loudspeaker output can't be captured and echoed
+        // back. The gate stays closed until turnComplete.
+        final hasModelContent =
+            (message.modelTurn?.parts.isNotEmpty ?? false) ||
+                (outT != null && outT.trim().isNotEmpty);
+        if (hasModelContent && !_modelSpeaking) {
+          _modelSpeaking = true;
+          _lastModelAudioAt = DateTime.now();
+          unawaited(audio.pauseCapture());
+        } else if (hasModelContent) {
+          _lastModelAudioAt = DateTime.now();
         }
         final parts = message.modelTurn?.parts;
         if (parts != null) {
           for (final part in parts) {
             if (part is InlineDataPart &&
                 part.mimeType.startsWith('audio/pcm')) {
+              _modelSpeaking = true;
+              _lastModelAudioAt = DateTime.now();
               await audio.playChunk(part.bytes);
             }
           }
@@ -293,7 +389,11 @@ class LiveConversationService extends ChangeNotifier {
   /// the model may still also emit an `interrupted` server signal which we
   /// honor in [_onServerResponse].
   Future<void> interrupt() async {
+    // User is taking over: stop playback and re-open the mic immediately.
+    _modelSpeaking = false;
+    _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
     await _audioIO?.stopPlayback();
+    await _audioIO?.resumeCapture();
   }
 
   /// Ends the conversation and releases the session + audio resources.
