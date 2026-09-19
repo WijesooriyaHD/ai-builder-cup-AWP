@@ -66,6 +66,22 @@ class VoiceCommandService extends ChangeNotifier {
   // ensures we only handle (and speak) it once.
   bool _isHandlingInput = false;
 
+  // True while the Gemini Live "Talk" session owns the microphone. The
+  // Assistant must be fully inert during this time so the two don't both
+  // capture audio (which causes echo) or both act on the user. Set true by
+  // [shutdownForHandoff] and cleared by [resumeAfterHandoff].
+  bool _liveActive = false;
+
+  /// Whether Live "Talk" currently owns the mic (Assistant is suspended).
+  bool get isLiveActive => _liveActive;
+
+  /// Re-enables the Assistant after a Live "Talk" session has ended. Call this
+  /// when Conversation Mode closes so tap-to-speak works again.
+  void resumeAfterHandoff() {
+    _liveActive = false;
+    notifyListeners();
+  }
+
   // Conversational check-in state
   bool _isInCheckInFlow = false;
   int? _pendingEnergy;
@@ -166,6 +182,8 @@ class VoiceCommandService extends ChangeNotifier {
 
   /// Starts listening for voice input.
   Future<void> startListening() async {
+    // Inert while Live "Talk" owns the mic.
+    if (_liveActive) return;
     if (!_isInitialized) await initialize();
     if (!_speechAvailable) {
       _addAssistantMessage(
@@ -212,6 +230,7 @@ class VoiceCommandService extends ChangeNotifier {
   /// a text-entry fallback. Runs intent parsing / conversational reply exactly
   /// as if the words had been spoken.
   Future<void> submitTextInput(String text) async {
+    if (_liveActive) return;
     if (text.trim().isEmpty) return;
     _state = VoiceAssistantState.processing;
     notifyListeners();
@@ -232,6 +251,8 @@ class VoiceCommandService extends ChangeNotifier {
   /// exclusive control of the mic. Without this, speech_to_text keeps the mic
   /// open and both capture the loudspeaker at once, causing heavy echo.
   Future<void> shutdownForHandoff() async {
+    // Suspend the Assistant entirely for the duration of the Live session.
+    _liveActive = true;
     _soundLevel = 0.0;
     _currentWords = '';
     try {
@@ -382,6 +403,9 @@ class VoiceCommandService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> _processInput(String text) async {
+    // Belt-and-suspenders: ignore any late STT callback that fires after the
+    // Live handoff took the mic.
+    if (_liveActive) return;
     if (text.trim().isEmpty) {
       _state = VoiceAssistantState.idle;
       notifyListeners();

@@ -1,5 +1,6 @@
 import '../models/voice_command.dart';
 import '../models/wellness_enums.dart';
+import 'accent_colors.dart';
 
 /// Parses natural language text into structured [VoiceCommand] objects.
 ///
@@ -296,22 +297,8 @@ class VoiceIntentParser {
       return VoiceCommand(type: VoiceCommandType.setThemeLight, rawText: raw);
     }
 
-    // Accent color
-    final colorMap = <String, int>{
-      'coral': 0xFFFF7F50,
-      'orange': 0xFFFF7F50,
-      'turquoise': 0xFF4ECDC4,
-      'teal': 0xFF4ECDC4,
-      'yellow': 0xFFFFD93D,
-      'purple': 0xFF9B59B6,
-      'violet': 0xFF9B59B6,
-      'pink': 0xFFE91E63,
-      'blue': 0xFF2196F3,
-      'green': 0xFF4CAF50,
-      'red': 0xFFF44336,
-    };
-
-    for (final entry in colorMap.entries) {
+    // Accent color — shared map (also used by the Live "Talk" bridge).
+    for (final entry in AccentColors.byName.entries) {
       if (normalized.contains(entry.key) &&
           _matchesAny(normalized, [
             'change color to',

@@ -20,6 +20,7 @@ import 'services/voice_command_service.dart';
 import 'services/live_conversation_service.dart';
 import 'services/record_pcm_audio_io.dart';
 import 'services/app_navigation_service.dart';
+import 'services/conversation_store.dart';
 import 'features/nutrition/presentation/nutrition_state.dart';
 import 'features/meal_planner/presentation/meal_planner_state.dart';
 import 'features/calorie_budget/presentation/calorie_budget_state.dart';
@@ -166,6 +167,9 @@ class BloomApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MeditationState()),
         ChangeNotifierProvider(create: (_) => HabitBuilderState()),
         ChangeNotifierProvider(create: (_) => ChallengeState()),
+        // Recent Gemini Live "Talk" conversations (max 3), shown as cards on
+        // the Wellness Assistant page and persisted to Firestore.
+        ChangeNotifierProvider(create: (_) => ConversationStore()..load()),
       ],
       child: Consumer<AppState>(
         builder: (context, appState, child) {

@@ -23,6 +23,16 @@ enum LiveConversationState {
   error,
 }
 
+/// Who spoke a given line of the conversation transcript.
+enum LiveSpeaker { user, model }
+
+/// A single committed turn in the conversation transcript.
+class LiveTranscriptTurn {
+  const LiveTranscriptTurn(this.role, this.text);
+  final LiveSpeaker role;
+  final String text;
+}
+
 /// Abstraction over microphone capture + PCM playback so the Live session logic
 /// is testable and doesn't hard-depend on a specific audio plugin yet.
 ///
@@ -122,6 +132,17 @@ class LiveConversationService extends ChangeNotifier {
   /// before [start] to match [onToolCall].
   List<Tool> tools = const [];
 
+  /// Fired when the USER'S transcribed speech indicates they want to end the
+  /// conversation ("bye", "let's end", "I'm done", etc.). The Live model is
+  /// unreliable at calling the end_conversation tool for spoken goodbyes, so we
+  /// detect the intent app-side from the input transcription and let the owner
+  /// (ConversationModeSheet) tear the session down. Fires at most once.
+  VoidCallback? onUserEndIntent;
+  bool _endIntentFired = false;
+  // Armed when the user says goodbye; the actual end is deferred until the
+  // pal finishes its goodbye reply (next turnComplete).
+  bool _endPending = false;
+
   LiveConversationState _state = LiveConversationState.idle;
   LiveConversationState get state => _state;
 
@@ -134,11 +155,131 @@ class LiveConversationService extends ChangeNotifier {
   // the mic resumes so the speaker's trailing audio doesn't leak in.
   DateTime _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // Watchdog: if the mic stays gated (paused) for longer than this with no new
+  // model audio arriving, we assume a missed/dropped turnComplete and force the
+  // mic back open so the conversation can't silently deadlock ("stops
+  // responding"). This is the safety net behind the turnComplete resume.
+  static const Duration _micGateMaxHold = Duration(seconds: 4);
+  Timer? _micWatchdog;
+
   String _lastTranscript = '';
 
   /// The latest transcription of the model's spoken reply (from the server's
   /// output audio transcription). Useful for showing live captions in the UI.
   String get lastTranscript => _lastTranscript;
+
+  /// One line of the conversation transcript.
+  final List<LiveTranscriptTurn> _transcript = [];
+
+  /// The full, ordered two-sided conversation transcript (user + assistant),
+  /// accumulated across the whole session. Empty until the first speech is
+  /// transcribed. Used to save the conversation as a Reflection afterwards.
+  List<LiveTranscriptTurn> get transcript =>
+      List.unmodifiable(_transcript);
+
+  /// Whether there is any real conversation content worth offering to save.
+  bool get hasTranscript =>
+      _transcript.any((t) => t.text.trim().isNotEmpty);
+
+  /// The transcript rendered as plain text with role labels, e.g.
+  /// "You: ...\nPal: ...". Suitable for summarization or storage.
+  String get transcriptText => _transcript
+      .where((t) => t.text.trim().isNotEmpty)
+      .map((t) => '${t.role == LiveSpeaker.user ? 'You' : 'Pal'}: ${t.text}')
+      .join('\n');
+
+  // Transcription arrives incrementally per turn. We buffer the in-progress
+  // text for each side and commit it as a turn when that side stops (the other
+  // side starts, or the turn completes), so the saved transcript reads as clean
+  // alternating turns rather than fragmented partials.
+  final StringBuffer _userTurnBuf = StringBuffer();
+  final StringBuffer _modelTurnBuf = StringBuffer();
+
+  /// Appends transcription text for [speaker], buffering partials and merging
+  /// them into a single turn until the speaker changes.
+  void _appendTranscript(LiveSpeaker speaker, String text) {
+    final t = text.trim();
+    if (t.isEmpty) return;
+    if (speaker == LiveSpeaker.user) {
+      // Committing a new user turn flushes any pending model turn first.
+      _flushModelTurn();
+      _userTurnBuf.write(_userTurnBuf.isEmpty ? t : ' $t');
+      _maybeDetectEndIntent(_userTurnBuf.toString());
+    } else {
+      _flushUserTurn();
+      _modelTurnBuf.write(_modelTurnBuf.isEmpty ? t : ' $t');
+      _lastTranscript = t;
+    }
+    notifyListeners();
+  }
+
+  void _flushUserTurn() {
+    if (_userTurnBuf.isEmpty) return;
+    _transcript.add(
+        LiveTranscriptTurn(LiveSpeaker.user, _userTurnBuf.toString().trim()));
+    _userTurnBuf.clear();
+  }
+
+  void _flushModelTurn() {
+    if (_modelTurnBuf.isEmpty) return;
+    _transcript.add(
+        LiveTranscriptTurn(LiveSpeaker.model, _modelTurnBuf.toString().trim()));
+    _modelTurnBuf.clear();
+  }
+
+  /// Commits any pending buffered turns (called at turn/session boundaries).
+  void _flushTranscriptBuffers() {
+    _flushUserTurn();
+    _flushModelTurn();
+  }
+
+  /// End-of-conversation phrases we watch for in the user's transcribed speech.
+  static final RegExp _endIntentPattern = RegExp(
+    r"\b("
+    r"good\s?bye|bye bye|bye|see you|see ya|"
+    r"(let'?s|let us|we can|i want to|i'?d like to|can we|please)\s+"
+    r"(end|stop|finish|wrap up|wrap this up|close|be done)|"
+    r"end (the|this) (conversation|chat|call|discussion|session)|"
+    r"stop (the|this) (conversation|chat|call|discussion|session)|"
+    r"(i'?m|i am|we'?re|we are) (done|finished)|"
+    r"that'?s (all|it|enough)|"
+    r"talk (to you )?later|gotta go|got to go|hang up|"
+    r"thanks?,? (that'?s all|bye|goodbye)"
+    r")\b",
+    caseSensitive: false,
+  );
+
+  /// If [utterance] looks like the user asking to end, ARM the pending-end
+  /// flag (once). We don't end immediately — we let the pal speak its goodbye
+  /// reply and end after that turn completes (see [_onServerResponse]). This is
+  /// the reliable path — the Live model often just speaks a goodbye instead of
+  /// calling the end_conversation tool.
+  void _maybeDetectEndIntent(String utterance) {
+    if (_endIntentFired || _endPending) return;
+    if (onUserEndIntent == null) return;
+    if (_endIntentPattern.hasMatch(utterance.toLowerCase())) {
+      _endPending = true;
+      if (kDebugMode) {
+        debugPrint('LiveConversationService: end intent detected in '
+            '"$utterance" — ending after the pal\'s goodbye.');
+      }
+      // Fallback: if the pal never produces a goodbye turn, end anyway.
+      _endFallbackTimer?.cancel();
+      _endFallbackTimer = Timer(const Duration(seconds: 6), _fireEndIfPending);
+    }
+  }
+
+  Timer? _endFallbackTimer;
+
+  /// Fires the end callback (once) after the pal has finished its goodbye.
+  void _fireEndIfPending() {
+    if (!_endPending || _endIntentFired) return;
+    _endIntentFired = true;
+    _endPending = false;
+    _endFallbackTimer?.cancel();
+    _endFallbackTimer = null;
+    onUserEndIntent?.call();
+  }
 
   String? _lastError;
   String? get lastError => _lastError;
@@ -182,6 +323,11 @@ class LiveConversationService extends ChangeNotifier {
     _modelSpeaking = false;
     _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastTranscript = '';
+    _transcript.clear();
+    _userTurnBuf.clear();
+    _modelTurnBuf.clear();
+    _endIntentFired = false;
+    _endPending = false;
 
     try {
       final granted = await audio.requestPermission();
@@ -203,9 +349,12 @@ class LiveConversationService extends ChangeNotifier {
         model: resolvedModel,
         liveGenerationConfig: LiveGenerationConfig(
           responseModalities: [ResponseModalities.audio],
-          // Ask the server for a text transcription of the model's spoken
-          // reply. Exposed via `lastTranscript` so the UI can show captions of
-          // what the model said.
+          // Ask the server for text transcriptions of BOTH sides of the
+          // conversation: the model's spoken reply (output) and the user's
+          // speech (input). We stitch these into a running two-sided transcript
+          // (see _appendTranscript) so the whole conversation can be saved as a
+          // Reflection afterwards, and surfaced live as captions.
+          inputAudioTranscription: AudioTranscriptionConfig(),
           outputAudioTranscription: AudioTranscriptionConfig(),
         ),
         tools: tools.isEmpty ? null : tools,
@@ -215,6 +364,7 @@ class LiveConversationService extends ChangeNotifier {
 
       _session = await liveModel.connect();
       _setState(LiveConversationState.active);
+      _startMicWatchdog();
 
       // Stream mic audio up as realtime PCM chunks. The Live API expects raw
       // 16-bit LE PCM at 16 kHz, tagged 'audio/pcm;rate=16000'. firebase_ai
@@ -257,6 +407,52 @@ class LiveConversationService extends ChangeNotifier {
     } catch (e) {
       if (kDebugMode) debugPrint('LiveConversationService: mic pump error: $e');
     }
+  }
+
+  Timer? _resumeTimer;
+
+  /// Reopens the mic a short tail after the model finishes speaking. Rearms
+  /// itself if the model produced more audio during the tail, so a late chunk
+  /// can never leave the mic permanently gated.
+  void _scheduleMicResume() {
+    _resumeTimer?.cancel();
+    _resumeTimer = Timer(const Duration(milliseconds: 500), () {
+      if (_state != LiveConversationState.active) return;
+      if (_modelSpeaking) {
+        // A late chunk re-armed speaking; try again shortly instead of bailing.
+        _scheduleMicResume();
+        return;
+      }
+      unawaited(_audioIO?.resumeCapture() ?? Future.value());
+    });
+  }
+
+  /// Periodically checks that the mic isn't stuck gated. If the model is
+  /// "speaking" but no audio has arrived for [_micGateMaxHold], we treat the
+  /// turn as finished (a dropped/late turnComplete) and force the mic open so
+  /// the conversation recovers instead of hanging.
+  void _startMicWatchdog() {
+    _micWatchdog?.cancel();
+    _micWatchdog = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_state != LiveConversationState.active) return;
+      if (!_modelSpeaking) return;
+      final sinceAudio = DateTime.now().difference(_lastModelAudioAt);
+      if (sinceAudio >= _micGateMaxHold) {
+        if (kDebugMode) {
+          debugPrint('LiveConversationService: mic watchdog fired after '
+              '${sinceAudio.inMilliseconds}ms — force-resuming mic.');
+        }
+        _modelSpeaking = false;
+        unawaited(_audioIO?.resumeCapture() ?? Future.value());
+      }
+    });
+  }
+
+  void _stopMicWatchdog() {
+    _micWatchdog?.cancel();
+    _micWatchdog = null;
+    _resumeTimer?.cancel();
+    _resumeTimer = null;
   }
 
   /// Drives the receive stream turn-by-turn until the session ends.
@@ -306,18 +502,29 @@ class LiveConversationService extends ChangeNotifier {
           _lastModelAudioAt = DateTime.now();
           // Resume the mic after a short tail so the speaker's trailing audio
           // finishes playing before the mic re-opens (prevents a final echo).
-          final resumeAudio = audio;
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (_state == LiveConversationState.active && !_modelSpeaking) {
-              unawaited(resumeAudio.resumeCapture());
-            }
-          });
+          // Self-rearming: if a late audio chunk flips _modelSpeaking back on
+          // during the tail, we reschedule instead of silently giving up — the
+          // old code cancelled the resume in that case and the mic could stay
+          // gated forever (a cause of the "stops responding" stall).
+          _scheduleMicResume();
         }
-        // Capture the model's output transcription for optional UI captions.
+        // Capture both sides' transcription into the running transcript.
+        final inT = message.inputTranscription?.text;
+        if (inT != null && inT.trim().isNotEmpty) {
+          _appendTranscript(LiveSpeaker.user, inT);
+        }
         final outT = message.outputTranscription?.text;
         if (outT != null && outT.trim().isNotEmpty) {
-          _lastTranscript = outT.trim();
-          notifyListeners();
+          _appendTranscript(LiveSpeaker.model, outT);
+        }
+        // On turn boundary, commit any buffered partials as clean turns.
+        if (message.turnComplete == true) {
+          _flushTranscriptBuffers();
+          // If the user asked to end, the pal has now finished its goodbye —
+          // end the session (a short delay lets the final audio play out).
+          if (_endPending) {
+            Future.delayed(const Duration(milliseconds: 900), _fireEndIfPending);
+          }
         }
         // As soon as the model produces ANY turn content it has taken the floor:
         // pause the mic so its loudspeaker output can't be captured and echoed
@@ -401,6 +608,10 @@ class LiveConversationService extends ChangeNotifier {
     if (_state == LiveConversationState.idle) return;
     // Setting closing first makes the receive loop exit cleanly.
     _setState(LiveConversationState.closing);
+    _stopMicWatchdog();
+    _endFallbackTimer?.cancel();
+    _endFallbackTimer = null;
+    _flushTranscriptBuffers();
     try {
       await _audioIO?.stopCapture();
       await _audioIO?.stopPlayback();
@@ -414,6 +625,7 @@ class LiveConversationService extends ChangeNotifier {
   }
 
   void _fail(String message) {
+    _stopMicWatchdog();
     _lastError = message;
     _setState(LiveConversationState.error);
   }
@@ -425,6 +637,7 @@ class LiveConversationService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _stopMicWatchdog();
     _session?.close();
     _audioIO?.dispose();
     super.dispose();

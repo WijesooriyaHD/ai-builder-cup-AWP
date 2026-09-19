@@ -14,6 +14,22 @@ import '../models/wellness_intention.dart';
 import '../models/wellness_method.dart';
 import 'content_safety_filter.dart';
 
+/// Structured result of summarizing a Live voice conversation into a saveable
+/// reflection (title + summary + two topic tags + a mood emoji).
+class ConversationSummary {
+  final String title;
+  final String summary;
+  final List<String> tags;
+  final String mood;
+
+  const ConversationSummary({
+    required this.title,
+    required this.summary,
+    required this.tags,
+    required this.mood,
+  });
+}
+
 /// Service that generates AI-powered wellness content using Firebase AI Logic
 /// (Vertex AI) with the Gemini 2.5 Flash model.
 ///
@@ -902,6 +918,163 @@ Respond ONLY with the insight text (no JSON, no quotes, no labels).''';
   }
 
   // ---------------------------------------------------------------------------
+  // Conversation (Live) reflections
+  // ---------------------------------------------------------------------------
+
+  /// Summarizes a spoken wellness conversation into a saveable reflection:
+  /// a short title, a warm summary, exactly two topic tags, and a single mood
+  /// emoji. The result becomes a pinned entry in the Reflection tab.
+  ///
+  /// [transcript] is the plain-text conversation with role labels, e.g.
+  /// "You: ...\nPal: ...". Always returns a [ConversationSummary]; on AI
+  /// failure it falls back to sensible defaults so saving never blocks.
+  Future<ConversationSummary> summarizeConversationDetailed({
+    required String transcript,
+  }) async {
+    const fallback = ConversationSummary(
+      title: 'Voice reflection',
+      summary: 'A saved voice conversation with your wellness pal.',
+      tags: ['Reflection', 'Voice Chat'],
+      mood: '💬',
+    );
+    if (transcript.trim().isEmpty) return fallback;
+
+    try {
+      final prompt =
+          '''You are a supportive wellness companion. Below is a spoken conversation between the user ("You") and their wellness pal ("Pal"). Summarize it into a reflection the user can look back on.
+
+CONVERSATION:
+$transcript
+
+Return a JSON object with EXACTLY these keys:
+- "title": a short, warm title in Title Case, at most 5 words.
+- "summary": 60 to 150 words, written TO the user in second person ("you"), warm and non-judgmental. Capture what was on their mind, feelings shared, and any gentle steps or intentions. Do NOT invent details not in the conversation. No clinical language.
+- "tags": an array of EXACTLY two topic keywords drawn from what was actually discussed, in Title Case, one or two words each (e.g. "Stress", "Sleep", "Gratitude", "Work Balance"). Use the real subjects of THIS conversation. Do NOT use generic words like "Reflection", "Conversation", "Voice Chat", or "Wellness".
+- "mood": a single emoji that best reflects the overall feeling of the conversation.
+
+Respond ONLY with the JSON object.''';
+
+      final json = await _generateJson(
+        prompt,
+        temperature: 0.6,
+        maxOutputTokens: 700,
+        systemInstruction:
+            'You are a supportive wellness companion. Respond ONLY with a '
+            'valid JSON object, no markdown or code fences.',
+        timeout: const Duration(seconds: 20),
+      );
+
+      if (json is! Map) return fallback;
+
+      final title = (json['title'] as String?)?.trim();
+      final summary = (json['summary'] as String?)?.trim();
+      final rawTags = (json['tags'] as List<dynamic>?)
+              ?.map((t) => t.toString().trim())
+              .where((t) => t.isNotEmpty && !_isGenericTag(t))
+              .toList() ??
+          const [];
+      final mood = (json['mood'] as String?)?.trim();
+
+      // Enforce exactly two tags. If the model returned fewer real topic tags,
+      // backfill with keywords extracted from the transcript (not generic
+      // labels), so tags always describe what was discussed.
+      final tags = <String>[...rawTags];
+      if (tags.length < 2) {
+        for (final kw in _keywordsFromTranscript(transcript)) {
+          if (tags.length >= 2) break;
+          if (!tags.any((t) => t.toLowerCase() == kw.toLowerCase())) {
+            tags.add(kw);
+          }
+        }
+      }
+      // Last resort only if we still couldn't find topic keywords.
+      for (final t in fallback.tags) {
+        if (tags.length >= 2) break;
+        if (!tags.contains(t)) tags.add(t);
+      }
+
+      return ConversationSummary(
+        title: (title == null || title.isEmpty) ? fallback.title : title,
+        summary: (summary == null || summary.isEmpty)
+            ? fallback.summary
+            : ContentSafetyFilter.sanitize(summary),
+        tags: tags.take(2).toList(),
+        mood: (mood == null || mood.isEmpty) ? fallback.mood : mood,
+      );
+    } catch (e) {
+      debugPrint('❌ AIService.summarizeConversationDetailed error: $e');
+      // Even on failure, prefer transcript keywords over generic labels.
+      final kw = _keywordsFromTranscript(transcript);
+      final tags = <String>[...kw.take(2)];
+      for (final t in fallback.tags) {
+        if (tags.length >= 2) break;
+        if (!tags.contains(t)) tags.add(t);
+      }
+      return ConversationSummary(
+        title: fallback.title,
+        summary: fallback.summary,
+        tags: tags.take(2).toList(),
+        mood: fallback.mood,
+      );
+    }
+  }
+
+  /// Generic tag words we never want as reflection tags (they describe the
+  /// feature, not the topic).
+  static const Set<String> _genericTagWords = {
+    'reflection',
+    'reflections',
+    'conversation',
+    'voice chat',
+    'voicechat',
+    'wellness',
+    'chat',
+    'talk',
+    'discussion',
+  };
+
+  bool _isGenericTag(String tag) =>
+      _genericTagWords.contains(tag.toLowerCase().trim());
+
+  /// Extracts up to two topic keywords from a conversation transcript by
+  /// frequency of meaningful words (skipping stop-words and generic terms).
+  /// Used to tag reflections when the model doesn't supply good topic tags.
+  List<String> _keywordsFromTranscript(String transcript) {
+    // Strip the "You:"/"Pal:" role labels, then tokenize words.
+    final text = transcript
+        .replaceAll(RegExp(r'(?:^|\n)\s*(you|pal)\s*:', caseSensitive: false), ' ')
+        .toLowerCase();
+    final words = RegExp(r"[a-z][a-z']{2,}").allMatches(text).map((m) => m[0]!);
+
+    final counts = <String, int>{};
+    for (final w in words) {
+      if (_stopWords.contains(w) || _genericTagWords.contains(w)) continue;
+      counts[w] = (counts[w] ?? 0) + 1;
+    }
+    final ranked = counts.keys.toList()
+      ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
+
+    return ranked.take(2).map(_titleCase).toList();
+  }
+
+  String _titleCase(String w) =>
+      w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}';
+
+  /// Common English stop-words excluded from keyword extraction.
+  static const Set<String> _stopWords = {
+    'the', 'and', 'you', 'your', 'yours', 'that', 'this', 'have', 'has', 'had',
+    'was', 'were', 'are', 'for', 'with', 'but', 'not', 'they', 'them', 'their',
+    'what', 'when', 'where', 'which', 'who', 'how', 'why', 'can', 'could',
+    'would', 'should', 'will', 'just', 'like', 'really', 'about', 'there',
+    'here', 'from', 'into', 'out', 'get', 'got', 'been', 'being', 'some', 'any',
+    'all', 'one', 'two', 'now', 'then', 'than', 'too', 'very', 'much', 'more',
+    'most', 'feel', 'feeling', 'feels', 'felt', 'think', 'thought', 'know',
+    'want', 'need', 'okay', 'yeah', 'yes', 'sure', 'well', 'good', 'right',
+    'lets', 'going', 'gonna', 'thing', 'things', 'today', 'day', 'time',
+    'little', 'bit', 'kind', 'sort', 'maybe', 'because', 'over', 'also',
+  };
+
+  // ---------------------------------------------------------------------------
   // Weekly summary
   // ---------------------------------------------------------------------------
 
@@ -1475,6 +1648,44 @@ Respond ONLY with the summary text (no JSON, no labels).''';
       return null;
     } catch (e) {
       debugPrint('❌ AIService.generateIntentionTitle error: $e');
+      return null;
+    }
+  }
+
+  /// Generates a short title for a saved Live conversation from its
+  /// [transcript] ("You: ...\nPal: ..."). Returns a concise Title Case string
+  /// (≤ 5 words), or `null` on timeout/error so the caller can fall back.
+  Future<String?> generateConversationTitle(String transcript) async {
+    if (transcript.trim().isEmpty) return null;
+    try {
+      final text = await _generateText(
+        'Below is a short spoken wellness conversation. Give it a brief title '
+        'capturing what it was mainly about.\n\n$transcript',
+        temperature: 0.3,
+        maxOutputTokens: 200,
+        systemInstruction:
+            'You create concise titles for saved conversations. Respond with '
+            'ONLY the title — 2 to 5 words, Title Case, no quotes, no '
+            'punctuation, no emojis, no extra text (e.g. "Managing Evening '
+            'Stress", "Sleeping Better").',
+        timeout: const Duration(seconds: _promptTimeoutSeconds),
+      );
+      if (text == null) return null;
+      var title = ContentSafetyFilter.sanitize(text)
+          .split('\n')
+          .first
+          .trim()
+          .replaceAll('"', '')
+          .replaceAll(RegExp(r'[.!?]+$'), '')
+          .trim();
+      if (title.isEmpty) return null;
+      if (title.length > 48) title = title.substring(0, 48).trim();
+      return title;
+    } on TimeoutException catch (_) {
+      debugPrint('⏱️ AIService.generateConversationTitle timed out');
+      return null;
+    } catch (e) {
+      debugPrint('❌ AIService.generateConversationTitle error: $e');
       return null;
     }
   }

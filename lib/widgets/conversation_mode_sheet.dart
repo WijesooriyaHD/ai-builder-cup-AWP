@@ -1,10 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../config/feature_flags.dart';
+import '../features/calorie_budget/presentation/calorie_budget_screen.dart';
 import '../features/habit_builder/presentation/habit_builder_state.dart';
+import '../features/hydration/presentation/hydration_coach_screen.dart';
+import '../features/hydration/presentation/hydration_state.dart';
+import '../features/meal_planner/presentation/meal_planner_screen.dart';
+import '../features/meditation/presentation/breathing_screen.dart';
+import '../features/meditation/presentation/guided_meditation_screen.dart';
+import '../features/meditation/presentation/meditation_home_screen.dart';
+import '../features/nutrition/presentation/nutrition_coach_screen.dart';
+import '../features/sleep/presentation/sleep_coach_screen.dart';
+import '../models/live_conversation_record.dart';
+import '../providers/app_state.dart';
+import '../providers/check_in_state.dart';
+import '../providers/wellness_plan_state.dart';
+import '../screens/period_tracker_screen.dart';
+import '../screens/settings_screen.dart';
+import '../screens/travel_screen.dart';
+import '../screens/weight_tracker_screen.dart';
+import '../services/app_navigation_service.dart';
+import '../services/conversation_store.dart';
 import '../services/live_conversation_service.dart';
 import '../services/live_tool_bridge.dart';
+import '../services/voice_command_service.dart';
 
 /// Premium, real-time "Conversation Mode" bottom sheet powered by the Gemini
 /// Live API. Hands-free, natural back-and-forth voice chat with the wellness
@@ -55,7 +77,31 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
       'supportive; never shame or alarm the user. Only suggest safe, gentle, '
       'healthy actions. Do not give medical, legal, or financial advice, and '
       'avoid clinical language. For signs of crisis, respond with compassion '
-      'and gently encourage reaching out to a trusted person or professional.';
+      'and gently encourage reaching out to a trusted person or professional.\n'
+      '\n'
+      'You can also DO things in the app using your tools — do so whenever the '
+      'user asks: change the theme (dark/light), change the accent color, make '
+      'text larger/smaller, toggle winter mode, create a habit or set its '
+      'reminder, log water, add a wellness intention, refresh today\'s plan, '
+      'and record a daily check-in. Briefly confirm what you did out loud.\n'
+      '\n'
+      'When the user asks to open or go to another screen (settings, sleep '
+      'coach, meditation, nutrition, etc.), use the navigate tool. Judge '
+      'has_wellness_context carefully: set it TRUE only if this conversation '
+      'included meaningful wellness discussion (feelings, stress, sleep, '
+      'habits, goals) worth saving as a reflection; set it FALSE for a plain '
+      'request like "go to settings" with no wellness discussion.\n'
+      '\n'
+      'When the user wants to finish (e.g. "let\'s end", "I\'m done", '
+      '"goodbye", "stop"), give a brief warm sign-off and then call the '
+      'end_conversation tool to close the session. Do NOT ask about saving — '
+      'the conversation is kept automatically and the user can turn it into a '
+      'reflection later. Always call end_conversation to actually close the '
+      'session; never just say goodbye without calling it.';
+
+  /// Held so we can re-enable the Assistant when this sheet closes, without
+  /// touching `context` during dispose().
+  VoiceCommandService? _voiceService;
 
   @override
   void initState() {
@@ -64,22 +110,191 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _voiceService = context.read<VoiceCommandService>();
+  }
+
+  @override
+  void dispose() {
+    // The Live session released the mic; re-enable the tap-to-speak Assistant
+    // (it was suspended by shutdownForHandoff when Talk opened).
+    _voiceService?.resumeAfterHandoff();
+    super.dispose();
+  }
+
   Future<void> _start() async {
     final service = context.read<LiveConversationService>();
 
-    // Wire tool calling so the pal can create habits / set reminders mid-chat.
-    final bridge = LiveToolBridge(context.read<HabitBuilderState>());
+    // Wire tool calling so the pal can DO everything the tap-to-speak Assistant
+    // can (appearance, habits, water, intentions, plan, check-in, navigation),
+    // reusing the same providers.
+    final bridge = LiveToolBridge(
+      habits: context.read<HabitBuilderState>(),
+      appState: context.read<AppState>(),
+      navService: context.read<AppNavigationService>(),
+      hydration: context.read<HydrationState>(),
+      checkIn: context.read<CheckInState>(),
+      plan: context.read<WellnessPlanState>(),
+      onNavigate: _onNavRequested,
+      onEndConversation: _onEndRequested,
+    );
     service.tools = bridge.tools;
     service.onToolCall = bridge.handleToolCall;
+    // The Live model is unreliable at calling end_conversation for spoken
+    // goodbyes, so also end when the user's transcribed speech says so.
+    service.onUserEndIntent = () {
+      if (mounted) _finalize();
+    };
 
     // TEMP(test): pass isPremium: true unconditionally (Premium gate disabled).
     // Restore with `isPremium: context.read<AppState>().isPro`.
     await service.start(isPremium: true, systemInstruction: _persona);
   }
 
-  Future<void> _end() async {
-    await context.read<LiveConversationService>().stop();
-    if (mounted) Navigator.of(context).pop();
+  /// Called (from the tool bridge) when the pal wants to navigate somewhere.
+  /// The conversation is saved automatically; then we navigate.
+  void _onNavRequested(LiveNavRequest request) {
+    if (!mounted) return;
+    _finalize(navRequest: request);
+  }
+
+  /// Called (from the tool bridge) when the pal ENDS the conversation.
+  void _onEndRequested(LiveEndRequest request) {
+    if (!mounted) return;
+    _finalize();
+  }
+
+  /// Guards against re-entrancy: the End button, a pal navigate(), and a pal
+  /// end_conversation() can all trigger teardown; only run it once.
+  bool _ending = false;
+
+  /// The manual End button.
+  Future<void> _end() => _finalize();
+
+  /// Unified teardown: stop the session, auto-save the conversation as a card
+  /// (max 3, FIFO) with NO prompt/dialog/voice ask, then pop and optionally
+  /// navigate. Turning a conversation into a reflection happens later, from the
+  /// card's "Generate Reflection" button.
+  Future<void> _finalize({LiveNavRequest? navRequest}) async {
+    if (_ending) return;
+    _ending = true;
+
+    final service = context.read<LiveConversationService>();
+    final store = context.read<ConversationStore>();
+    final nav = context.read<AppNavigationService>();
+    final navigator = Navigator.of(context);
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+
+    // stop() flushes the final turn, so read the transcript after it.
+    await service.stop();
+    final turns = service.transcript;
+    final hasRealTranscript =
+        service.hasTranscript && service.transcriptText.trim().isNotEmpty;
+
+    // Auto-save the conversation as a card (fire-and-forget; the store caps at
+    // 3, persists to Firestore, and generates an AI title in the background —
+    // we pass a quick heuristic title as the immediate fallback).
+    if (hasRealTranscript) {
+      final record = LiveConversationRecord(
+        title: _titleFor(turns),
+        turns: turns
+            .map((t) => ConversationTurn(
+                  isUser: t.role == LiveSpeaker.user,
+                  text: t.text,
+                ))
+            .toList(),
+      );
+      unawaited(store.add(record, generateTitle: true));
+    }
+
+    if (!mounted) return;
+    navigator.pop();
+    if (navRequest != null) _applyNav(navRequest, nav, rootNavigator);
+  }
+
+  /// A short card title from the first thing the user said, else a dated label.
+  String _titleFor(List<LiveTranscriptTurn> turns) {
+    final firstUser = turns.firstWhere(
+      (t) => t.role == LiveSpeaker.user && t.text.trim().isNotEmpty,
+      orElse: () => const LiveTranscriptTurn(LiveSpeaker.user, ''),
+    );
+    final text = firstUser.text.trim();
+    if (text.isNotEmpty) {
+      final words = text.split(RegExp(r'\s+'));
+      final short = words.take(6).join(' ');
+      return words.length > 6 ? '$short…' : short;
+    }
+    final now = DateTime.now();
+    return 'Talk on ${now.month}/${now.day}';
+  }
+
+  /// Applies a [LiveNavRequest] after the session has ended: bottom tabs via
+  /// [AppNavigationService], pushed screens via the root navigator.
+  void _applyNav(
+    LiveNavRequest request,
+    AppNavigationService nav,
+    NavigatorState rootNavigator,
+  ) {
+    final dest = request.destination;
+    // Bottom tabs.
+    switch (dest) {
+      case LiveNavDestination.home:
+      case LiveNavDestination.checkIn:
+        nav.goToTab(AppTab.home);
+        return;
+      case LiveNavDestination.intentions:
+        nav.goToTab(AppTab.intentions);
+        return;
+      case LiveNavDestination.habitBuilder:
+        nav.goToTab(AppTab.habitBuilder);
+        return;
+      case LiveNavDestination.reflection:
+        nav.goToTab(AppTab.reflection);
+        return;
+      default:
+        break;
+    }
+    // Pushed full-screen routes.
+    final screen = _screenForDestination(dest);
+    if (screen != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        rootNavigator.push(MaterialPageRoute(builder: (_) => screen));
+      });
+    }
+  }
+
+  /// Maps a pushed-screen destination to its widget (tabs return null).
+  Widget? _screenForDestination(LiveNavDestination dest) {
+    switch (dest) {
+      case LiveNavDestination.settings:
+        return const SettingsScreen();
+      case LiveNavDestination.nutrition:
+        return const NutritionCoachScreen();
+      case LiveNavDestination.mealPlanner:
+        return const MealPlannerScreen();
+      case LiveNavDestination.calorieBudget:
+        return const CalorieBudgetScreen();
+      case LiveNavDestination.hydration:
+        return const HydrationCoachScreen();
+      case LiveNavDestination.sleep:
+        return const SleepCoachEntry();
+      case LiveNavDestination.meditation:
+        return const MeditationHomeScreen();
+      case LiveNavDestination.periodTracker:
+        return const PeriodTrackerScreen();
+      case LiveNavDestination.weightTracker:
+        return const WeightTrackerScreen();
+      case LiveNavDestination.mindfulTravel:
+        return const TravelScreen();
+      case LiveNavDestination.breathing:
+        return const BreathingScreen();
+      case LiveNavDestination.meditationSession:
+        return const GuidedMeditationScreen();
+      default:
+        return null;
+    }
   }
 
   @override

@@ -36,6 +36,10 @@ import '../features/habit_builder/presentation/habit_builder_state.dart';
 import '../screens/period_tracker_screen.dart';
 import '../screens/weight_tracker_screen.dart';
 import '../screens/travel_screen.dart';
+import '../models/live_conversation_record.dart';
+import '../services/conversation_store.dart';
+import 'ai_wellness_loader.dart';
+import 'conversation_transcript_sheet.dart';
 
 /// A bottom sheet that houses the voice assistant with the Siri-style orb,
 /// conversation messages, and real-time speech transcription.
@@ -739,6 +743,9 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
 
           const Divider(height: 1),
 
+          // Recent Live "Talk" conversations (max 3) as tappable cards.
+          _buildRecentConversations(theme, isDark),
+
           // Conversation messages
           Expanded(
             child: _voiceService.messages.isEmpty
@@ -759,6 +766,50 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
           _buildOrbSection(theme, isDark),
         ],
       ),
+    );
+  }
+
+  /// A "Recent conversations" band showing up to 3 saved Live conversations as
+  /// cards (styled like the Habit Builder active-habit tiles). Hidden entirely
+  /// when there are none. Rebuilds via Consumer<ConversationStore>.
+  Widget _buildRecentConversations(ThemeData theme, bool isDark) {
+    return Consumer<ConversationStore>(
+      builder: (context, store, _) {
+        final records = store.records;
+        if (records.isEmpty) return const SizedBox.shrink();
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.34,
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'RECENT CONVERSATIONS',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: theme.colorScheme.onSurface.withOpacity(0.45),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: records.length,
+                  itemBuilder: (context, index) => _ConversationCard(
+                    record: records[index],
+                    isDark: isDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1009,5 +1060,134 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
     if (!_voiceService.isInCheckInFlow) {
       _voiceService.startCheckInFlow();
     }
+  }
+}
+
+/// A card for one saved Live conversation, styled like the Habit Builder
+/// active-habit tiles. Tapping opens the full transcript; the trailing buttons
+/// delete it or turn it into a wellness reflection.
+class _ConversationCard extends StatefulWidget {
+  const _ConversationCard({required this.record, required this.isDark});
+
+  final LiveConversationRecord record;
+  final bool isDark;
+
+  @override
+  State<_ConversationCard> createState() => _ConversationCardState();
+}
+
+class _ConversationCardState extends State<_ConversationCard> {
+  bool _generating = false;
+
+  Future<void> _generateReflection() async {
+    if (_generating) return;
+    setState(() => _generating = true);
+
+    final store = context.read<ConversationStore>();
+    final appState = context.read<AppState>();
+    final nav = context.read<AppNavigationService>();
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final ok = await store.generateReflection(widget.record, appState);
+    if (!mounted) return;
+    setState(() => _generating = false);
+
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text("Couldn't create the reflection.")),
+      );
+      return;
+    }
+    // Close the assistant sheet and land on the Reflection tab.
+    if (rootNavigator.canPop()) rootNavigator.pop();
+    nav.goToTab(AppTab.reflection);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF1E2124) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          // Disable tapping into the card while a reflection is generating.
+          onTap: _generating
+              ? null
+              : () => ConversationTranscriptSheet.open(context, widget.record),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+            child: Row(
+              children: [
+                const Text('🗣️', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.record.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _generating
+                            ? 'Creating your reflection…'
+                            : '${widget.record.turns.length} messages · tap to view',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color:
+                                theme.colorScheme.onSurface.withOpacity(0.5)),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_generating)
+                  // Same AI-generation animation used elsewhere, sized to fit
+                  // the icon-button slot — signals work in progress and blocks
+                  // repeat taps.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: AiWellnessLoader(
+                      color: theme.colorScheme.primary,
+                      size: 30,
+                    ),
+                  )
+                else ...[
+                  IconButton(
+                    tooltip: 'Generate reflection',
+                    icon: Icon(Icons.auto_awesome_rounded,
+                        color: theme.colorScheme.primary),
+                    onPressed: _generateReflection,
+                  ),
+                  IconButton(
+                    tooltip: 'Delete',
+                    icon: Icon(Icons.delete_outline_rounded,
+                        color: Colors.red.withOpacity(0.7)),
+                    onPressed: () => context
+                        .read<ConversationStore>()
+                        .delete(widget.record.id),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
