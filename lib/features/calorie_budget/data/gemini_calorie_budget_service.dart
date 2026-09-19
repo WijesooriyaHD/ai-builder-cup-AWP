@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../services/content_safety_filter.dart';
@@ -21,10 +19,7 @@ class GeminiCalorieBudgetService implements CalorieBudgetService {
 
   GeminiCalorieBudgetService({FirebaseAI? ai})
       : _ai = ai ??
-            FirebaseAI.vertexAI(
-              appCheck: FirebaseAppCheck.instance,
-              auth: FirebaseAuth.instance,
-            );
+            FirebaseAI.vertexAI();
 
   // ---------------------------------------------------------------------------
   // Prediction — heuristic first, always reliable.

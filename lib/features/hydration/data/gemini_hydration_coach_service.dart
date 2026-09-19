@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../services/content_safety_filter.dart';
@@ -23,10 +21,7 @@ class GeminiHydrationCoachService implements HydrationCoachService {
 
   /// Lazily created so the pure-heuristic paths (e.g. calculateGoal) work
   /// without Firebase being initialized (also keeps unit tests light).
-  FirebaseAI get _ai => _aiOverride ??= (_lazyAi ??= FirebaseAI.vertexAI(
-        appCheck: FirebaseAppCheck.instance,
-        auth: FirebaseAuth.instance,
-      ));
+  FirebaseAI get _ai => _aiOverride ??= (_lazyAi ??= FirebaseAI.vertexAI());
 
   // ---------------------------------------------------------------------------
   // Goal calculation (pure heuristic — reliable, instant).

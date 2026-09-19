@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:firebase_ai/firebase_ai.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/check_in.dart';
@@ -60,16 +58,10 @@ class AIService {
   /// Creates an [AIService].
   ///
   /// If [ai] is not provided, a Vertex AI–backed [FirebaseAI] instance is used
-  /// with App Check and Auth wired in. Passing [FirebaseAppCheck] is REQUIRED
-  /// for projects that enforce App Check on Firebase AI Logic — without it the
-  /// SDK never attaches the `X-Firebase-AppCheck` header and every request is
-  /// rejected with "Firebase App Check token is invalid".
+  /// with App Check and Auth auto-wired by the SDK (firebase_ai 4.0.0+).
   AIService({FirebaseAI? ai})
       : _ai = ai ??
-            FirebaseAI.vertexAI(
-              appCheck: FirebaseAppCheck.instance,
-              auth: FirebaseAuth.instance,
-            );
+            FirebaseAI.vertexAI();
 
   /// Builds a [GenerativeModel] for the Gemini 2.5 Flash model.
   ///

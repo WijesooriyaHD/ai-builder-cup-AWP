@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import 'content_safety_filter.dart';
@@ -49,10 +47,7 @@ class TravelWellnessService {
   TravelWellnessService({FirebaseAI? ai}) : _override = ai;
 
   FirebaseAI get _ai =>
-      _override ??= (_lazy ??= FirebaseAI.vertexAI(
-        appCheck: FirebaseAppCheck.instance,
-        auth: FirebaseAuth.instance,
-      ));
+      _override ??= (_lazy ??= FirebaseAI.vertexAI());
 
   // ---------------------------------------------------------------------------
   // Public API

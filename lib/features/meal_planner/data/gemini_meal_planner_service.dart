@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:firebase_ai/firebase_ai.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -27,10 +25,7 @@ class GeminiMealPlannerService implements MealPlannerService {
 
   GeminiMealPlannerService({FirebaseAI? ai})
       : _ai = ai ??
-            FirebaseAI.vertexAI(
-              appCheck: FirebaseAppCheck.instance,
-              auth: FirebaseAuth.instance,
-            );
+            FirebaseAI.vertexAI();
 
   GenerativeModel _model({int maxTokens = 2048}) => _ai.generativeModel(
         model: _modelId,

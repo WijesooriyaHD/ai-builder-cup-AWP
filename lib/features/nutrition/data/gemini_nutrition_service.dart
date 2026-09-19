@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_ai/firebase_ai.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -27,10 +25,7 @@ class GeminiNutritionService implements NutritionAnalysisService {
 
   GeminiNutritionService({FirebaseAI? ai, http.Client? httpClient})
       : _ai = ai ??
-            FirebaseAI.vertexAI(
-              appCheck: FirebaseAppCheck.instance,
-              auth: FirebaseAuth.instance,
-            ),
+            FirebaseAI.vertexAI(),
         _http = httpClient ?? http.Client();
 
   GenerativeModel _model() => _ai.generativeModel(

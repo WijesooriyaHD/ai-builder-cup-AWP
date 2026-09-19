@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:firebase_ai/firebase_ai.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/feature_flags.dart';
@@ -89,8 +86,21 @@ class LiveConversationService extends ChangeNotifier {
 
   /// Live-capable model id. Kept overridable because these preview models are
   /// retired/renamed frequently — do not hardcode long-term.
-  static const String _defaultModelId =
-      'gemini-2.5-flash-native-audio-preview-12-2025';
+  ///
+  /// Overridable at build time for debugging which model the Live/BidiGenerate
+  /// endpoint accepts (a wrong/retired model closes the WebSocket with code
+  /// 1008 — policy violation):
+  ///   flutter run --dart-define=LIVE_MODEL_ID=gemini-live-2.5-flash-preview
+  ///
+  /// Default: `gemini-live-2.5-flash` — the Live/BidiGenerateContent model
+  /// available on the `global` Vertex AI endpoint for this project. Confirmed
+  /// working with firebase_ai 4.0.0 + FirebaseAI.agentPlatform() which
+  /// defaults to `global` (fixing the 1008 "model not found" error that
+  /// occurred with the old vertexAI() + us-central1 combination).
+  static const String _defaultModelId = String.fromEnvironment(
+    'LIVE_MODEL_ID',
+    defaultValue: 'gemini-live-2.5-flash',
+  );
 
   final LiveAudioIO? _audioIO;
   final FirebaseAI? _ai;
@@ -154,14 +164,16 @@ class LiveConversationService extends ChangeNotifier {
         return;
       }
 
-      // In firebase_ai 2.3.0 the Live model requires the Vertex AI backend.
+      // firebase_ai 4.0.0: use agentPlatform() instead of the deprecated
+      // vertexAI(). agentPlatform() defaults to location='global', which is
+      // where the Live/BidiGenerateContent models (e.g. gemini-live-2.5-flash)
+      // are served. The old vertexAI() + us-central1 combination caused a 1008
+      // "Publisher model was not found" close on every Live connect().
       final ai = _ai ??
-          FirebaseAI.vertexAI(
-            appCheck: FirebaseAppCheck.instance,
-            auth: FirebaseAuth.instance,
-          );
+          FirebaseAI.agentPlatform();
       // Resolve the model id: explicit override, else the default constant.
       final resolvedModel = modelId ?? _defaultModelId;
+      debugPrint('🎙️ LiveConversation: connecting model="$resolvedModel" (global)');
       final liveModel = ai.liveGenerativeModel(
         model: resolvedModel,
         liveGenerationConfig: LiveGenerationConfig(
@@ -204,6 +216,9 @@ class LiveConversationService extends ChangeNotifier {
         // Turn complete — loop to receive the next one (unless we're closing).
       }
     } catch (e) {
+      // Log the full error (incl. WebSocket closeReason when present) so the
+      // exact cause of a 1008 policy-violation close is visible in the console.
+      debugPrint('❌ LiveConversationService receive error: $e');
       if (_state == LiveConversationState.active) {
         _fail('Live session error: $e');
       }
