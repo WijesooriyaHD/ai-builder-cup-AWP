@@ -38,7 +38,7 @@ import home_widget
     // on the loudspeaker while the mic keeps capturing.
     if let controller = window?.rootViewController as? FlutterViewController {
       let audioChannel = FlutterMethodChannel(
-        name: "bloom/audio", binaryMessenger: controller.binaryMessenger)
+        name: "aiwellnesspal/audio", binaryMessenger: controller.binaryMessenger)
       audioChannel.setMethodCallHandler { call, result in
         if call.method == "routeToSpeaker" {
           let session = AVAudioSession.sharedInstance()

@@ -36,7 +36,8 @@ class _WorldMapSheetState extends State<WorldMapSheet> {
       if (byteData == null) return;
 
       final tempDir = await getTemporaryDirectory();
-      final file = await File('${tempDir.path}/bloom_travel_map.png').create();
+      final file =
+          await File('${tempDir.path}/aiwellnesspal_travel_map.png').create();
       await file.writeAsBytes(byteData.buffer.asUint8List());
 
       await Share.shareXFiles([XFile(file.path)], text: 'Check out my travel map from AI Wellness Pal! 🌍');

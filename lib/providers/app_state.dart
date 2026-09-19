@@ -808,7 +808,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           'Background Intention Toggle: intentionId=$intentionId, taskId=$taskId');
 
       if (intentionId != null && taskId != null) {
-        final String? localData = prefs.getString('bloom_dreams');
+        final String? localData = prefs.getString('aiwellnesspal_dreams');
         if (localData != null) {
           try {
             final List<dynamic> jsonList = jsonDecode(localData);
@@ -835,7 +835,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
             }
 
             if (found) {
-              await prefs.setString('bloom_dreams', jsonEncode(jsonList));
+              await prefs.setString('aiwellnesspal_dreams', jsonEncode(jsonList));
               // Flag for Firestore reconciliation on next foreground resume.
               await prefs.setBool('intention_pending_sync', true);
               // Show the task the user just tapped in its new (checked) state
@@ -851,7 +851,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
     } else if (uri?.host == 'intention_refresh') {
       debugPrint('Background Intention Refresh Request');
-      final String? intentionId = prefs.getString('bloom_widget_intention_id');
+      final String? intentionId =
+          prefs.getString('aiwellnesspal_widget_intention_id');
       await _syncIntentionWidgetInIsolate(prefs, intentionId);
     } else if (uri?.host == 'wellness_toggle') {
       // Handle AI Wellness Widget action toggle
@@ -920,7 +921,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (intentionId == null || intentionId.isEmpty) {
       await _writeIntentionWidgetEmpty();
     } else {
-      final String? localData = prefs.getString('bloom_dreams');
+      final String? localData = prefs.getString('aiwellnesspal_dreams');
       if (localData != null) {
         try {
           final List<dynamic> jsonList = jsonDecode(localData);

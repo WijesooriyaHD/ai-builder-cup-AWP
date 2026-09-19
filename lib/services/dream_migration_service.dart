@@ -17,7 +17,7 @@ import '../models/wellness_intention.dart';
 /// Preserves ALL existing Dream fields per Requirement 5.8.
 class DreamMigrationService {
   static const String _migrationFlagKey = 'wellness_migration_v1_done';
-  static const String _dreamsKey = 'bloom_dreams';
+  static const String _dreamsKey = 'aiwellnesspal_dreams';
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;

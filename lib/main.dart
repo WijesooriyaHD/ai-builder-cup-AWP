@@ -21,6 +21,7 @@ import 'services/live_conversation_service.dart';
 import 'services/record_pcm_audio_io.dart';
 import 'services/app_navigation_service.dart';
 import 'services/conversation_store.dart';
+import 'services/prefs_brand_migration.dart';
 import 'features/nutrition/presentation/nutrition_state.dart';
 import 'features/meal_planner/presentation/meal_planner_state.dart';
 import 'features/calorie_budget/presentation/calorie_budget_state.dart';
@@ -109,6 +110,14 @@ void main() async {
     debugPrint('Failed to initialize AuthService: $e');
   }
 
+  // Migrate legacy `bloom_*` prefs to `aiwellnesspal_*` BEFORE anything reads
+  // them, so existing users keep their data after the brand rename.
+  try {
+    await PrefsBrandMigration.run();
+  } catch (e) {
+    debugPrint('Failed to run prefs brand migration: $e');
+  }
+
   // Initialize StorageService (SharedPrefs Cache)
   try {
     await StorageService.init();
@@ -130,11 +139,11 @@ void main() async {
     debugPrint('Failed to initialize NotificationService: $e');
   }
 
-  runApp(const BloomApp());
+  runApp(const AiWellnessPalApp());
 }
 
-class BloomApp extends StatelessWidget {
-  const BloomApp({super.key});
+class AiWellnessPalApp extends StatelessWidget {
+  const AiWellnessPalApp({super.key});
 
   @override
   Widget build(BuildContext context) {

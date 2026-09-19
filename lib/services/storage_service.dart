@@ -20,33 +20,38 @@ class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
   // SharedPreferences keys (unchanged — local storage keys stay the same)
-  static const String _dreamsKey = 'bloom_dreams';
-  static const String _travelMemoriesKey = 'bloom_travel_memories';
-  static const String _journalEntriesKey = 'bloom_journal_entries';
-  static const String _gardenKey = 'bloom_garden_state';
-  static const String _negotiationsCompletedKey = 'bloom_negotiations_completed';
-  static const String _todoCompletionsKey = 'bloom_todo_completions';
-  static const String _distinctGamesKey = 'bloom_distinct_she_stacks_games';
-  static const String _totalCheckInsKey = 'bloom_total_check_ins';
-  static const String _hasSeedDataKey = 'bloom_has_seed_data';
-  static const String _pinnedJournalHomeKey = 'bloom_pinned_journal_home';
-  static const String _widgetJournalEntryIdKey = 'bloom_widget_journal_entry_id';
-  static const String _widgetIntentionIdKey = 'bloom_widget_intention_id';
-  static const String _isWinterModeKey = 'bloom_is_winter_mode';
-  static const String _showDailyMotivationKey = 'bloom_show_motivation';
-  static const String _showGardenKey = 'bloom_show_garden';
-  static const String _showAchievementsKey = 'bloom_show_achievements';
-  static const String _showMapKey = 'bloom_show_map';
-  static const String _themeModeKey = 'bloom_theme_mode';
-  static const String _themeColorKey = 'bloom_theme_color';
-  static const String _textScaleKey = 'bloom_text_scale';
-  static const String _currentStreakKey = 'bloom_current_streak';
-  static const String _lastActiveDateKey = 'bloom_last_active_date';
-  static const String _pinnedCardsKey = 'bloom_pinned_cards';
-  static const String _aiVoiceKey = 'bloom_ai_voice';
-  static const String _preferredMethodsKey = 'bloom_preferred_methods';
-  static const String _periodDataKey = 'bloom_period_data';
-  static const String _weightDataKey = 'bloom_weight_data';
+  static const String _dreamsKey = 'aiwellnesspal_dreams';
+  static const String _travelMemoriesKey = 'aiwellnesspal_travel_memories';
+  static const String _journalEntriesKey = 'aiwellnesspal_journal_entries';
+  static const String _gardenKey = 'aiwellnesspal_garden_state';
+  static const String _negotiationsCompletedKey =
+      'aiwellnesspal_negotiations_completed';
+  static const String _todoCompletionsKey = 'aiwellnesspal_todo_completions';
+  static const String _distinctGamesKey =
+      'aiwellnesspal_distinct_she_stacks_games';
+  static const String _totalCheckInsKey = 'aiwellnesspal_total_check_ins';
+  static const String _hasSeedDataKey = 'aiwellnesspal_has_seed_data';
+  static const String _pinnedJournalHomeKey =
+      'aiwellnesspal_pinned_journal_home';
+  static const String _widgetJournalEntryIdKey =
+      'aiwellnesspal_widget_journal_entry_id';
+  static const String _widgetIntentionIdKey =
+      'aiwellnesspal_widget_intention_id';
+  static const String _isWinterModeKey = 'aiwellnesspal_is_winter_mode';
+  static const String _showDailyMotivationKey = 'aiwellnesspal_show_motivation';
+  static const String _showGardenKey = 'aiwellnesspal_show_garden';
+  static const String _showAchievementsKey = 'aiwellnesspal_show_achievements';
+  static const String _showMapKey = 'aiwellnesspal_show_map';
+  static const String _themeModeKey = 'aiwellnesspal_theme_mode';
+  static const String _themeColorKey = 'aiwellnesspal_theme_color';
+  static const String _textScaleKey = 'aiwellnesspal_text_scale';
+  static const String _currentStreakKey = 'aiwellnesspal_current_streak';
+  static const String _lastActiveDateKey = 'aiwellnesspal_last_active_date';
+  static const String _pinnedCardsKey = 'aiwellnesspal_pinned_cards';
+  static const String _aiVoiceKey = 'aiwellnesspal_ai_voice';
+  static const String _preferredMethodsKey = 'aiwellnesspal_preferred_methods';
+  static const String _periodDataKey = 'aiwellnesspal_period_data';
+  static const String _weightDataKey = 'aiwellnesspal_weight_data';
 
   // Wellness keys
   static const String _wellnessDailyPlanKey = 'wellness_daily_plan';
@@ -304,7 +309,9 @@ class StorageService {
     if (showGarden != null) await prefs.setBool(_showGardenKey, showGarden);
     if (showAchievements != null) await prefs.setBool(_showAchievementsKey, showAchievements);
     if (showMap != null) await prefs.setBool(_showMapKey, showMap);
-    if (instagram != null) await prefs.setString('bloom_instagram', instagram);
+    if (instagram != null) {
+      await prefs.setString('aiwellnesspal_instagram', instagram);
+    }
     if (aiVoice != null) await prefs.setString(_aiVoiceKey, aiVoice);
     if (preferredMethods != null) {
       await prefs.setStringList(_preferredMethodsKey, preferredMethods);
@@ -403,7 +410,7 @@ class StorageService {
       'showGarden': prefs.getBool(_showGardenKey) ?? true,
       'showAchievements': prefs.getBool(_showAchievementsKey) ?? true,
       'showMap': prefs.getBool(_showMapKey) ?? true,
-      'instagram': prefs.getString('bloom_instagram'),
+      'instagram': prefs.getString('aiwellnesspal_instagram'),
       'aiVoice': prefs.getString(_aiVoiceKey) ?? 'default',
       'preferredMethods': prefs.getStringList(_preferredMethodsKey) ?? <String>[],
     };
@@ -731,7 +738,7 @@ class StorageService {
   // keyed by a stable content key (see ActionDetailScreen). Persisting locally
   // keeps the guide available when the user switches tabs or restarts the app,
   // without re-calling the model.
-  static const String _actionLessonKeyPrefix = 'bloom_action_lesson_';
+  static const String _actionLessonKeyPrefix = 'aiwellnesspal_action_lesson_';
 
   Future<void> saveActionLesson(String actionKey, String lesson) async {
     final prefs = await _getPrefs;
@@ -748,7 +755,7 @@ class StorageService {
   // Remembers the one-time reminder the user set for a given plan date so the
   // alarm icon can reflect the "on" state after switching tabs or restarting.
   // Stored as "HH:mm" under a date-scoped key; a new day naturally has no value.
-  static const String _planReminderKeyPrefix = 'bloom_plan_reminder_';
+  static const String _planReminderKeyPrefix = 'aiwellnesspal_plan_reminder_';
 
   Future<void> savePlanReminder(String planDate, int hour, int minute) async {
     final prefs = await _getPrefs;

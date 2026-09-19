@@ -4,16 +4,18 @@ import '../providers/app_state.dart';
 import '../utils/wellnesspal_snackbar.dart';
 import '../screens/activity_stats_screen.dart';
 
-class BloomGardenCard extends StatefulWidget {
+class AiWellnessPalGardenCard extends StatefulWidget {
   final AppState appState;
   
-  const BloomGardenCard({super.key, required this.appState});
+  const AiWellnessPalGardenCard({super.key, required this.appState});
 
   @override
-  State<BloomGardenCard> createState() => _BloomGardenCardState();
+  State<AiWellnessPalGardenCard> createState() =>
+      _AiWellnessPalGardenCardState();
 }
 
-class _BloomGardenCardState extends State<BloomGardenCard> with TickerProviderStateMixin {
+class _AiWellnessPalGardenCardState extends State<AiWellnessPalGardenCard>
+    with TickerProviderStateMixin {
   bool _isMinimized = true;
   int? _caterpillarIndex;
   late AnimationController _fireflyController;

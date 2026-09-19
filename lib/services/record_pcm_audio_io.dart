@@ -24,7 +24,8 @@ class RecordPcmAudioIO implements LiveAudioIO {
   static const int _outputSampleRate = 24000; // Live API output format
 
   final AudioRecorder _recorder = AudioRecorder();
-  static const MethodChannel _audioChannel = MethodChannel('bloom/audio');
+  static const MethodChannel _audioChannel =
+      MethodChannel('aiwellnesspal/audio');
   bool _playbackReady = false;
 
   @override

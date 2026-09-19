@@ -13,7 +13,7 @@ import '../models/journal_entry.dart';
 import '../widgets/world_map_svg.dart';
 import 'dream_completion_page.dart';
 import 'achievement_completion_page.dart';
-import '../widgets/bloom_garden_card.dart';
+import '../widgets/aiwellnesspal_garden_card.dart';
 import '../utils/wellnesspal_snackbar.dart';
 import '../utils/pro_modal_utils.dart';
 import '../widgets/world_map_sheet.dart';
@@ -139,7 +139,7 @@ class HomeTabScreen extends StatelessWidget {
         break;
       case kCardJourney:
         if (!appState.showGarden) return null;
-        cardContent = BloomGardenCard(appState: appState);
+        cardContent = AiWellnessPalGardenCard(appState: appState);
         break;
       case kCardMotivation:
         if (!appState.showMotivation) return null;
