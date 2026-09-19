@@ -680,7 +680,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Wellness Assistant',
+                  'Wellness Pal',
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,

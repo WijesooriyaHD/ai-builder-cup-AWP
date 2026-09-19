@@ -76,9 +76,12 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
   static const String _persona =
       'You are the user\'s warm, encouraging wellness pal in AI Wellness Pal, '
       'having a live, spoken conversation. Talk like a caring, down-to-earth '
-      'friend — natural, brief, human, with contractions. Keep replies short '
-      '(usually 1-3 sentences) since they are spoken aloud, and end with a '
-      'gentle question when it helps. Be positive; never shame or alarm the '
+      'friend — natural, brief, human, with contractions. BE CONCISE BY '
+      'DEFAULT: usually 1-2 short sentences since replies are spoken aloud; '
+      'only go longer if the user explicitly asks for detail. Get to the point '
+      'quickly, then end with a gentle question when it helps. If the user '
+      'starts talking while you are speaking, stop immediately and listen — '
+      'never talk over them. Be positive; never shame or alarm the '
       'user. Only suggest safe, gentle, healthy actions. No medical, legal, or '
       'financial advice; avoid clinical language. For signs of crisis, respond '
       'with compassion and gently encourage reaching out to a trusted person '
@@ -189,9 +192,68 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
       if (mounted) _finalize();
     };
 
+    // Seed the pal with the user's current context (profile + plan + habits)
+    // so it remembers who it's talking to and what's going on today.
+    final systemInstruction = '$_persona\n\n${_buildContextMemory()}';
+
     // TEMP(test): pass isPremium: true unconditionally (Premium gate disabled).
     // Restore with `isPremium: context.read<AppState>().isPro`.
-    await service.start(isPremium: true, systemInstruction: _persona);
+    await service.start(isPremium: true, systemInstruction: systemInstruction);
+  }
+
+  /// Builds a short "what I know about you right now" block appended to the
+  /// persona, so the pal has memory of the user's profile, today's plan/
+  /// check-in, recent plans, active habits, and intentions.
+  String _buildContextMemory() {
+    final appState = context.read<AppState>();
+    final plan = context.read<WellnessPlanState>();
+    final checkIn = context.read<CheckInState>();
+    final habits = context.read<HabitBuilderState>();
+
+    final b = StringBuffer('WHAT YOU KNOW ABOUT THIS USER RIGHT NOW '
+        '(use it naturally; do not read it back verbatim):\n');
+
+    b.writeln('- Membership: ${appState.isPro ? 'Premium' : 'Free'}.');
+
+    if (appState.preferredMethods.isNotEmpty) {
+      b.writeln('- Preferred wellness approaches: '
+          '${appState.preferredMethods.join(', ')}.');
+    }
+
+    final todays = plan.todaysPlan;
+    final todaysCheckIn = checkIn.todaysCheckIn;
+    if (todaysCheckIn == null) {
+      b.writeln('- They have NOT done today\'s check-in yet.');
+    } else {
+      final e = todaysCheckIn.energyScore;
+      b.writeln('- Today\'s check-in is done'
+          '${e != null ? ' (energy $e/5)' : ''}.');
+    }
+    if (todays != null) {
+      b.writeln('- Today\'s Plan focus: "${todays.todaysFocus}" '
+          '(${todays.completedActionsCount}/${todays.actions.length} actions done).');
+    } else {
+      b.writeln('- No Today\'s Plan generated yet.');
+    }
+
+    final recent = plan.recentPlans.take(3).map((p) => p.todaysFocus).toList();
+    if (recent.isNotEmpty) {
+      b.writeln('- Recent plan focuses: ${recent.join('; ')}.');
+    }
+
+    final activeHabits =
+        habits.habits.where((h) => h.isActive).map((h) => h.title).toList();
+    if (activeHabits.isNotEmpty) {
+      b.writeln('- Active habits: ${activeHabits.take(6).join(', ')}.');
+    }
+
+    final intentions =
+        appState.intentions.map((i) => i.title).take(4).toList();
+    if (intentions.isNotEmpty) {
+      b.writeln('- Wellness intentions: ${intentions.join(', ')}.');
+    }
+
+    return b.toString().trim();
   }
 
   /// Called (from the tool bridge) when the pal wants to navigate somewhere.
@@ -374,13 +436,13 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              Text(
-                _subtitle(state, service.lastError),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
-                  height: 1.4,
-                ),
+              _CaptionBox(
+                text: state == LiveConversationState.active &&
+                        service.currentReply.isNotEmpty
+                    ? service.currentReply
+                    : _subtitle(state, service.lastError),
+                isLive: state == LiveConversationState.active &&
+                    service.currentReply.isNotEmpty,
               ),
               const SizedBox(height: 28),
               Row(
@@ -459,6 +521,123 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
       case LiveConversationState.idle:
         return 'Thanks for chatting.';
     }
+  }
+}
+
+/// A captions area that reveals the pal's reply ONE FULL SENTENCE AT A TIME,
+/// roughly paced to the narration (like well-timed subtitles). It splits the
+/// current reply into sentences, shows a whole sentence fully, then advances to
+/// the next after a delay estimated from the sentence's length — never showing
+/// a mid-sentence scroll fragment. It won't outrun the text that has arrived.
+class _CaptionBox extends StatefulWidget {
+  const _CaptionBox({required this.text, required this.isLive});
+
+  final String text;
+  final bool isLive;
+
+  @override
+  State<_CaptionBox> createState() => _CaptionBoxState();
+}
+
+class _CaptionBoxState extends State<_CaptionBox> {
+  List<String> _sentences = const [];
+  int _index = 0; // which sentence is currently shown
+  Timer? _advanceTimer;
+  String _lastText = '';
+
+  @override
+  void didUpdateWidget(covariant _CaptionBox old) {
+    super.didUpdateWidget(old);
+    if (widget.text != _lastText) {
+      _lastText = widget.text;
+      final isContinuation = widget.text.startsWith(old.text) &&
+          old.text.isNotEmpty;
+      _sentences = _splitSentences(widget.text);
+      if (!isContinuation) {
+        // Fresh reply — start from the first sentence.
+        _index = 0;
+        _advanceTimer?.cancel();
+        _scheduleAdvance();
+      } else {
+        // Same reply growing — keep our place, but make sure a timer is
+        // running (new sentences may now be available to advance into).
+        if (_advanceTimer == null || !_advanceTimer!.isActive) {
+          _scheduleAdvance();
+        }
+      }
+      if (_index >= _sentences.length) _index = _sentences.length - 1;
+      if (_index < 0) _index = 0;
+    }
+  }
+
+  /// Splits [text] into sentence-ish chunks on . ! ? (keeping the punctuation).
+  List<String> _splitSentences(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return const [];
+    final matches = RegExp(r'[^.!?]+[.!?]*').allMatches(t);
+    final out = matches
+        .map((m) => m[0]!.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return out.isEmpty ? [t] : out;
+  }
+
+  /// Estimated on-screen time for a sentence, ~ speaking pace (min 1.6s).
+  Duration _dwellFor(String s) {
+    final words = s.split(RegExp(r'\s+')).length;
+    // ~380ms per spoken word, clamped to a comfortable range.
+    final ms = (words * 380).clamp(1600, 7000);
+    return Duration(milliseconds: ms);
+  }
+
+  void _scheduleAdvance() {
+    _advanceTimer?.cancel();
+    // Only advance if there IS a next sentence already available in the text.
+    if (_index >= _sentences.length - 1) return;
+    final current =
+        _index < _sentences.length ? _sentences[_index] : '';
+    _advanceTimer = Timer(_dwellFor(current), () {
+      if (!mounted) return;
+      if (_index < _sentences.length - 1) {
+        setState(() => _index++);
+      }
+      _scheduleAdvance();
+    });
+  }
+
+  @override
+  void dispose() {
+    _advanceTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final shown = (_sentences.isEmpty)
+        ? widget.text
+        : _sentences[_index.clamp(0, _sentences.length - 1)];
+    return SizedBox(
+      height: 72,
+      child: Center(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: Text(
+            shown,
+            key: ValueKey(shown),
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface
+                  .withOpacity(widget.isLive ? 0.85 : 0.6),
+              height: 1.4,
+              fontWeight: widget.isLive ? FontWeight.w500 : FontWeight.normal,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

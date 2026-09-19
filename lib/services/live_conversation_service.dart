@@ -62,6 +62,10 @@ abstract class LiveAudioIO {
   /// Plays a chunk of PCM16 audio (24 kHz, mono) returned by the model.
   Future<void> playChunk(Uint8List pcm);
 
+  /// Plays a short, soft "thinking" cue (a gentle tone) through the same
+  /// playback engine while the model prepares its reply. No-op if unsupported.
+  Future<void> playThinkingCue();
+
   /// Stops any in-progress playback (used for barge-in).
   Future<void> stopPlayback();
 
@@ -151,6 +155,8 @@ class LiveConversationService extends ChangeNotifier {
   // model's turnComplete. Two separate audio engines (record + flutter_pcm_sound)
   // mean iOS hardware AEC can't cancel the echo, so we gate instead.
   bool _modelSpeaking = false;
+  // Ensures the soft "thinking" cue plays at most once per user turn.
+  bool _thinkingCuePlayed = false;
   // Timestamp of the model's most recent audio, used to add a short tail before
   // the mic resumes so the speaker's trailing audio doesn't leak in.
   DateTime _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -167,6 +173,23 @@ class LiveConversationService extends ChangeNotifier {
   /// The latest transcription of the model's spoken reply (from the server's
   /// output audio transcription). Useful for showing live captions in the UI.
   String get lastTranscript => _lastTranscript;
+
+  /// The model's CURRENT spoken reply as live captions: the in-progress model
+  /// turn while it's speaking, otherwise the most recently completed model
+  /// reply. Empty until the pal has said something. Updates as the reply
+  /// streams so the UI can show it like movie subtitles.
+  String get currentReply {
+    // While the pal is mid-reply, the running buffer has the freshest text.
+    if (_modelTurnBuf.isNotEmpty) return _modelTurnBuf.toString().trim();
+    // Otherwise show the last committed model turn (keeps it on screen).
+    for (var i = _transcript.length - 1; i >= 0; i--) {
+      if (_transcript[i].role == LiveSpeaker.model &&
+          _transcript[i].text.trim().isNotEmpty) {
+        return _transcript[i].text.trim();
+      }
+    }
+    return '';
+  }
 
   /// One line of the conversation transcript.
   final List<LiveTranscriptTurn> _transcript = [];
@@ -204,7 +227,10 @@ class LiveConversationService extends ChangeNotifier {
       // Committing a new user turn flushes any pending model turn first.
       _flushModelTurn();
       _userTurnBuf.write(_userTurnBuf.isEmpty ? t : ' $t');
-      _maybeDetectEndIntent(_userTurnBuf.toString());
+      // Check the current buffer AND this fresh fragment for an end phrase.
+      // (The buffer can be flushed when the model starts speaking, so also
+      // matching the raw fragment makes "bye" detection reliable.)
+      _maybeDetectEndIntent('${_userTurnBuf.toString()} $t');
     } else {
       _flushUserTurn();
       _modelTurnBuf.write(_modelTurnBuf.isEmpty ? t : ' $t');
@@ -263,13 +289,40 @@ class LiveConversationService extends ChangeNotifier {
         debugPrint('LiveConversationService: end intent detected in '
             '"$utterance" — ending after the pal\'s goodbye.');
       }
-      // Fallback: if the pal never produces a goodbye turn, end anyway.
+      // Fallback: if the pal never produces a goodbye turn at all, end anyway
+      // after a generous wait (the normal path ends right after the goodbye
+      // audio goes quiet, via _scheduleEndAfterGoodbye).
       _endFallbackTimer?.cancel();
-      _endFallbackTimer = Timer(const Duration(seconds: 6), _fireEndIfPending);
+      _endFallbackTimer = Timer(const Duration(seconds: 10), _fireEndIfPending);
     }
   }
 
   Timer? _endFallbackTimer;
+
+  /// Waits for the pal's goodbye AUDIO to finish (a quiet gap after the last
+  /// audio chunk) before ending, so the user hears the whole sign-off. Polls
+  /// briefly since playback lags the transcript's turnComplete.
+  void _scheduleEndAfterGoodbye() {
+    const quietGap = Duration(milliseconds: 1200);
+    const maxWait = Duration(seconds: 8);
+    final startedAt = DateTime.now();
+
+    void check() {
+      if (!_endPending || _endIntentFired) return;
+      final sinceAudio = DateTime.now().difference(_lastModelAudioAt);
+      final waited = DateTime.now().difference(startedAt);
+      // End once the goodbye audio has been quiet long enough, or we've waited
+      // the max (safety net).
+      if (sinceAudio >= quietGap || waited >= maxWait) {
+        _fireEndIfPending();
+      } else {
+        Future.delayed(const Duration(milliseconds: 250), check);
+      }
+    }
+
+    // Give playback a beat to start, then begin polling for the quiet gap.
+    Future.delayed(const Duration(milliseconds: 400), check);
+  }
 
   /// Fires the end callback (once) after the pal has finished its goodbye.
   void _fireEndIfPending() {
@@ -328,6 +381,7 @@ class LiveConversationService extends ChangeNotifier {
     _modelTurnBuf.clear();
     _endIntentFired = false;
     _endPending = false;
+    _thinkingCuePlayed = false;
 
     try {
       final granted = await audio.requestPermission();
@@ -356,6 +410,19 @@ class LiveConversationService extends ChangeNotifier {
           // Reflection afterwards, and surfaced live as captions.
           inputAudioTranscription: AudioTranscriptionConfig(),
           outputAudioTranscription: AudioTranscriptionConfig(),
+          // Keep spoken replies concise by capping output, and make turn-taking
+          // snappy + interruptible: detect speech eagerly, respond soon after a
+          // short silence, and let the user barge in to cut off the reply.
+          maxOutputTokens: 512,
+          temperature: 0.8,
+          realtimeInputConfig: RealtimeInputConfig(
+            automaticActivityDetection: ActivityDetectionConfig(
+              startSensitivity: Sensitivity.high,
+              endSensitivity: Sensitivity.high,
+              silenceDurationMS: 500,
+            ),
+            activityHandling: ActivityHandling.interrupt,
+          ),
         ),
         tools: tools.isEmpty ? null : tools,
         systemInstruction:
@@ -512,6 +579,12 @@ class LiveConversationService extends ChangeNotifier {
         final inT = message.inputTranscription?.text;
         if (inT != null && inT.trim().isNotEmpty) {
           _appendTranscript(LiveSpeaker.user, inT);
+          // The user just said something and the pal hasn't started replying
+          // yet — play a soft "thinking" cue once so the pause feels alive.
+          if (!_modelSpeaking && !_thinkingCuePlayed) {
+            _thinkingCuePlayed = true;
+            unawaited(audio.playThinkingCue());
+          }
         }
         final outT = message.outputTranscription?.text;
         if (outT != null && outT.trim().isNotEmpty) {
@@ -520,11 +593,11 @@ class LiveConversationService extends ChangeNotifier {
         // On turn boundary, commit any buffered partials as clean turns.
         if (message.turnComplete == true) {
           _flushTranscriptBuffers();
-          // If the user asked to end, the pal has now finished its goodbye —
-          // end the session (a short delay lets the final audio play out).
-          if (_endPending) {
-            Future.delayed(const Duration(milliseconds: 900), _fireEndIfPending);
-          }
+          // If the user asked to end, the pal has finished its goodbye turn —
+          // but the goodbye AUDIO may still be playing (playback lags the
+          // transcript). Wait until the audio has actually gone quiet before
+          // ending, so the user hears the whole sign-off.
+          if (_endPending) _scheduleEndAfterGoodbye();
         }
         // As soon as the model produces ANY turn content it has taken the floor:
         // pause the mic so its loudspeaker output can't be captured and echoed
@@ -534,6 +607,7 @@ class LiveConversationService extends ChangeNotifier {
                 (outT != null && outT.trim().isNotEmpty);
         if (hasModelContent && !_modelSpeaking) {
           _modelSpeaking = true;
+          _thinkingCuePlayed = false; // reset for the next user turn
           _lastModelAudioAt = DateTime.now();
           unawaited(audio.pauseCapture());
         } else if (hasModelContent) {

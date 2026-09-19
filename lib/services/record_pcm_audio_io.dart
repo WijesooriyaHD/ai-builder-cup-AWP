@@ -1,5 +1,8 @@
 import 'dart:typed_data';
 
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart' as pcm;
@@ -147,6 +150,66 @@ class RecordPcmAudioIO implements LiveAudioIO {
     } catch (e) {
       debugPrint('RecordPcmAudioIO: playChunk failed: $e');
     }
+  }
+
+  bool _cuePlaying = false;
+
+  @override
+  Future<void> playThinkingCue() async {
+    if (_cuePlaying) return;
+    _cuePlaying = true;
+    try {
+      await _ensurePlaybackReady();
+      // Feed a short, soft two-note "thinking" blip through the same engine
+      // that plays the model's voice — so it shares the audio session and
+      // speaker routing (no separate player, no session conflict).
+      await pcm.FlutterPcmSound.feed(pcm.PcmArrayInt16(bytes: _thinkingTone()));
+      if (!_playbackStarted) {
+        pcm.FlutterPcmSound.start();
+        _playbackStarted = true;
+      }
+    } catch (e) {
+      debugPrint('RecordPcmAudioIO: playThinkingCue failed: $e');
+    } finally {
+      _cuePlaying = false;
+    }
+  }
+
+  /// Builds a gentle, low-volume two-note tone (~360ms) at 24 kHz mono PCM16,
+  /// with short fades so it sounds soft rather than a harsh beep.
+  ByteData _thinkingTone() {
+    const sr = _outputSampleRate; // 24000
+    const noteMs = 170;
+    const gapMs = 20;
+    const amp = 0.16; // low volume
+    final samplesPerNote = (sr * noteMs / 1000).round();
+    final gapSamples = (sr * gapMs / 1000).round();
+    final total = samplesPerNote * 2 + gapSamples;
+    final data = ByteData(total * 2);
+    var i = 0;
+
+    void writeNote(double freq) {
+      for (var n = 0; n < samplesPerNote; n++) {
+        // Fade in/out over ~12ms to avoid clicks.
+        final fadeLen = (sr * 12 / 1000).round();
+        var env = 1.0;
+        if (n < fadeLen) env = n / fadeLen;
+        if (n > samplesPerNote - fadeLen) {
+          env = (samplesPerNote - n) / fadeLen;
+        }
+        final v = amp * env * math.sin(2 * math.pi * freq * n / sr);
+        data.setInt16(i * 2, (v * 32767).round(), Endian.little);
+        i++;
+      }
+    }
+
+    writeNote(523.25); // C5
+    for (var g = 0; g < gapSamples; g++) {
+      data.setInt16(i * 2, 0, Endian.little);
+      i++;
+    }
+    writeNote(659.25); // E5 — gentle rising two-note cue
+    return data;
   }
 
   @override
