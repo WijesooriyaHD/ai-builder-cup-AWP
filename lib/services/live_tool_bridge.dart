@@ -4,9 +4,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import '../features/calorie_budget/domain/calorie_budget_models.dart';
+import '../features/calorie_budget/presentation/calorie_budget_state.dart';
+import '../features/habit_builder/domain/challenge_models.dart';
 import '../features/habit_builder/domain/habit_models.dart';
+import '../features/habit_builder/presentation/challenge_state.dart';
 import '../features/habit_builder/presentation/habit_builder_state.dart';
 import '../features/hydration/presentation/hydration_state.dart';
+import '../features/meditation/domain/meditation_models.dart';
+import '../features/meditation/presentation/meditation_state.dart';
+import '../features/nutrition/domain/nutrition_models.dart';
+import '../features/nutrition/presentation/nutrition_state.dart';
 import '../models/check_in.dart';
 import '../models/wellness_enums.dart';
 import '../providers/app_state.dart';
@@ -80,6 +88,10 @@ class LiveToolBridge {
     required HydrationState hydration,
     required CheckInState checkIn,
     required WellnessPlanState plan,
+    required NutritionState nutrition,
+    required CalorieBudgetState calorieBudget,
+    required MeditationState meditation,
+    required ChallengeState challenges,
     this.onNavigate,
     this.onEndConversation,
   })  : _habits = habits,
@@ -87,7 +99,11 @@ class LiveToolBridge {
         _navService = navService,
         _hydration = hydration,
         _checkIn = checkIn,
-        _plan = plan;
+        _plan = plan,
+        _nutrition = nutrition,
+        _calorieBudget = calorieBudget,
+        _meditation = meditation,
+        _challenges = challenges;
 
   final HabitBuilderState _habits;
   final AppState _appState;
@@ -95,6 +111,10 @@ class LiveToolBridge {
   final HydrationState _hydration;
   final CheckInState _checkIn;
   final WellnessPlanState _plan;
+  final NutritionState _nutrition;
+  final CalorieBudgetState _calorieBudget;
+  final MeditationState _meditation;
+  final ChallengeState _challenges;
 
   /// Called when the pal requests navigation. The UI orchestrates the
   /// end-session / reflection-gate / navigate flow (see ConversationModeSheet).
@@ -266,6 +286,146 @@ class LiveToolBridge {
               'available_time',
             ],
           ),
+          FunctionDeclaration(
+            'improve_todays_plan',
+            "Update the user's personalized Today's Plan using something new "
+                'from this conversation. Use when the user has already checked '
+                'in but the chat reveals a change (e.g. they now feel tired, '
+                'slept badly, are stressed, or want a different focus) that '
+                'should reshape today\'s plan. Ask the user first, then call '
+                'this. Optionally pass an updated energy/mood/recovery/time.',
+            parameters: {
+              'context_note': Schema.string(
+                description:
+                    'A short note of what to reflect in the plan, e.g. '
+                    '"slept poorly and feeling stressed, wants calmer actions".',
+              ),
+              'energy_score': Schema.integer(
+                description: 'Updated energy 1-5, if it changed. Omit if not.',
+              ),
+              'mood': Schema.enumString(
+                enumValues: const [
+                  'calm', 'anxious', 'tired', 'energized', 'stressed', 'content',
+                ],
+                description: 'Updated mood, if it changed.',
+              ),
+              'recovery': Schema.enumString(
+                enumValues: const ['wellRested', 'sore', 'fatigued', 'recovering'],
+                description: 'Updated body recovery, if it changed.',
+              ),
+              'available_time': Schema.enumString(
+                enumValues: const [
+                  'under10', 'range10_20', 'range20_40', 'range40_60', 'over60',
+                ],
+                description: 'Updated available time, if it changed.',
+              ),
+            },
+            optionalParameters: [
+              'energy_score',
+              'mood',
+              'recovery',
+              'available_time',
+            ],
+          ),
+          // ── Habits (extra) ──────────────────────────────────────────
+          FunctionDeclaration(
+            'mark_habit_done',
+            "Mark one of the user's habits complete for today. Match by name.",
+            parameters: {
+              'title': Schema.string(
+                description: 'The habit name to mark done, e.g. "Meditate".',
+              ),
+            },
+          ),
+          FunctionDeclaration(
+            'clear_habit_reminder',
+            'Remove the reminder from the habit currently being discussed.',
+            parameters: const {},
+          ),
+          // ── Challenges ──────────────────────────────────────────────
+          FunctionDeclaration(
+            'join_challenge',
+            'Start/join a wellness challenge for the user.',
+            parameters: {
+              'challenge': Schema.enumString(
+                enumValues: const [
+                  'hydration', 'walking', 'meditation', 'sugar_detox', 'sleep',
+                ],
+                description: 'Which challenge to join.',
+              ),
+            },
+          ),
+          FunctionDeclaration(
+            'log_challenge_day',
+            "Log today's progress on an active challenge (match by name).",
+            parameters: {
+              'challenge': Schema.enumString(
+                enumValues: const [
+                  'hydration', 'walking', 'meditation', 'sugar_detox', 'sleep',
+                ],
+                description: 'Which active challenge to log a day for.',
+              ),
+            },
+          ),
+          // ── Calorie budget / exercise ───────────────────────────────
+          FunctionDeclaration(
+            'log_exercise',
+            'Log exercise the user did (adds to their calories burned).',
+            parameters: {
+              'type': Schema.enumString(
+                enumValues: const [
+                  'walking', 'running', 'cycling', 'yoga', 'pilates',
+                  'strength', 'other',
+                ],
+                description: 'Type of exercise.',
+              ),
+              'minutes': Schema.integer(description: 'Duration in minutes.'),
+            },
+          ),
+          // ── Meditation ──────────────────────────────────────────────
+          FunctionDeclaration(
+            'log_meditation_session',
+            'Record a completed meditation or breathing session for the user.',
+            parameters: {
+              'type': Schema.enumString(
+                enumValues: const [
+                  'breathing', 'guided', 'bodyScan', 'stressRelief',
+                  'sleep', 'focus',
+                ],
+                description: 'The kind of session.',
+              ),
+              'minutes': Schema.integer(description: 'How many minutes.'),
+            },
+          ),
+          // ── Trackers ────────────────────────────────────────────────
+          FunctionDeclaration(
+            'log_weight',
+            'Log the user\'s body weight in kilograms.',
+            parameters: {
+              'weight_kg': Schema.number(description: 'Weight in kilograms.'),
+            },
+          ),
+          FunctionDeclaration(
+            'log_period_start',
+            "Log today as the start of the user's period.",
+            parameters: const {},
+          ),
+          // ── Nutrition ───────────────────────────────────────────────
+          FunctionDeclaration(
+            'log_meal',
+            'Log a meal the user describes (e.g. "two eggs and toast"). The '
+                'app estimates the nutrition automatically.',
+            parameters: {
+              'description': Schema.string(
+                description: 'What the user ate, in their words.',
+              ),
+              'meal_type': Schema.enumString(
+                enumValues: const ['breakfast', 'lunch', 'dinner', 'snack'],
+                description: 'Which meal it was.',
+              ),
+            },
+            optionalParameters: ['meal_type'],
+          ),
           // ── Navigation ──────────────────────────────────────────────
           FunctionDeclaration(
             'navigate',
@@ -341,6 +501,26 @@ class LiveToolBridge {
         return _refreshPlan();
       case 'submit_check_in':
         return _submitCheckIn(args);
+      case 'improve_todays_plan':
+        return _improveTodaysPlan(args);
+      case 'mark_habit_done':
+        return _markHabitDone(args);
+      case 'clear_habit_reminder':
+        return _clearHabitReminder(args);
+      case 'join_challenge':
+        return _joinChallenge(args);
+      case 'log_challenge_day':
+        return _logChallengeDay(args);
+      case 'log_exercise':
+        return _logExercise(args);
+      case 'log_meditation_session':
+        return _logMeditationSession(args);
+      case 'log_weight':
+        return _logWeight(args);
+      case 'log_period_start':
+        return _logPeriodStart();
+      case 'log_meal':
+        return _logMeal(args);
       case 'navigate':
         return _navigate(args);
       case 'end_conversation':
@@ -597,6 +777,293 @@ class LiveToolBridge {
     }
   }
 
+  Future<Map<String, Object?>> _improveTodaysPlan(
+      Map<String, Object?> args) async {
+    final uid = _uid;
+    if (uid == null) {
+      return {'status': 'error', 'message': 'Please sign in first.'};
+    }
+    final existing = _checkIn.todaysCheckIn;
+    if (existing == null) {
+      return {
+        'status': 'error',
+        'message': 'No check-in yet today — do a quick check-in first.',
+      };
+    }
+
+    final energy = _asInt(args['energy_score'], 1, 5);
+    final mood = _enumByName(MoodState.values, args['mood'] as String?);
+    final recovery =
+        _enumByName(RecoveryStatus.values, args['recovery'] as String?);
+    final time = _enumByName(
+        AvailableTimeRange.values, args['available_time'] as String?);
+    final note = (args['context_note'] as String?)?.trim();
+
+    try {
+      // Apply any updated check-in signals first (so the plan reflects them).
+      CheckIn checkIn = existing;
+      if (energy != null || recovery != null || time != null) {
+        await _checkIn.loadTodaysCheckIn(uid);
+        checkIn = await _checkIn.updateEnergyAndRecovery(
+          energyScore: energy,
+          recoveryStatus: recovery,
+          availableTime: time,
+        );
+      }
+
+      // Fold the conversation insight + mood into the toolkit context so the
+      // AI planner honors it.
+      final ctx = StringBuffer();
+      if (note != null && note.isNotEmpty) {
+        ctx.writeln('FROM THE USER\'S CONVERSATION: $note');
+      }
+      if (mood != null) ctx.writeln('Current mood: ${mood.name}.');
+
+      await _plan.generatePlan(
+        uid,
+        checkIn,
+        intentions: _appState.intentions,
+        cycleContext: _appState.cyclePhaseContext,
+        travelContext: _appState.travelContext,
+        preferredMethods: _appState.preferredMethods,
+        premiumToolkitContext: ctx.isEmpty ? null : ctx.toString(),
+      );
+      return {
+        'status': 'ok',
+        'message': "Updated today's plan to reflect what you shared.",
+      };
+    } catch (e) {
+      if (kDebugMode) debugPrint('LiveToolBridge.improve_plan failed: $e');
+      return {'status': 'error', 'message': "Couldn't update the plan."};
+    }
+  }
+
+  Future<Map<String, Object?>> _markHabitDone(Map<String, Object?> args) async {
+    final title = (args['title'] as String?)?.trim().toLowerCase();
+    if (title == null || title.isEmpty) {
+      return {'status': 'error', 'message': 'Which habit?'};
+    }
+    final habit = _habits.habits.firstWhereOrNull(
+      (h) => h.title.toLowerCase().contains(title),
+    );
+    if (habit == null) {
+      return {'status': 'error', 'message': 'No habit matches "$title".'};
+    }
+    try {
+      await _habits.markComplete(habit.id);
+      return {
+        'status': 'ok',
+        'message': 'Marked "${habit.title}" done for today.',
+      };
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not update that habit.'};
+    }
+  }
+
+  Future<Map<String, Object?>> _clearHabitReminder(
+      Map<String, Object?> args) async {
+    final id = _lastHabitId;
+    if (id == null || !_habits.habits.any((h) => h.id == id)) {
+      return {'status': 'error', 'message': 'No habit is in context.'};
+    }
+    try {
+      await _habits.clearReminder(id);
+      return {
+        'status': 'ok',
+        'message': 'Cleared the reminder for "${_lastHabitTitle ?? 'it'}".',
+      };
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not clear the reminder.'};
+    }
+  }
+
+  // ── Challenges ────────────────────────────────────────────────────────
+
+  static const Map<String, String> _challengeIds = {
+    'hydration': 'hydration_7',
+    'walking': 'walking_30',
+    'meditation': 'meditation_14',
+    'sugar_detox': 'sugar_detox_7',
+    'sleep': 'sleep_14',
+  };
+
+  Future<Map<String, Object?>> _joinChallenge(Map<String, Object?> args) async {
+    final key = (args['challenge'] as String?)?.toLowerCase();
+    final id = _challengeIds[key];
+    final template = id == null ? null : ChallengeCatalog.findById(id);
+    if (template == null) {
+      return {'status': 'error', 'message': 'Unknown challenge.'};
+    }
+    try {
+      await _challenges.load();
+      final joined = await _challenges.joinChallenge(template);
+      if (joined == null) {
+        return {
+          'status': 'ok',
+          'message': 'You\'re already in the ${template.title}.',
+        };
+      }
+      return {
+        'status': 'ok',
+        'message': 'Started the ${template.title}. ${template.trophyEmoji}',
+      };
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not join the challenge.'};
+    }
+  }
+
+  Future<Map<String, Object?>> _logChallengeDay(
+      Map<String, Object?> args) async {
+    final key = (args['challenge'] as String?)?.toLowerCase();
+    final id = _challengeIds[key];
+    try {
+      await _challenges.load();
+      final active = _challenges.activeChallenges.firstWhereOrNull(
+        (c) => c.templateId == id,
+      );
+      if (active == null) {
+        return {
+          'status': 'error',
+          'message': 'No active challenge of that kind to log.',
+        };
+      }
+      final result = await _challenges.logDay(active.id);
+      switch (result) {
+        case LogDayResult.completed:
+          return {
+            'status': 'ok',
+            'message': 'That completes the ${active.title}! ${active.trophyEmoji}',
+          };
+        case LogDayResult.logged:
+          return {
+            'status': 'ok',
+            'message': 'Logged today for the ${active.title}.',
+          };
+        case LogDayResult.alreadyLoggedToday:
+          return {
+            'status': 'ok',
+            'message': 'You already logged that challenge today.',
+          };
+        case LogDayResult.failed:
+          return {'status': 'error', 'message': 'Could not log that.'};
+      }
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not log the challenge.'};
+    }
+  }
+
+  // ── Calorie budget / exercise ─────────────────────────────────────────
+
+  Future<Map<String, Object?>> _logExercise(Map<String, Object?> args) async {
+    final type = _enumByName(ExerciseType.values, args['type'] as String?) ??
+        ExerciseType.other;
+    final minutes = _asInt(args['minutes'], 1, 600);
+    if (minutes == null) {
+      return {'status': 'error', 'message': 'How many minutes?'};
+    }
+    try {
+      await _calorieBudget.addExercise(type, minutes);
+      return {
+        'status': 'ok',
+        'message': 'Logged $minutes minutes of ${type.name}.',
+      };
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not log the exercise.'};
+    }
+  }
+
+  // ── Meditation ────────────────────────────────────────────────────────
+
+  Future<Map<String, Object?>> _logMeditationSession(
+      Map<String, Object?> args) async {
+    final type = _enumByName(SessionType.values, args['type'] as String?) ??
+        SessionType.breathing;
+    final minutes = _asInt(args['minutes'], 1, 180);
+    if (minutes == null) {
+      return {'status': 'error', 'message': 'How many minutes?'};
+    }
+    try {
+      await _meditation.completeSession(
+        type: type,
+        title: '${_titleCase(type.name)} session',
+        minutes: minutes,
+      );
+      return {
+        'status': 'ok',
+        'message': 'Logged a $minutes-minute ${type.name} session. 🧘',
+      };
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not log the session.'};
+    }
+  }
+
+  // ── Trackers ──────────────────────────────────────────────────────────
+
+  Future<Map<String, Object?>> _logWeight(Map<String, Object?> args) async {
+    final raw = args['weight_kg'];
+    final kg = raw is num ? raw.toDouble() : null;
+    if (kg == null || kg < 20 || kg > 400) {
+      return {'status': 'error', 'message': 'That weight doesn\'t look right.'};
+    }
+    try {
+      await _appState.logWeight(kg);
+      return {
+        'status': 'ok',
+        'message': 'Logged your weight: ${kg.toStringAsFixed(1)} kg.',
+      };
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not log your weight.'};
+    }
+  }
+
+  Future<Map<String, Object?>> _logPeriodStart() async {
+    try {
+      await _appState.logPeriodStart(DateTime.now());
+      return {'status': 'ok', 'message': 'Logged today as your period start.'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not log that.'};
+    }
+  }
+
+  // ── Nutrition ─────────────────────────────────────────────────────────
+
+  Future<Map<String, Object?>> _logMeal(Map<String, Object?> args) async {
+    final desc = (args['description'] as String?)?.trim();
+    if (desc == null || desc.isEmpty) {
+      return {'status': 'error', 'message': 'What did you eat?'};
+    }
+    final mealType =
+        _enumByName(MealType.values, args['meal_type'] as String?) ??
+            _mealTypeForNow();
+    try {
+      final result = await _nutrition.analyzeText(desc);
+      if (result == null) {
+        return {
+          'status': 'error',
+          'message': "Couldn't estimate that meal — try the Nutrition Coach.",
+        };
+      }
+      await _nutrition.logMeal(result, mealType: mealType);
+      return {
+        'status': 'ok',
+        'message': 'Logged "$desc" as ${mealType.name}.',
+      };
+    } catch (e) {
+      return {'status': 'error', 'message': 'Could not log the meal.'};
+    }
+  }
+
+  MealType _mealTypeForNow() {
+    final h = DateTime.now().hour;
+    if (h < 11) return MealType.breakfast;
+    if (h < 15) return MealType.lunch;
+    if (h < 21) return MealType.dinner;
+    return MealType.snack;
+  }
+
+  String _titleCase(String w) =>
+      w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}';
+
   // ── Navigation ──────────────────────────────────────────────────────────
 
   Map<String, Object?> _navigate(Map<String, Object?> args) {
@@ -745,5 +1212,14 @@ class LiveToolBridge {
     return await notifier.hasNotificationPermission()
         ? true
         : await notifier.requestPermission();
+  }
+}
+
+extension _FirstWhereOrNull<E> on Iterable<E> {
+  E? firstWhereOrNull(bool Function(E) test) {
+    for (final e in this) {
+      if (test(e)) return e;
+    }
+    return null;
   }
 }
