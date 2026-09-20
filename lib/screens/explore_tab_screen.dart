@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/blog_post.dart';
 import 'blog_reader_screen.dart';
-import 'she_stacks_screen.dart';
+import 'life_toolkit_screen.dart';
 
 
 class ExploreTabScreen extends StatefulWidget {
