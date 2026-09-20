@@ -19,6 +19,20 @@ import AppIntents
 // WidgetKit renders static snapshots on the home screen (no live animation), so
 // the flip is a tap-to-swap between faces — consistent with Hydration.
 
+// MARK: - Sizing
+
+/// Content scale factor for the resizable live-data widgets. Small stays 1×;
+/// medium/large scale the rings, cards and fonts up so they fill the larger
+/// canvas instead of leaving empty space.
+func widgetScale(_ family: WidgetFamily) -> CGFloat {
+    switch family {
+    case .systemSmall: return 1.0
+    case .systemMedium: return 1.35
+    case .systemLarge: return 1.9
+    default: return 1.0
+    }
+}
+
 // MARK: - Shared flip button
 
 /// A small circular flip button shared by all live-data tool widgets. Fires the
@@ -88,12 +102,13 @@ struct ToolDefaultTile: View {
     let emoji: String
     let label: String
     let widgetId: String
+    var scale: CGFloat = 1.0
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text(emoji).font(.system(size: 40))
+        VStack(spacing: 8 * scale) {
+            Text(emoji).font(.system(size: 40 * scale))
             Text(label)
-                .font(.caption).bold()
+                .font(.system(size: 13 * scale, weight: .bold))
                 .foregroundColor(widgetTextColor(widgetId))
                 .multilineTextAlignment(.center)
                 .lineLimit(2).minimumScaleFactor(0.8)
@@ -109,33 +124,35 @@ struct ToolRing: View {
     let centerTop: String       // big text (e.g. "62%", "540", "Luteal")
     let centerBottom: String    // small text under it (emoji or label)
     let centerTopSize: CGFloat
+    var scale: CGFloat = 1.0
 
     var body: some View {
+        let lineWidth = 8 * scale
         ZStack {
             Circle()
                 .stroke(
                     accent.opacity(hasData ? 0.15 : 0.10),
                     style: hasData
-                        ? StrokeStyle(lineWidth: 8)
-                        : StrokeStyle(lineWidth: 8, dash: [4, 4])
+                        ? StrokeStyle(lineWidth: lineWidth)
+                        : StrokeStyle(lineWidth: lineWidth, dash: [4, 4])
                 )
             if hasData {
                 Circle()
                     .trim(from: 0, to: min(max(fraction, 0), 1))
-                    .stroke(accent, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .stroke(accent, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
             VStack(spacing: 0) {
                 Text(centerTop)
-                    .font(.system(size: centerTopSize, weight: .bold))
+                    .font(.system(size: centerTopSize * scale, weight: .bold))
                     .foregroundColor(accent)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 if !centerBottom.isEmpty {
-                    Text(centerBottom).font(.system(size: 11))
+                    Text(centerBottom).font(.system(size: 11 * scale))
                 }
             }
         }
-        .frame(width: 88, height: 88)
+        .frame(width: 88 * scale, height: 88 * scale)
     }
 }
 
@@ -187,6 +204,7 @@ struct NutritionProvider: TimelineProvider {
 struct NutritionToolWidgetView: View {
     var entry: NutritionEntry
     private let wid = "tool_nutrition"
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         content
@@ -202,38 +220,39 @@ struct NutritionToolWidgetView: View {
     }
 
     @ViewBuilder private var content: some View {
+        let scale = widgetScale(family)
         if entry.flipped {
             let hasData = entry.goal > 0
-            VStack(spacing: 8) {
+            VStack(spacing: 8 * scale) {
                 Spacer().frame(height: 12)
                 ToolRing(
                     fraction: hasData ? Double(entry.pct) / 100.0 : 0,
                     accent: kNutritionAccent, hasData: hasData,
                     centerTop: hasData ? "\(entry.calories)" : "🥗",
                     centerBottom: hasData ? "/ \(entry.goal) kcal" : "",
-                    centerTopSize: 20)
+                    centerTopSize: 20, scale: scale)
                 if hasData {
-                    HStack(spacing: 8) {
-                        macro("P", entry.protein, entry.proteinGoal)
-                        macro("C", entry.carbs, entry.carbsGoal)
-                        macro("F", entry.fat, entry.fatGoal)
+                    HStack(spacing: 8 * scale) {
+                        macro("P", entry.protein, entry.proteinGoal, scale)
+                        macro("C", entry.carbs, entry.carbsGoal, scale)
+                        macro("F", entry.fat, entry.fatGoal, scale)
                     }
                 } else {
                     Text("Open app to sync")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 10 * scale, weight: .semibold))
                         .foregroundColor(widgetTextColor(wid))
                 }
             }
             .padding(.horizontal, 8)
         } else {
-            ToolDefaultTile(emoji: "🥗", label: "Nutrition Coach", widgetId: wid)
+            ToolDefaultTile(emoji: "🥗", label: "Nutrition Coach", widgetId: wid, scale: scale)
         }
     }
 
-    private func macro(_ label: String, _ v: Int, _ goal: Int) -> some View {
+    private func macro(_ label: String, _ v: Int, _ goal: Int, _ scale: CGFloat) -> some View {
         VStack(spacing: 1) {
-            Text(label).font(.system(size: 9, weight: .bold)).foregroundColor(kNutritionAccent)
-            Text("\(v)g").font(.system(size: 10, weight: .semibold)).foregroundColor(widgetTextColor(wid))
+            Text(label).font(.system(size: 9 * scale, weight: .bold)).foregroundColor(kNutritionAccent)
+            Text("\(v)g").font(.system(size: 10 * scale, weight: .semibold)).foregroundColor(widgetTextColor(wid))
         }
     }
 }
@@ -295,6 +314,7 @@ struct MealPlannerProvider: TimelineProvider {
 struct MealPlannerToolWidgetView: View {
     var entry: MealPlannerEntry
     private let wid = "tool_meal_planner"
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         content
@@ -310,69 +330,74 @@ struct MealPlannerToolWidgetView: View {
     }
 
     @ViewBuilder private var content: some View {
+        let scale = widgetScale(family)
         if entry.flipped {
             if entry.count > 0 && !entry.name.isEmpty {
-                HStack(spacing: 4) {
-                    // The meal card.
-                    VStack(spacing: 4) {
-                        Spacer().frame(height: 10)
+                HStack(alignment: .top, spacing: 4 * scale) {
+                    // The meal card — vertically centered in the row.
+                    VStack(spacing: 4 * scale) {
+                        Spacer(minLength: 0)
                         Text(entry.type.uppercased())
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 9 * scale, weight: .bold))
                             .foregroundColor(kMealAccent)
                         Text(entry.name)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 13 * scale, weight: .semibold))
                             .foregroundColor(widgetTextColor(wid))
                             .multilineTextAlignment(.center)
-                            .lineLimit(3).minimumScaleFactor(0.7)
+                            .lineLimit(scale > 1.5 ? 5 : 3).minimumScaleFactor(0.7)
                         Text("\(entry.cal) kcal")
-                            .font(.system(size: 11, weight: .bold))
+                            .font(.system(size: 11 * scale, weight: .bold))
                             .foregroundColor(widgetTextColor(wid))
                         Text("\(entry.index + 1) / \(entry.count)")
-                            .font(.system(size: 9))
+                            .font(.system(size: 9 * scale))
                             .foregroundColor(widgetTextColor(wid).opacity(0.6))
+                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity)
-                    // Up/down arrows.
-                    VStack(spacing: 10) {
-                        mealArrow(systemName: "chevron.up", dir: -1)
-                        mealArrow(systemName: "chevron.down", dir: 1)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Up/down arrows — top-aligned and pushed below the
+                    // top-trailing theme toggle so the up arrow lines up under
+                    // it without touching, keeping even spacing between arrows.
+                    VStack(spacing: 10 * scale) {
+                        mealArrow(systemName: "chevron.up", dir: -1, scale: scale)
+                        mealArrow(systemName: "chevron.down", dir: 1, scale: scale)
                     }
+                    .padding(.top, 34)
                     .padding(.trailing, 2)
                 }
                 .padding(.horizontal, 6)
             } else {
-                VStack(spacing: 6) {
-                    Text("🍽️").font(.system(size: 32))
+                VStack(spacing: 6 * scale) {
+                    Text("🍽️").font(.system(size: 32 * scale))
                     Text("No plan yet")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 11 * scale, weight: .semibold))
                         .foregroundColor(widgetTextColor(wid))
                     Text("Open app to generate")
-                        .font(.system(size: 9))
+                        .font(.system(size: 9 * scale))
                         .foregroundColor(widgetTextColor(wid).opacity(0.6))
                 }
             }
         } else {
-            ToolDefaultTile(emoji: "🍽️", label: "Meal Planner", widgetId: wid)
+            ToolDefaultTile(emoji: "🍽️", label: "Meal Planner", widgetId: wid, scale: scale)
         }
     }
 
     @ViewBuilder
-    private func mealArrow(systemName: String, dir: Int) -> some View {
+    private func mealArrow(systemName: String, dir: Int, scale: CGFloat = 1.0) -> some View {
         #if canImport(AppIntents)
         if #available(iOS 17.0, *) {
-            Button(intent: indexIntent(dir: dir)) { arrowIcon(systemName) }
+            Button(intent: indexIntent(dir: dir)) { arrowIcon(systemName, scale) }
                 .buttonStyle(.plain)
-        } else { arrowIcon(systemName) }
+        } else { arrowIcon(systemName, scale) }
         #else
-        arrowIcon(systemName)
+        arrowIcon(systemName, scale)
         #endif
     }
 
-    private func arrowIcon(_ systemName: String) -> some View {
+    private func arrowIcon(_ systemName: String, _ scale: CGFloat = 1.0) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 12, weight: .bold))
+            .font(.system(size: 12 * scale, weight: .bold))
             .foregroundColor(kMealAccent)
-            .padding(6)
+            .padding(6 * scale)
             .background(Circle().fill(Color.white.opacity(0.9)))
     }
 
@@ -391,8 +416,8 @@ struct MealPlannerToolWidget: Widget {
             MealPlannerToolWidgetView(entry: entry)
         }
         .configurationDisplayName("Meal Planner")
-        .description("Tap flip to see today's meals — use the arrows to browse.")
-        .supportedFamilies([.systemSmall])
+        .description("Tap flip to see today's meals — use the arrows to browse. Resize to medium for a bigger view.")
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 
@@ -439,6 +464,7 @@ struct CalorieProvider: TimelineProvider {
 struct CalorieBudgetToolWidgetView: View {
     var entry: CalorieEntry
     private let wid = "tool_calorie_budget"
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         content
@@ -454,10 +480,11 @@ struct CalorieBudgetToolWidgetView: View {
     }
 
     @ViewBuilder private var content: some View {
+        let scale = widgetScale(family)
         if entry.flipped {
             let hasData = entry.budget > 0
             let over = entry.remaining < 0
-            VStack(spacing: 6) {
+            VStack(spacing: 6 * scale) {
                 Spacer().frame(height: 12)
                 ToolRing(
                     fraction: hasData ? Double(entry.pct) / 100.0 : 0,
@@ -465,15 +492,15 @@ struct CalorieBudgetToolWidgetView: View {
                     hasData: hasData,
                     centerTop: hasData ? "\(entry.remaining)" : "🔥",
                     centerBottom: hasData ? "kcal left" : "",
-                    centerTopSize: 22)
+                    centerTopSize: 22, scale: scale)
                 if hasData {
                     Text("\(entry.consumed) eaten · \(entry.budget) budget")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 9 * scale, weight: .semibold))
                         .foregroundColor(widgetTextColor(wid))
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
                     Text("Open app to sync")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 10 * scale, weight: .semibold))
                         .foregroundColor(widgetTextColor(wid))
                 }
             }
@@ -540,6 +567,7 @@ struct PeriodProvider: TimelineProvider {
 struct PeriodTrackerToolWidgetView: View {
     var entry: PeriodEntry
     private let wid = "tool_period_tracker"
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         content
@@ -555,33 +583,34 @@ struct PeriodTrackerToolWidgetView: View {
     }
 
     @ViewBuilder private var content: some View {
+        let scale = widgetScale(family)
         if entry.flipped {
             let hasData = entry.hasData && entry.cycleLength > 0
             let frac = hasData ? Double(entry.cycleDay) / Double(entry.cycleLength) : 0
-            VStack(spacing: 6) {
+            VStack(spacing: 6 * scale) {
                 Spacer().frame(height: 12)
                 ToolRing(
                     fraction: frac, accent: kPeriodAccent, hasData: hasData,
                     centerTop: hasData ? entry.emoji : "🌸",
                     centerBottom: hasData ? "Day \(entry.cycleDay)" : "",
-                    centerTopSize: 24)
+                    centerTopSize: 24, scale: scale)
                 if hasData {
                     Text(entry.phase)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 11 * scale, weight: .bold))
                         .foregroundColor(kPeriodAccent)
                     Text(nextText(entry.daysUntilNext))
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 9 * scale, weight: .semibold))
                         .foregroundColor(widgetTextColor(wid))
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
                     Text("Open app to sync")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 10 * scale, weight: .semibold))
                         .foregroundColor(widgetTextColor(wid))
                 }
             }
             .padding(.horizontal, 8)
         } else {
-            ToolDefaultTile(emoji: "🌸", label: "Period Tracker", widgetId: wid)
+            ToolDefaultTile(emoji: "🌸", label: "Period Tracker", widgetId: wid, scale: scale)
         }
     }
 
@@ -645,6 +674,7 @@ struct WeightProvider: TimelineProvider {
 struct WeightTrackerToolWidgetView: View {
     var entry: WeightEntryData
     private let wid = "tool_weight_tracker"
+    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         content
@@ -660,40 +690,41 @@ struct WeightTrackerToolWidgetView: View {
     }
 
     @ViewBuilder private var content: some View {
+        let scale = widgetScale(family)
         if entry.flipped {
             let hasData = entry.hasData && !entry.current.isEmpty
-            VStack(spacing: 4) {
+            VStack(spacing: 4 * scale) {
                 Spacer().frame(height: 14)
-                Text("⚖️").font(.system(size: 26))
+                Text("⚖️").font(.system(size: 26 * scale))
                 if hasData {
                     Text("CURRENT WEIGHT")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 8 * scale, weight: .bold))
                         .foregroundColor(widgetTextColor(wid).opacity(0.6))
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
                         Text(entry.current)
-                            .font(.system(size: 26, weight: .bold))
+                            .font(.system(size: 26 * scale, weight: .bold))
                             .foregroundColor(kWeightAccent)
                         Text(entry.unit)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 12 * scale, weight: .semibold))
                             .foregroundColor(kWeightAccent)
                     }
                     if !entry.change.isEmpty {
                         Text("\(entry.change) \(entry.unit)")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: 10 * scale, weight: .semibold))
                             .foregroundColor(widgetTextColor(wid))
                     }
                 } else {
                     Text("No weight logged")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 10 * scale, weight: .semibold))
                         .foregroundColor(widgetTextColor(wid))
                     Text("Open app to sync")
-                        .font(.system(size: 9))
+                        .font(.system(size: 9 * scale))
                         .foregroundColor(widgetTextColor(wid).opacity(0.6))
                 }
             }
             .padding(.horizontal, 8)
         } else {
-            ToolDefaultTile(emoji: "⚖️", label: "Body Weight", widgetId: wid)
+            ToolDefaultTile(emoji: "⚖️", label: "Body Weight", widgetId: wid, scale: scale)
         }
     }
 }

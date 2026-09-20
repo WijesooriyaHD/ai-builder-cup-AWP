@@ -231,33 +231,36 @@ struct HydrationFlipButton: View {
 private struct HydrationRing: View {
     let entry: HydrationEntry
     let textColor: Color
+    var scale: CGFloat = 1.0
 
     var body: some View {
         // goalMl is always ≥ the app default (2000) via the provider, so the
         // ring always renders real content — no "open app" placeholder.
         let fraction = min(max(Double(entry.pct) / 100.0, 0), 1)
-        return VStack(spacing: 6) {
+        let ringSize = 74 * scale
+        let lineWidth = 8 * scale
+        return VStack(spacing: 6 * scale) {
             // Push the ring down so it clears the flip/theme toggle buttons.
             Spacer().frame(height: 18)
             ZStack {
                 Circle()
-                    .stroke(kHydrationAccent.opacity(0.15), style: StrokeStyle(lineWidth: 8))
+                    .stroke(kHydrationAccent.opacity(0.15), style: StrokeStyle(lineWidth: lineWidth))
                 Circle()
                     .trim(from: 0, to: fraction)
                     .stroke(kHydrationAccent,
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
                     Text("\(entry.pct)%")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.system(size: 20 * scale, weight: .bold))
                         .foregroundColor(kHydrationAccent)
-                    Text("💧").font(.system(size: 12))
+                    Text("💧").font(.system(size: 12 * scale))
                 }
             }
-            .frame(width: 74, height: 74)
+            .frame(width: ringSize, height: ringSize)
 
             Text("\(mlText(entry.consumedMl)) / \(mlText(entry.goalMl))")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 10 * scale, weight: .semibold))
                 .foregroundColor(textColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -273,6 +276,8 @@ struct HydrationToolWidgetView: View {
     var entry: HydrationEntry
     private let wid = "tool_hydration"
     private var textColor: Color { widgetTextColor(wid) }
+
+    @Environment(\.widgetFamily) private var family
 
     private var base: Color {
         widgetThemeIsDark(wid) ? Color(red: 0.118, green: 0.145, blue: 0.180) : Color.white
@@ -302,7 +307,7 @@ struct HydrationToolWidgetView: View {
     @ViewBuilder
     private var content: some View {
         if entry.flipped {
-            HydrationRing(entry: entry, textColor: textColor)
+            HydrationRing(entry: entry, textColor: textColor, scale: widgetScale(family))
         } else {
             defaultTile
         }
@@ -310,9 +315,9 @@ struct HydrationToolWidgetView: View {
 
     private var defaultTile: some View {
         VStack(spacing: 8) {
-            Text("💧").font(.system(size: 40))
+            Text("💧").font(.system(size: 40 * widgetScale(family)))
             Text("Hydration Coach")
-                .font(.caption).bold()
+                .font(.system(size: 13 * widgetScale(family), weight: .bold))
                 .foregroundColor(textColor)
                 .multilineTextAlignment(.center)
                 .lineLimit(2).minimumScaleFactor(0.8)
