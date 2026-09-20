@@ -121,42 +121,10 @@ struct LifeToolEntry: TimelineEntry {
 }
 
 // MARK: - Concrete widgets (one per tool)
-
-struct NutritionToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "nutrition", emoji: "🥗", label: "Nutrition Coach", accent: Color(hex: 0x57B894))
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "NutritionToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
-            LifeToolWidgetView(tool: entry.tool)
-        }
-        .configurationDisplayName("Nutrition Coach")
-        .description("Open the Nutrition Coach tool.")
-        .supportedFamilies([.systemSmall])
-    }
-}
-
-struct MealPlannerToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "meal_planner", emoji: "🍽️", label: "Meal Planner", accent: Color(hex: 0xEF8354))
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "MealPlannerToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
-            LifeToolWidgetView(tool: entry.tool)
-        }
-        .configurationDisplayName("Meal Planner")
-        .description("Open the Meal Planner tool.")
-        .supportedFamilies([.systemSmall])
-    }
-}
-
-struct CalorieBudgetToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "calorie_budget", emoji: "🔥", label: "Calorie Budget", accent: Color(hex: 0xF5A623))
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "CalorieBudgetToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
-            LifeToolWidgetView(tool: entry.tool)
-        }
-        .configurationDisplayName("Calorie Budget")
-        .description("Open the Calorie Budget tool.")
-        .supportedFamilies([.systemSmall])
-    }
-}
+//
+// Nutrition, Meal Planner, Calorie Budget, Period Tracker and Body Weight are
+// live-data widgets with a flip button (see LiveDataToolWidgets.swift). Sleep,
+// Meditation and Mindful Travel remain simple emoji+label shortcut tiles below.
 
 // MARK: - Hydration (live data + flip-to-progress-ring)
 //
@@ -206,11 +174,16 @@ struct HydrationProvider: TimelineProvider {
 
     private func load() -> HydrationEntry {
         let d = defaults
+        // Default the goal to the app's standard 2000 ml when nothing has been
+        // synced yet, so a freshly installed widget shows a real ring (0% of
+        // 2.0L) rather than an "open app" placeholder — matching how the other
+        // tool widgets render sensible defaults on first launch.
+        let syncedGoal = d?.integer(forKey: "hydration_goal_ml") ?? 0
         return HydrationEntry(
             date: Date(),
             pct: d?.integer(forKey: "hydration_pct") ?? 0,
             consumedMl: d?.integer(forKey: "hydration_consumed_ml") ?? 0,
-            goalMl: d?.integer(forKey: "hydration_goal_ml") ?? 0,
+            goalMl: syncedGoal > 0 ? syncedGoal : 2000,
             flipped: d?.bool(forKey: "hydration_flipped_\(wid)") ?? false
         )
     }
@@ -259,44 +232,31 @@ private struct HydrationRing: View {
     let entry: HydrationEntry
     let textColor: Color
 
-    private var hasData: Bool { entry.goalMl > 0 }
-
     var body: some View {
+        // goalMl is always ≥ the app default (2000) via the provider, so the
+        // ring always renders real content — no "open app" placeholder.
         let fraction = min(max(Double(entry.pct) / 100.0, 0), 1)
         return VStack(spacing: 6) {
             // Push the ring down so it clears the flip/theme toggle buttons.
             Spacer().frame(height: 18)
             ZStack {
-                // Track: dashed when no data yet, solid otherwise.
                 Circle()
-                    .stroke(
-                        kHydrationAccent.opacity(hasData ? 0.15 : 0.10),
-                        style: hasData
-                            ? StrokeStyle(lineWidth: 8)
-                            : StrokeStyle(lineWidth: 8, dash: [4, 4])
-                    )
-                // Progress arc — only when we have real data.
-                if hasData {
-                    Circle()
-                        .trim(from: 0, to: fraction)
-                        .stroke(kHydrationAccent,
-                                style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                }
+                    .stroke(kHydrationAccent.opacity(0.15), style: StrokeStyle(lineWidth: 8))
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(kHydrationAccent,
+                            style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
-                    Text(hasData ? "\(entry.pct)%" : "💧")
-                        .font(.system(size: hasData ? 20 : 24, weight: .bold))
+                    Text("\(entry.pct)%")
+                        .font(.system(size: 20, weight: .bold))
                         .foregroundColor(kHydrationAccent)
-                    if hasData {
-                        Text("💧").font(.system(size: 12))
-                    }
+                    Text("💧").font(.system(size: 12))
                 }
             }
             .frame(width: 74, height: 74)
 
-            Text(hasData
-                 ? "\(mlText(entry.consumedMl)) / \(mlText(entry.goalMl))"
-                 : "Open app to sync")
+            Text("\(mlText(entry.consumedMl)) / \(mlText(entry.goalMl))")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(textColor)
                 .lineLimit(1)
@@ -412,29 +372,8 @@ struct MeditationToolWidget: Widget {
     }
 }
 
-struct PeriodTrackerToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "period_tracker", emoji: "🌸", label: "Period Tracker", accent: Color(hex: 0xE9506E))
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "PeriodTrackerToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
-            LifeToolWidgetView(tool: entry.tool)
-        }
-        .configurationDisplayName("Period Tracker")
-        .description("Open the Period Tracker tool.")
-        .supportedFamilies([.systemSmall])
-    }
-}
-
-struct WeightTrackerToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "weight_tracker", emoji: "⚖️", label: "Body Weight", accent: Color(hex: 0x2ECC71))
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "WeightTrackerToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
-            LifeToolWidgetView(tool: entry.tool)
-        }
-        .configurationDisplayName("Body Weight")
-        .description("Open the Body Weight tool.")
-        .supportedFamilies([.systemSmall])
-    }
-}
+// PeriodTrackerToolWidget and WeightTrackerToolWidget are live-data widgets
+// defined in LiveDataToolWidgets.swift.
 
 struct MindfulTravelToolWidget: Widget {
     private let tool = LifeToolInfo(id: "mindful_travel", emoji: "✈️", label: "Mindful Travel", accent: Color(hex: 0x3A7BD5))

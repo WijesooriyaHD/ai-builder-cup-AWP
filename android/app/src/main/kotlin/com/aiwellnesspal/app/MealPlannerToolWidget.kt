@@ -8,11 +8,12 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
 /**
- * Life-toolkit shortcut widget for "Meal Planner".
+ * Life-toolkit widget for "Meal Planner".
  *
- * A small square tile showing the tool emoji + label. Tapping it opens the app
- * and deep-links to the tool via home_widget's launch intent, handled in
- * Dart (MainWrapper._handleWidgetUri) at
+ * Default → emoji + title tile. When flipped (flipped_tool_meal_planner) with a
+ * plan, shows the current meal (name + type + calories). Android RemoteViews
+ * cannot host the iOS arrow-scroll App Intents, so it shows the meal at the
+ * synced index. Tapping opens the app at
  * aiwellnesspal://open?homeWidget=1&screen=tool_meal_planner.
  */
 class MealPlannerToolWidget : HomeWidgetProvider() {
@@ -23,19 +24,37 @@ class MealPlannerToolWidget : HomeWidgetProvider() {
         widgetData: android.content.SharedPreferences
     ) {
         for (appWidgetId in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.tool_widget).apply {
-                setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_meal_planner)
-                setTextViewText(R.id.tool_emoji, "🍽️")
-                setTextViewText(R.id.tool_label, "Meal Planner")
+            val flipped = widgetData.getBoolean("flipped_tool_meal_planner", false)
+            val count = widgetData.getInt("meal_count", 0)
+            var idx = widgetData.getInt("meal_index_tool_meal_planner", 0)
+            if (count > 0) idx = ((idx % count) + count) % count else idx = 0
+            val name = widgetData.getString("meal_${idx}_name", "") ?: ""
+            val type = widgetData.getString("meal_${idx}_type", "") ?: ""
+            val cal = widgetData.getInt("meal_${idx}_cal", 0)
 
-                val launchPendingIntent = HomeWidgetLaunchIntent.getActivity(
-                    context,
-                    MainActivity::class.java,
-                    Uri.parse("aiwellnesspal://open?homeWidget=1&screen=tool_meal_planner")
-                )
-                setOnClickPendingIntent(R.id.tool_root, launchPendingIntent)
+            val views = if (flipped && count > 0 && name.isNotEmpty()) {
+                RemoteViews(context.packageName, R.layout.tool_data_widget).apply {
+                    setTextViewText(R.id.data_value, type)
+                    setTextViewText(R.id.data_title, name)
+                    setTextViewText(R.id.data_subtitle, "$cal kcal · ${idx + 1}/$count")
+                    setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_meal_planner)
+                    setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
+                }
+            } else {
+                RemoteViews(context.packageName, R.layout.tool_widget).apply {
+                    setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_meal_planner)
+                    setTextViewText(R.id.tool_emoji, "🍽️")
+                    setTextViewText(R.id.tool_label, "Meal Planner")
+                    setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
+                }
             }
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
+
+    private fun launchIntent(context: Context) = HomeWidgetLaunchIntent.getActivity(
+        context,
+        MainActivity::class.java,
+        Uri.parse("aiwellnesspal://open?homeWidget=1&screen=tool_meal_planner")
+    )
 }

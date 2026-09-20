@@ -25,6 +25,7 @@
 		C003F00530551FBC003DA8CB /* HabitWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C003F00430551FBC003DA8CB /* HabitWidget.swift */; };
 		CC1D6085AD2B35397877853F /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EDEEA26F7A3D25F9EB7C5A82 /* Pods_RunnerTests.framework */; };
 		D1F70A11B2C34E5580AA9001 /* LifeToolWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F70A10B2C34E5580AA9000 /* LifeToolWidgets.swift */; };
+		D1F70A21B2C34E5580AA9021 /* LiveDataToolWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F70A20B2C34E5580AA9020 /* LiveDataToolWidgets.swift */; };
 		E76A149EAA42327FE2A41CA3 /* BackgroundIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A5E4988C31BB39C17127FA /* BackgroundIntent.swift */; };
 		FBF1F081DA75F384AE7A2C42 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 30731A8EBBB3E8E4B4947C8B /* Pods_Runner.framework */; };
 /* End PBXBuildFile section */
@@ -106,6 +107,7 @@
 		C003F00430551FBC003DA8CB /* HabitWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitWidget.swift; sourceTree = "<group>"; };
 		C6A5E4988C31BB39C17127FA /* BackgroundIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackgroundIntent.swift; sourceTree = "<group>"; };
 		D1F70A10B2C34E5580AA9000 /* LifeToolWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LifeToolWidgets.swift; sourceTree = "<group>"; };
+		D1F70A20B2C34E5580AA9020 /* LiveDataToolWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDataToolWidgets.swift; sourceTree = "<group>"; };
 		E89A659E44A08B4481B2EA32 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS14.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		EDEEA26F7A3D25F9EB7C5A82 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5B2332C9A29B793CD3A2E5D /* IntentionWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IntentionWidget.swift; sourceTree = "<group>"; };
@@ -158,6 +160,7 @@
 				F5B2332C9A29B793CD3A2E5D /* IntentionWidget.swift */,
 				C003F00430551FBC003DA8CB /* HabitWidget.swift */,
 				D1F70A10B2C34E5580AA9000 /* LifeToolWidgets.swift */,
+				D1F70A20B2C34E5580AA9020 /* LiveDataToolWidgets.swift */,
 			);
 			path = AIWellnessWidget;
 			sourceTree = "<group>";
@@ -556,6 +559,7 @@
 			files = (
 				C003F00530551FBC003DA8CB /* HabitWidget.swift in Sources */,
 				D1F70A11B2C34E5580AA9001 /* LifeToolWidgets.swift in Sources */,
+				D1F70A21B2C34E5580AA9021 /* LiveDataToolWidgets.swift in Sources */,
 				3C79D2AAC4E54F7B34E805A9 /* AIWellnessWidget.swift in Sources */,
 				E76A149EAA42327FE2A41CA3 /* BackgroundIntent.swift in Sources */,
 				294317FCA0B84B2CFB419147 /* IntentionWidget.swift in Sources */,

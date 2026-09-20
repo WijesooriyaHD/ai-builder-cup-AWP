@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../meal_planner/domain/meal_planner_models.dart';
@@ -66,6 +67,26 @@ class CalorieBudgetState extends ChangeNotifier {
 
   int get remaining => summary.remaining;
 
+  /// Mirrors the calorie budget into the shared app group so the home-screen
+  /// "Calorie Budget" widget can show a kcal-remaining ring on its data face.
+  Future<void> syncCalorieWidget() async {
+    try {
+      await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
+      final s = summary;
+      await HomeWidget.saveWidgetData<int>('calorie_budget', s.dailyBudget);
+      await HomeWidget.saveWidgetData<int>('calorie_consumed', s.consumed);
+      await HomeWidget.saveWidgetData<int>('calorie_burned', s.burned);
+      await HomeWidget.saveWidgetData<int>('calorie_remaining', s.remaining);
+      await HomeWidget.saveWidgetData<int>(
+          'calorie_pct', (s.consumedFraction * 100).round().clamp(0, 100));
+      await HomeWidget.updateWidget(
+          name: 'CalorieBudgetToolWidget',
+          androidName: 'CalorieBudgetToolWidget');
+    } catch (e) {
+      debugPrint('ℹ️ CalorieBudgetState.syncCalorieWidget: $e');
+    }
+  }
+
   /// Combined timeline (meals + exercises), newest first.
   List<CalorieEvent> get timeline {
     final ex = _exercises.map((e) => CalorieEvent(
@@ -131,6 +152,8 @@ class CalorieBudgetState extends ChangeNotifier {
       _profileBudget = _budgetForProfile(profile);
     }
     notifyListeners();
+    // ignore: unawaited_futures
+    syncCalorieWidget();
   }
 
   int _budgetForProfile(UserProfile p) {
@@ -271,6 +294,7 @@ class CalorieBudgetState extends ChangeNotifier {
       createdAt: today,
     );
     await _repo.saveDaily(day);
+    await syncCalorieWidget();
   }
 
   /// Evaluates today's goal achievement and updates the streak. Call at day

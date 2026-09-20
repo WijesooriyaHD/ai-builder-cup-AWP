@@ -207,6 +207,34 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _savePeriodData() async {
     await _storage.savePeriodData(_periodData, syncToCloud: _cloudSettingsLoaded);
+    // ignore: unawaited_futures
+    syncPeriodWidget();
+  }
+
+  /// Mirrors the current cycle state into the shared app group so the
+  /// home-screen "Period Tracker" widget can show a phase ring on its data
+  /// face. Writes phase label/emoji, cycle day, cycle length, days-until-next.
+  Future<void> syncPeriodWidget() async {
+    try {
+      await HomeWidget.setAppGroupId(kWidgetAppGroupId);
+      final p = _periodData;
+      await HomeWidget.saveWidgetData<bool>('period_has_data', p.hasData);
+      await HomeWidget.saveWidgetData<String>(
+          'period_phase', p.currentPhase.label);
+      await HomeWidget.saveWidgetData<String>(
+          'period_emoji', p.currentPhase.emoji);
+      await HomeWidget.saveWidgetData<int>(
+          'period_cycle_day', p.currentCycleDay ?? 0);
+      await HomeWidget.saveWidgetData<int>(
+          'period_cycle_length', p.effectiveCycleLength);
+      await HomeWidget.saveWidgetData<int>(
+          'period_days_until_next', p.daysUntilNextPeriod ?? -999);
+      await HomeWidget.updateWidget(
+          name: 'PeriodTrackerToolWidget',
+          androidName: 'PeriodTrackerToolWidget');
+    } catch (e) {
+      debugPrint('ℹ️ AppState.syncPeriodWidget: $e');
+    }
   }
 
   /// Marks [date] as the first day of a period.
@@ -238,6 +266,37 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _saveWeightData() async {
     await _storage.saveWeightData(_weightData, syncToCloud: _cloudSettingsLoaded);
+    // ignore: unawaited_futures
+    syncWeightWidget();
+  }
+
+  /// Mirrors the current body-weight snapshot into the shared app group so the
+  /// home-screen "Body Weight" widget can show current weight + change on its
+  /// data face.
+  Future<void> syncWeightWidget() async {
+    try {
+      await HomeWidget.setAppGroupId(kWidgetAppGroupId);
+      final w = _weightData;
+      final current = w.currentInUnit;
+      await HomeWidget.saveWidgetData<bool>('weight_has_data', w.hasData);
+      await HomeWidget.saveWidgetData<String>(
+          'weight_current',
+          current == null ? '' : current.toStringAsFixed(1));
+      await HomeWidget.saveWidgetData<String>('weight_unit', w.unit.label);
+      // Net change since previous entry, in the display unit (signed).
+      final changeKg = w.lastChangeKg;
+      await HomeWidget.saveWidgetData<String>(
+          'weight_change',
+          changeKg == null
+              ? ''
+              : '${changeKg >= 0 ? '+' : ''}'
+                  '${w.unit.fromKg(changeKg).toStringAsFixed(1)}');
+      await HomeWidget.updateWidget(
+          name: 'WeightTrackerToolWidget',
+          androidName: 'WeightTrackerToolWidget');
+    } catch (e) {
+      debugPrint('ℹ️ AppState.syncWeightWidget: $e');
+    }
   }
 
   /// Logs a weight measurement. [weightKg] must be in kilograms.
@@ -784,6 +843,41 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('Background Hydration Flip [$wid] -> flipped=$next');
       await HomeWidget.updateWidget(
           name: 'HydrationToolWidget', androidName: 'HydrationToolWidget');
+    } else if (uri?.host == 'tool_flip') {
+      // Generic flip for the other live-data tool widgets (nutrition, meal
+      // planner, calorie budget, period, weight). `?w=<widgetId>` is the flip
+      // key namespace (e.g. tool_nutrition); `?kind=<WidgetKind>` is the iOS
+      // widget kind / Android receiver to reload.
+      final String wid = uri?.queryParameters['w'] ?? '';
+      final String kind = uri?.queryParameters['kind'] ?? '';
+      if (wid.isNotEmpty && kind.isNotEmpty) {
+        final String key = 'flipped_$wid';
+        final bool current =
+            (await HomeWidget.getWidgetData<bool>(key)) ?? false;
+        final bool next = !current;
+        await HomeWidget.saveWidgetData<bool>(key, next);
+        debugPrint('Background Tool Flip [$wid] -> flipped=$next');
+        await HomeWidget.updateWidget(name: kind, androidName: kind);
+      }
+    } else if (uri?.host == 'meal_index') {
+      // Cycle the Meal Planner widget through today's meals one at a time.
+      // `?w=<widgetId>` namespace, `?dir=1` (next) or `?dir=-1` (previous).
+      final String wid = uri?.queryParameters['w'] ?? 'tool_meal_planner';
+      final int dir = int.tryParse(uri?.queryParameters['dir'] ?? '1') ?? 1;
+      final int count =
+          (await HomeWidget.getWidgetData<int>('meal_count')) ?? 0;
+      if (count > 0) {
+        final String key = 'meal_index_$wid';
+        final int current =
+            (await HomeWidget.getWidgetData<int>(key)) ?? 0;
+        // Wrap around within [0, count).
+        final int next = ((current + dir) % count + count) % count;
+        await HomeWidget.saveWidgetData<int>(key, next);
+        debugPrint('Background Meal Index [$wid] -> $next / $count');
+        await HomeWidget.updateWidget(
+            name: 'MealPlannerToolWidget',
+            androidName: 'MealPlannerToolWidget');
+      }
     } else if (uri?.host == 'habit_toggle') {
       // Toggle today's completion for a habit from the "Today's Habits" widget.
       final String? habitId = uri?.queryParameters['id'];
@@ -1301,6 +1395,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       // reflects the latest tasks (and their completion) without waiting for a
       // manual toggle. Runs after dreams are assigned above.
       _updateIntentionWidget();
+
+      // Push period + weight snapshots to their home-screen widgets on load.
+      // ignore: unawaited_futures
+      syncPeriodWidget();
+      // ignore: unawaited_futures
+      syncWeightWidget();
       
       // Robust duplicate ID check
       bool hasDuplicateIds = false;
@@ -1387,6 +1487,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
       // Restore body weight data from the cloud profile.
       _weightData = await _storage.loadWeightData(cloudProfile: cloudProfile);
+      // ignore: unawaited_futures
+      syncPeriodWidget();
+      // ignore: unawaited_futures
+      syncWeightWidget();
       
       // Update memories from cloud in background
       _travelMemories = await _storage.loadTravelMemories(syncCloud: true);

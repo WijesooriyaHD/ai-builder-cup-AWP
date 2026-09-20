@@ -8,12 +8,12 @@ import es.antonborri.home_widget.HomeWidgetLaunchIntent
 import es.antonborri.home_widget.HomeWidgetProvider
 
 /**
- * Life-toolkit shortcut widget for "Nutrition Coach".
+ * Life-toolkit widget for "Nutrition Coach".
  *
- * A small square tile showing the tool emoji + label. Tapping it opens the app
- * and deep-links to the tool via home_widget's launch intent, handled in
- * Dart (MainWrapper._handleWidgetUri) at
- * aiwellnesspal://open?homeWidget=1&screen=tool_nutrition.
+ * Default → emoji + title tile. When flipped (flipped_tool_nutrition) and data
+ * exists, shows today's calories vs goal + macros. Android RemoteViews cannot
+ * host the iOS flip animation, so the flip state is read from shared prefs.
+ * Tapping opens the app at aiwellnesspal://open?homeWidget=1&screen=tool_nutrition.
  */
 class NutritionToolWidget : HomeWidgetProvider() {
     override fun onUpdate(
@@ -23,19 +23,36 @@ class NutritionToolWidget : HomeWidgetProvider() {
         widgetData: android.content.SharedPreferences
     ) {
         for (appWidgetId in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.tool_widget).apply {
-                setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_nutrition)
-                setTextViewText(R.id.tool_emoji, "🥗")
-                setTextViewText(R.id.tool_label, "Nutrition Coach")
+            val flipped = widgetData.getBoolean("flipped_tool_nutrition", false)
+            val goal = widgetData.getInt("nutrition_calorie_goal", 0)
+            val calories = widgetData.getInt("nutrition_calories", 0)
+            val protein = widgetData.getInt("nutrition_protein", 0)
+            val carbs = widgetData.getInt("nutrition_carbs", 0)
+            val fat = widgetData.getInt("nutrition_fat", 0)
 
-                val launchPendingIntent = HomeWidgetLaunchIntent.getActivity(
-                    context,
-                    MainActivity::class.java,
-                    Uri.parse("aiwellnesspal://open?homeWidget=1&screen=tool_nutrition")
-                )
-                setOnClickPendingIntent(R.id.tool_root, launchPendingIntent)
+            val views = if (flipped && goal > 0) {
+                RemoteViews(context.packageName, R.layout.tool_data_widget).apply {
+                    setTextViewText(R.id.data_value, "$calories")
+                    setTextViewText(R.id.data_title, "/ $goal kcal")
+                    setTextViewText(R.id.data_subtitle, "P${protein} C${carbs} F${fat}")
+                    setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_nutrition)
+                    setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
+                }
+            } else {
+                RemoteViews(context.packageName, R.layout.tool_widget).apply {
+                    setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_nutrition)
+                    setTextViewText(R.id.tool_emoji, "🥗")
+                    setTextViewText(R.id.tool_label, "Nutrition Coach")
+                    setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
+                }
             }
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
+
+    private fun launchIntent(context: Context) = HomeWidgetLaunchIntent.getActivity(
+        context,
+        MainActivity::class.java,
+        Uri.parse("aiwellnesspal://open?homeWidget=1&screen=tool_nutrition")
+    )
 }

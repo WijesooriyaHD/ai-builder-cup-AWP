@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
 
+import '../../nutrition/domain/nutrition_models.dart' show MealTypeInfo;
 import '../data/gemini_meal_planner_service.dart';
 import '../data/meal_plan_repository.dart';
 import '../domain/meal_planner_models.dart';
@@ -48,6 +51,42 @@ class MealPlannerState extends ChangeNotifier {
       _favoriteMeals.any((f) => f.name.toLowerCase() == m.name.toLowerCase());
 
   // ---------------------------------------------------------------------------
+  // Home-screen widget sync
+  // ---------------------------------------------------------------------------
+
+  /// Mirrors today's planned meals into the shared app group so the
+  /// home-screen "Meal Planner" widget can show them one at a time (with the
+  /// up/down arrows cycling through them). Writes an ordered set of keys:
+  /// meal_count + meal_N_name / meal_N_type / meal_N_cal for N in 0..count-1.
+  Future<void> syncMealPlannerWidget() async {
+    try {
+      await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
+      final meals = todayPlan?.allMeals ?? const <PlannedMeal>[];
+      // Cap at 6 so the widget key set stays bounded.
+      final capped = meals.take(6).toList();
+      await HomeWidget.saveWidgetData<int>('meal_count', capped.length);
+      for (var i = 0; i < 6; i++) {
+        if (i < capped.length) {
+          final m = capped[i];
+          await HomeWidget.saveWidgetData<String>('meal_${i}_name', m.name);
+          await HomeWidget.saveWidgetData<String>(
+              'meal_${i}_type', m.type.label);
+          await HomeWidget.saveWidgetData<int>('meal_${i}_cal', m.calories);
+        } else {
+          // Clear stale slots.
+          await HomeWidget.saveWidgetData<String>('meal_${i}_name', '');
+          await HomeWidget.saveWidgetData<String>('meal_${i}_type', '');
+          await HomeWidget.saveWidgetData<int>('meal_${i}_cal', 0);
+        }
+      }
+      await HomeWidget.updateWidget(
+          name: 'MealPlannerToolWidget', androidName: 'MealPlannerToolWidget');
+    } catch (e) {
+      debugPrint('ℹ️ MealPlannerState.syncMealPlannerWidget: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Loading
   // ---------------------------------------------------------------------------
   Future<void> load() async {
@@ -69,6 +108,8 @@ class MealPlannerState extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+      // ignore: unawaited_futures
+      syncMealPlannerWidget();
     }
   }
 
@@ -108,6 +149,8 @@ class MealPlannerState extends ChangeNotifier {
         exclude: exclude,
       );
       _activePlan = plan;
+      // ignore: unawaited_futures
+      syncMealPlannerWidget();
       await _repo.savePlan(plan);
       _trackChosenMeals(plan);
       return true;
@@ -172,6 +215,8 @@ class MealPlannerState extends ChangeNotifier {
     // A successful swap clears any lingering swap error.
     _error = null;
     notifyListeners();
+    // ignore: unawaited_futures
+    syncMealPlannerWidget();
     await _repo.updatePlan(_activePlan!);
     await _repo.savePreferenceCounts(_preferenceCounts);
   }
@@ -209,6 +254,8 @@ class MealPlannerState extends ChangeNotifier {
   /// Clears the current plan (keeps profile and favorites).
   Future<void> resetPlan() async {
     _activePlan = null;
+    // ignore: unawaited_futures
+    syncMealPlannerWidget();
     _error = null;
     notifyListeners();
     await _repo.clearActivePlan();

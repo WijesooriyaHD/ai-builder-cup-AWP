@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/gemini_nutrition_service.dart';
@@ -59,6 +60,43 @@ class NutritionState extends ChangeNotifier {
       (_goals.calories - todaysTotals.calories).clamp(-9999, 99999);
 
   // ---------------------------------------------------------------------------
+  // Home-screen widget sync
+  // ---------------------------------------------------------------------------
+
+  /// Mirrors today's nutrition progress into the shared app group so the
+  /// home-screen "Nutrition Coach" widget can show today's calories + macros
+  /// on its flipped data face. Safe to call after any state change.
+  Future<void> syncNutritionWidget() async {
+    try {
+      await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
+      final t = todaysTotals;
+      final pct = _goals.calories <= 0
+          ? 0
+          : ((t.calories / _goals.calories) * 100).round().clamp(0, 100);
+      await HomeWidget.saveWidgetData<int>('nutrition_calories', t.calories);
+      await HomeWidget.saveWidgetData<int>(
+          'nutrition_calorie_goal', _goals.calories);
+      await HomeWidget.saveWidgetData<int>('nutrition_pct', pct);
+      await HomeWidget.saveWidgetData<int>(
+          'nutrition_protein', t.macros.protein.round());
+      await HomeWidget.saveWidgetData<int>(
+          'nutrition_protein_goal', _goals.protein);
+      await HomeWidget.saveWidgetData<int>(
+          'nutrition_carbs', t.macros.carbs.round());
+      await HomeWidget.saveWidgetData<int>(
+          'nutrition_carbs_goal', _goals.carbs);
+      await HomeWidget.saveWidgetData<int>(
+          'nutrition_fat', t.macros.fat.round());
+      await HomeWidget.saveWidgetData<int>('nutrition_fat_goal', _goals.fat);
+      await HomeWidget.saveWidgetData<int>('nutrition_meal_count', t.mealCount);
+      await HomeWidget.updateWidget(
+          name: 'NutritionToolWidget', androidName: 'NutritionToolWidget');
+    } catch (e) {
+      debugPrint('ℹ️ NutritionState.syncNutritionWidget: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Loading
   // ---------------------------------------------------------------------------
   Future<void> load() async {
@@ -76,6 +114,8 @@ class NutritionState extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+      // ignore: unawaited_futures
+      syncNutritionWidget();
     }
   }
 
@@ -147,6 +187,8 @@ class NutritionState extends ChangeNotifier {
     // Optimistic insert (newest first).
     _meals = [meal, ..._meals];
     notifyListeners();
+    // ignore: unawaited_futures
+    syncNutritionWidget();
 
     await _repo.saveMeal(meal);
     return meal;
@@ -155,6 +197,8 @@ class NutritionState extends ChangeNotifier {
   Future<void> deleteMeal(String mealId) async {
     _meals = _meals.where((m) => m.id != mealId).toList();
     notifyListeners();
+    // ignore: unawaited_futures
+    syncNutritionWidget();
     await _repo.deleteMeal(mealId);
   }
 
@@ -182,12 +226,16 @@ class NutritionState extends ChangeNotifier {
       return updated!;
     }).toList();
     notifyListeners();
+    // ignore: unawaited_futures
+    syncNutritionWidget();
     if (updated != null) await _repo.saveMeal(updated!);
   }
 
   Future<void> updateGoals(NutritionGoals goals) async {
     _goals = goals;
     notifyListeners();
+    // ignore: unawaited_futures
+    syncNutritionWidget();
     await _repo.saveGoals(goals);
   }
 
