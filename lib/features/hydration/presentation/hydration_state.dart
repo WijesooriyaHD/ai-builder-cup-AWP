@@ -57,6 +57,13 @@ class HydrationState extends ChangeNotifier {
   // inputs from other tools
   HydrationProfile _profile = const HydrationProfile();
 
+  // User-set base target override (null = auto from profile/weight/activity).
+  int? _manualBaseMl;
+
+  /// Allowed range for a manually set daily base target (ml).
+  static const int minTargetMl = 500;
+  static const int maxTargetMl = 6000;
+
   // --- Open-Meteo weather state ---
   WeatherLocation? _weatherLocation;
   WeatherData? _weatherData;
@@ -69,6 +76,12 @@ class HydrationState extends ChangeNotifier {
   // --- getters ---
   HydrationGoal get goal => _goal;
   int get goalMl => _goal.totalMl;
+
+  /// The base daily target (before exercise/weather adjustments).
+  int get baseTargetMl => _goal.baseMl;
+
+  /// Whether the base target is a user-set value (vs. auto-calculated).
+  bool get isManualTarget => _manualBaseMl != null;
   List<HydrationEntry> get entries => _entries;
   WeatherAdjustment get weather => _weather;
 
@@ -151,6 +164,7 @@ class HydrationState extends ChangeNotifier {
         _repo.loadRecent(),
         _weatherRepo.loadLocation(),
         _weatherRepo.loadCachedWeather(),
+        _repo.loadManualBaseMl(),
       ]);
       _entries = results[0] as List<HydrationEntry>;
       _weather = results[1] as WeatherAdjustment;
@@ -160,6 +174,7 @@ class HydrationState extends ChangeNotifier {
       _recent = results[3] as List<DailyHydration>;
       _weatherLocation = results[4] as WeatherLocation?;
       _weatherData = results[5] as WeatherData?;
+      _manualBaseMl = results[6] as int?;
       if (_weatherData != null) {
         _weatherAdjustment = _weatherAdjust.compute(_weatherData);
       }
@@ -199,10 +214,31 @@ class HydrationState extends ChangeNotifier {
         : _weather.extraMl;
     final weatherDesc =
         _weatherAdjustment.isActive ? _weatherAdjustment.reason : _weather.description;
-    _goal = await _service.calculateGoal(
+    final computed = await _service.calculateGoal(
       _profile,
       weather: WeatherAdjustment(extraMl: weatherMl, description: weatherDesc),
     );
+    // A user-set base target replaces the auto-calculated base, while exercise
+    // and weather adjustments still layer on top.
+    _goal = _manualBaseMl == null
+        ? computed
+        : HydrationGoal(
+            baseMl: _manualBaseMl!,
+            exerciseAdjustmentMl: computed.exerciseAdjustmentMl,
+            weatherAdjustmentMl: computed.weatherAdjustmentMl,
+          );
+  }
+
+  /// Sets a manual daily base target (ml), or pass `null` to revert to the
+  /// auto-calculated target. The value is clamped to a safe range and persisted.
+  Future<void> setManualTarget(int? ml) async {
+    final clamped = ml?.clamp(minTargetMl, maxTargetMl).toInt();
+    _manualBaseMl = clamped;
+    await _repo.saveManualBaseMl(clamped);
+    await _recomputeGoal();
+    notifyListeners();
+    await refreshAnalysis();
+    await _persistToday();
   }
 
   // ---------------------------------------------------------------------------

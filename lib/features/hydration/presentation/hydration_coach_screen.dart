@@ -71,6 +71,8 @@ class _HydrationCoachScreenState extends State<HydrationCoachScreen> {
                       HydrationProgressCard(
                         goalMl: state.goalMl,
                         consumedMl: state.consumedMl,
+                        isManualGoal: state.isManualTarget,
+                        onEditGoal: () => _showEditTarget(context, state),
                       ),
                       const SizedBox(height: 16),
                       _buildQuickAdd(context, state),
@@ -322,6 +324,76 @@ class _HydrationCoachScreenState extends State<HydrationCoachScreen> {
                 },
                 child: const Text('Add water'),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Edit the daily base water target (or reset it to the auto-calculated one).
+  void _showEditTarget(BuildContext context, HydrationState state) {
+    final c = TextEditingController(text: state.baseTargetMl.toString());
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: _Sheet(
+          title: 'Daily water target',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Set your base daily target. Exercise and weather adjustments '
+                'are still added on top.',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: c,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Target',
+                  suffixText: 'ml',
+                  helperText:
+                      '${HydrationState.minTargetMl}–${HydrationState.maxTargetMl} ml',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kHydrationAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () {
+                  final ml = int.tryParse(c.text.trim()) ?? 0;
+                  if (ml > 0) {
+                    state.setManualTarget(ml);
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: const Text('Save target'),
+              ),
+              if (state.isManualTarget) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    state.setManualTarget(null);
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Reset to automatic'),
+                ),
+              ],
             ],
           ),
         ),

@@ -17,10 +17,18 @@ class HydrationProgressCard extends StatefulWidget {
   final int goalMl;
   final int consumedMl;
 
+  /// Whether the goal is a user-set value (shows an "Edit" hint).
+  final bool isManualGoal;
+
+  /// Tapped to edit the daily target. When null, the goal is not editable.
+  final VoidCallback? onEditGoal;
+
   const HydrationProgressCard({
     super.key,
     required this.goalMl,
     required this.consumedMl,
+    this.isManualGoal = false,
+    this.onEditGoal,
   });
 
   @override
@@ -92,8 +100,7 @@ class _HydrationProgressCardState extends State<HydrationProgressCard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _metric(context, 'Goal', formatMl(widget.goalMl),
-                  theme.colorScheme.onSurface),
+              _goalMetric(context),
               _metric(context, 'Consumed', formatMl(widget.consumedMl),
                   kHydrationAccent),
               _metric(context, 'Remaining', formatMl(remaining),
@@ -116,6 +123,43 @@ class _HydrationProgressCardState extends State<HydrationProgressCard>
             style: theme.textTheme.labelSmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       ],
+    );
+  }
+
+  /// The "Goal" metric, tappable to edit the daily target when [onEditGoal] is
+  /// provided. Shows an edit icon and a "Custom"/"Edit" hint.
+  Widget _goalMetric(BuildContext context) {
+    final theme = Theme.of(context);
+    final column = Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(formatMl(widget.goalMl),
+                style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface)),
+            if (widget.onEditGoal != null) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.edit_rounded, size: 14, color: kHydrationAccent),
+            ],
+          ],
+        ),
+        Text(widget.onEditGoal == null
+            ? 'Goal'
+            : (widget.isManualGoal ? 'Goal · Custom' : 'Goal · Tap to edit'),
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      ],
+    );
+    if (widget.onEditGoal == null) return column;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: widget.onEditGoal,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: column,
+      ),
     );
   }
 }

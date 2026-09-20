@@ -24,6 +24,7 @@ class HydrationRepository {
   static const String _bestStreakKey = 'hydration_best_streak';
   static const String _streakDateKey = 'hydration_streak_date';
   static const String _weatherKey = 'hydration_weather_extra';
+  static const String _manualBaseKey = 'hydration_manual_base_ml';
 
   CollectionReference<Map<String, dynamic>>? get _col {
     final uid = _uid;
@@ -105,6 +106,24 @@ class HydrationRepository {
   Future<void> saveWeather(WeatherAdjustment w) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_weatherKey, jsonEncode(w.toMap()));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Manual base target override (null = auto-calculated from profile)
+  // ---------------------------------------------------------------------------
+  Future<int?> loadManualBaseMl() async {
+    final prefs = await SharedPreferences.getInstance();
+    final v = prefs.getInt(_manualBaseKey);
+    return (v != null && v > 0) ? v : null;
+  }
+
+  Future<void> saveManualBaseMl(int? ml) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (ml == null || ml <= 0) {
+      await prefs.remove(_manualBaseKey);
+    } else {
+      await prefs.setInt(_manualBaseKey, ml);
+    }
   }
 
   // ---------------------------------------------------------------------------
