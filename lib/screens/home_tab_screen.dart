@@ -13,7 +13,6 @@ import '../models/journal_entry.dart';
 import '../widgets/world_map_svg.dart';
 import 'dream_completion_page.dart';
 import 'achievement_completion_page.dart';
-import '../widgets/aiwellnesspal_garden_card.dart';
 import '../utils/wellnesspal_snackbar.dart';
 import '../utils/pro_modal_utils.dart';
 import '../widgets/world_map_sheet.dart';
@@ -34,7 +33,6 @@ class HomeTabScreen extends StatelessWidget {
   }
 
   static const String kCardPoints = 'points';
-  static const String kCardJourney = 'journey';
   static const String kCardMotivation = 'motivation';
   static const String kCardAchievements = 'achievements';
   static const String kCardChallenge = 'challenge';
@@ -49,7 +47,6 @@ class HomeTabScreen extends StatelessWidget {
           // Define card order
           final allCards = [
             kCardPoints,
-            kCardJourney, 
             kCardMotivation,
             kCardAchievements, 
             kCardChallenge, 
@@ -136,10 +133,6 @@ class HomeTabScreen extends StatelessWidget {
     switch (cardId) {
       case kCardPoints:
         cardContent = _buildPointsCard(context, appState);
-        break;
-      case kCardJourney:
-        if (!appState.showGarden) return null;
-        cardContent = AiWellnessPalGardenCard(appState: appState);
         break;
       case kCardMotivation:
         if (!appState.showMotivation) return null;
@@ -477,7 +470,7 @@ class HomeTabScreen extends StatelessWidget {
               _buildBreakdownItem(
                 context,
                 Icons.local_fire_department_rounded,
-                "Garden Streak",
+                "Streak",
                 "$streakCount active days",
                 "+${streakCount * 25}",
                 Colors.green,
@@ -812,12 +805,6 @@ class HomeTabScreen extends StatelessWidget {
 
 
 
-
-  // Journey card replaced by Garden card
-  // Keep original method for reference or to be removed later if verified
-  Widget? _buildJourneyCard(BuildContext context) {
-    return null;
-  }
 
   Widget _buildAchievementsCard(BuildContext context) {
     return Consumer<AchievementService>(

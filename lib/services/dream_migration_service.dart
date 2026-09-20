@@ -9,7 +9,6 @@ import '../models/wellness_intention.dart';
 /// Migrates existing Dream objects to WellnessIntention objects.
 ///
 /// This service runs once per user on first launch after the pivot.
-/// It reads Dreams from both local SharedPreferences cache (`bloom_dreams`)
 /// and Firestore (`users/{uid}/wellness_intentions`), converts any that
 /// lack a `category` field using [WellnessIntention.fromDream], writes the
 /// migrated records to Firestore, and sets a local flag to prevent re-running.
@@ -41,7 +40,6 @@ class DreamMigrationService {
   ///
   /// Steps:
   /// 1. Check if migration is already done (SharedPreferences flag).
-  /// 2. Load existing dreams from local cache (`bloom_dreams`).
   /// 3. Load existing intentions from Firestore to avoid duplicates.
   /// 4. For each Dream without a corresponding WellnessIntention, convert
   ///    using `WellnessIntention.fromDream()` and write to Firestore.

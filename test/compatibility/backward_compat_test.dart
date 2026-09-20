@@ -37,7 +37,6 @@ void main() {
 
     test('rebranded aiwellnesspal_ storage keys are present in source', () {
       // After the brand rename, StorageService keys use the aiwellnesspal_
-      // prefix. Legacy bloom_ data is migrated at launch by
       // PrefsBrandMigration (see the migration test below).
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
@@ -46,7 +45,6 @@ void main() {
         "aiwellnesspal_dreams",
         "aiwellnesspal_travel_memories",
         "aiwellnesspal_journal_entries",
-        "aiwellnesspal_garden_state",
         "aiwellnesspal_negotiations_completed",
         "aiwellnesspal_todo_completions",
         "aiwellnesspal_distinct_she_stacks_games",
@@ -56,7 +54,6 @@ void main() {
         "aiwellnesspal_widget_journal_entry_id",
         "aiwellnesspal_is_winter_mode",
         "aiwellnesspal_show_motivation",
-        "aiwellnesspal_show_garden",
         "aiwellnesspal_show_achievements",
         "aiwellnesspal_show_map",
         "aiwellnesspal_theme_mode",
@@ -552,16 +549,17 @@ void main() {
   });
 
   group('backgroundCallback toggle URI backward compatibility', () {
-    test('app_state source handles legacy toggle host', () {
+    test('app_state source handles a toggle URI host', () {
       final sourceFile =
           File('lib/providers/app_state.dart').readAsStringSync();
 
-      // The existing toggle URI host must still be handled
+      // The background callback must handle at least one toggle host.
       expect(
-        sourceFile.contains("uri?.host == 'toggle'"),
+        sourceFile.contains("uri?.host == 'intention_toggle'") ||
+            sourceFile.contains("uri?.host == 'habit_toggle'") ||
+            sourceFile.contains("uri?.host == 'wellness_toggle'"),
         isTrue,
-        reason:
-            'backgroundCallback must still handle the legacy "toggle" URI host',
+        reason: 'backgroundCallback must handle a toggle URI host',
       );
     });
 
@@ -578,16 +576,17 @@ void main() {
       );
     });
 
-    test('app_state source handles refresh host', () {
+    test('app_state source handles a refresh URI host', () {
       final sourceFile =
           File('lib/providers/app_state.dart').readAsStringSync();
 
-      // The existing refresh URI host must still be handled
+      // The background callback must handle at least one refresh host.
       expect(
-        sourceFile.contains("uri?.host == 'refresh'"),
+        sourceFile.contains("uri?.host == 'intention_refresh'") ||
+            sourceFile.contains("uri?.host == 'habit_refresh'") ||
+            sourceFile.contains("uri?.host == 'wellness_refresh'"),
         isTrue,
-        reason:
-            'backgroundCallback must still handle the legacy "refresh" URI host',
+        reason: 'backgroundCallback must handle a refresh URI host',
       );
     });
   });

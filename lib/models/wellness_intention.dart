@@ -34,6 +34,17 @@ class WellnessIntention extends Dream {
     return completed / steps.length;
   }
 
+  /// Long-term progress toward this intention, derived from how many matching
+  /// daily plans the user has completed. Reaching [_plansForFullProgress]
+  /// completed plans counts as 100%. Returns a value in 0.0..1.0.
+  static const int _plansForFullProgress = 30;
+
+  double progressPercent(int completedMatchingPlans) {
+    if (completedMatchingPlans <= 0) return 0.0;
+    final ratio = completedMatchingPlans / _plansForFullProgress;
+    return ratio > 1.0 ? 1.0 : ratio;
+  }
+
   @override
   Map<String, dynamic> toMap() {
     return {

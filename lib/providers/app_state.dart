@@ -93,9 +93,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   // Journal entries that failed Firestore write and need sync/retry (Req 8.5)
   final Set<String> _entriesNeedingSync = {};
   
-  // Garden (formerly Bloom Garden)
-  List<int> _gardenCells = List.filled(25, 0); // 5x5 grid
-  double _waterRate = 0.0;
   int _lastMissedDays = 0; // Days missed since last activity
   int _negotiationsCompleted = 0;
   int _totalTodoCompletions = 0;
@@ -125,8 +122,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool get isOnline => _isOnline;
   /// Set of journal entry IDs that failed Firestore sync and need retry.
   Set<String> get entriesNeedingSync => _entriesNeedingSync;
-  List<int> get gardenCells => _gardenCells;
-  double get waterRate => _waterRate;
   int get lastMissedDays => _lastMissedDays;
   int get negotiationsCompleted => _negotiationsCompleted;
   String? get instagramUsername => _instagramUsername;
@@ -143,7 +138,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   double _textScaleFactor = 1.0;
   bool _isWinterMode = false;
   bool _showMotivation = true;
-  bool _showGarden = true;
   bool _showAchievements = true;
   bool _showMap = true;
 
@@ -159,7 +153,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool get isWinnerMode => _isWinterMode; // Keep existing naming if any, but adding new ones
   bool get isWinterMode => _isWinterMode;
   bool get showMotivation => _showMotivation;
-  bool get showGarden => _showGarden;
   bool get showAchievements => _showAchievements;
   bool get showMap => _showMap;
 
@@ -319,12 +312,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  void setShowGarden(bool value) {
-    _showGarden = value;
-    _saveSettings();
-    notifyListeners();
-  }
-
   void setShowAchievements(bool value) {
     _showAchievements = value;
     _saveSettings();
@@ -373,7 +360,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       textScale: _textScaleFactor,
       isWinterMode: _isWinterMode,
       showMotivation: _showMotivation,
-      showGarden: _showGarden,
       showAchievements: _showAchievements,
       showMap: _showMap,
       instagram: _instagramUsername,
@@ -697,7 +683,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       // If an intention task was toggled from the home-screen widget (which
-      // writes `bloom_dreams` from a background isolate), reload dreams so the
       // in-app Wellness Intentions screen reflects the change, then persist to
       // Firestore.
       final intentionPending =
@@ -1266,7 +1251,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         _storage.loadTravelMemories(),
         _storage.loadJournalEntries(),
         _storage.loadPinnedCards(),
-        _storage.loadGarden(),
         _storage.loadNegotiationsCompleted(),
         _storage.loadTodoCompletions(),
         _storage.loadDistinctGames(),
@@ -1290,18 +1274,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       // that checklist use case is now covered by Wellness Intentions.
       await _purgeDeprecatedEntries();
       _pinnedCardIds = results[4] as List<String>;
-      _gardenCells = results[5] as List<int>;
-      _negotiationsCompleted = results[6] as int;
-      _totalTodoCompletions = results[7] as int;
-      _distinctGamesPlayed = (results[8] as List<String>).toSet();
-      _totalCheckIns = results[9] as int;
-      final streakData = results[10] as Map<String, dynamic>;
+      _negotiationsCompleted = results[5] as int;
+      _totalTodoCompletions = results[6] as int;
+      _distinctGamesPlayed = (results[7] as List<String>).toSet();
+      _totalCheckIns = results[8] as int;
+      final streakData = results[9] as Map<String, dynamic>;
       _currentStreak = streakData['streak'] ?? 0;
-      _pinnedJournalToHomeIds = results[12] as List<String>;
-      _widgetJournalEntryId = results[13] as String?;
-      _periodData = results[14] as PeriodData;
-      _weightData = results[15] as WeightData;
-      _widgetIntentionId = results[16] as String?;
+      _pinnedJournalToHomeIds = results[11] as List<String>;
+      _widgetJournalEntryId = results[12] as String?;
+      _periodData = results[13] as PeriodData;
+      _weightData = results[14] as WeightData;
+      _widgetIntentionId = results[15] as String?;
 
       // Push the pinned intention to the home-screen widget on load so it
       // reflects the latest tasks (and their completion) without waiting for a
@@ -1327,7 +1310,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
       // Apply settings immediately
       _applySettings(settings);
-      _updateWaterRate();
 
       // PHASE 2: Local activity tracking
       await trackActivity();
@@ -1365,7 +1347,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _textScaleFactor = (settings['textScale'] as num?)?.toDouble().clamp(0.8, 1.3) ?? 1.0;
     _isWinterMode = settings['isWinterMode'] ?? false;
     _showMotivation = settings['showMotivation'] ?? true;
-    _showGarden = settings['showGarden'] ?? true;
     _showAchievements = settings['showAchievements'] ?? true;
     _showMap = settings['showMap'] ?? true;
     _instagramUsername = settings['instagram'];
@@ -1390,8 +1371,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
       _currentStreak = streakData['streak'] ?? 0;
 
-      _gardenCells = await _storage.loadGarden(cloudProfile: cloudProfile);
-
       // Restore period tracker data from the cloud profile.
       _periodData = await _storage.loadPeriodData(cloudProfile: cloudProfile);
 
@@ -1404,7 +1383,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final settings = await _storage.loadSettings(cloudProfile: cloudProfile);
       _applySettings(settings);
       
-      _updateWaterRate();
       notifyListeners();
     }
 
@@ -1427,52 +1405,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _checkAchievements();
   }
 
-  void _updateWaterRate() {
-    // Water rate based on streak (e.g., 7 days = 1.0)
-    _waterRate = (_currentStreak / 7.0).clamp(0.0, 1.0);
-  }
-
-  Future<void> _updateGardenGrowth(bool isActiveToday, int dayDifference) async {
-    if (dayDifference == 0 && isActiveToday) {
-       // Just active today, maybe give a small growth boost if not already done today
-       // (Real implementation would track "wateredToday" flag)
-       _growRandomPlant();
-    } else if (dayDifference > 1) {
-       // Missed days! Wither some plants
-       _witherPlants(dayDifference - 1);
-    } else if (dayDifference == 1 && isActiveToday) {
-       // Consecutive day! Grow plants
-       _growRandomPlant();
-    }
-    
-    await _storage.saveGarden(_gardenCells);
-    notifyListeners();
-  }
-
-  void _growRandomPlant() {
-    // Find cells that can grow (shuffled for randomness)
-    final indices = List.generate(25, (i) => i)..shuffle();
-    for (final i in indices) {
-      if (_gardenCells[i] < 4) { // Max growth is 4 (Bloom)
-        _gardenCells[i]++;
-        break;
-      }
-    }
-  }
-
-  void _witherPlants(int missedDays) {
-    // Wither plants based on missed days
-    final indices = List.generate(25, (i) => i)..shuffle();
-    int witheredCount = 0;
-    for (final i in indices) {
-      if (_gardenCells[i] > 0) {
-        _gardenCells[i]--; // Back to previous stage or sand
-        witheredCount++;
-        if (witheredCount >= missedDays) break;
-      }
-    }
-  }
-  
   // Activity Streak
   int _currentStreak = 0;
   int get currentStreak => _currentStreak;
@@ -1514,7 +1446,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       _lastMissedDays = 0;
       await _storage.saveTotalCheckIns(_totalCheckIns);
       await _storage.saveStreak(1, today.toIso8601String());
-      await _updateGardenGrowth(true, 0);
     } else {
       final lastActiveDay = DateTime(lastActiveDate.year, lastActiveDate.month, lastActiveDate.day);
       
@@ -1524,7 +1455,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         // Already active today, maintain streak
         _currentStreak = loadedStreak;
         _lastMissedDays = 0;
-        await _updateGardenGrowth(true, 0);
       } else if (difference == 1) {
         // Consecutive day
         _currentStreak = loadedStreak + 1;
@@ -1532,7 +1462,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         _lastMissedDays = 0;
         await _storage.saveTotalCheckIns(_totalCheckIns);
         await _storage.saveStreak(_currentStreak, today.toIso8601String());
-        await _updateGardenGrowth(true, 1);
       } else {
         // Streak penalty logic: -1 for every missed day
         int missedDays = difference - 1;
@@ -1544,10 +1473,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         await _storage.saveStreak(_currentStreak, today.toIso8601String());
         _totalCheckIns++;
         await _storage.saveTotalCheckIns(_totalCheckIns);
-        await _updateGardenGrowth(true, difference);
       }
     }
-    _updateWaterRate();
     notifyListeners();
     
     // Check for streak achievements

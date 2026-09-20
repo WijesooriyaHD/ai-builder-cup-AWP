@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// rebranded `aiwellnesspal_*` keys, so existing users keep their journals,
 /// settings, streaks, intentions, etc. after the brand rename.
 ///
-/// Any preferences key that starts with `bloom_` is copied to the same key
 /// with the prefix swapped to `aiwellnesspal_` (value type preserved). The old
 /// key is then removed. Runs at most once, guarded by [_doneFlag].
 ///

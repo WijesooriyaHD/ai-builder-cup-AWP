@@ -23,7 +23,6 @@ class StorageService {
   static const String _dreamsKey = 'aiwellnesspal_dreams';
   static const String _travelMemoriesKey = 'aiwellnesspal_travel_memories';
   static const String _journalEntriesKey = 'aiwellnesspal_journal_entries';
-  static const String _gardenKey = 'aiwellnesspal_garden_state';
   static const String _negotiationsCompletedKey =
       'aiwellnesspal_negotiations_completed';
   static const String _todoCompletionsKey = 'aiwellnesspal_todo_completions';
@@ -39,7 +38,6 @@ class StorageService {
       'aiwellnesspal_widget_intention_id';
   static const String _isWinterModeKey = 'aiwellnesspal_is_winter_mode';
   static const String _showDailyMotivationKey = 'aiwellnesspal_show_motivation';
-  static const String _showGardenKey = 'aiwellnesspal_show_garden';
   static const String _showAchievementsKey = 'aiwellnesspal_show_achievements';
   static const String _showMapKey = 'aiwellnesspal_show_map';
   static const String _themeModeKey = 'aiwellnesspal_theme_mode';
@@ -292,7 +290,6 @@ class StorageService {
     required double textScale,
     bool? isWinterMode,
     bool? showMotivation,
-    bool? showGarden,
     bool? showAchievements,
     bool? showMap,
     String? instagram,
@@ -306,7 +303,6 @@ class StorageService {
     await prefs.setDouble(_textScaleKey, textScale);
     if (isWinterMode != null) await prefs.setBool(_isWinterModeKey, isWinterMode);
     if (showMotivation != null) await prefs.setBool(_showDailyMotivationKey, showMotivation);
-    if (showGarden != null) await prefs.setBool(_showGardenKey, showGarden);
     if (showAchievements != null) await prefs.setBool(_showAchievementsKey, showAchievements);
     if (showMap != null) await prefs.setBool(_showMapKey, showMap);
     if (instagram != null) {
@@ -344,7 +340,6 @@ class StorageService {
         };
         if (isWinterMode != null) data['is_winter_mode'] = isWinterMode;
         if (showMotivation != null) data['show_motivation'] = showMotivation;
-        if (showGarden != null) data['show_garden'] = showGarden;
         if (showAchievements != null) data['show_achievements'] = showAchievements;
         if (showMap != null) data['show_map'] = showMap;
         if (preferredMethods != null) data['preferred_methods'] = preferredMethods;
@@ -407,7 +402,6 @@ class StorageService {
       'textScale': prefs.getDouble(_textScaleKey) ?? 1.0,
       'isWinterMode': prefs.getBool(_isWinterModeKey) ?? false,
       'showMotivation': prefs.getBool(_showDailyMotivationKey) ?? true,
-      'showGarden': prefs.getBool(_showGardenKey) ?? true,
       'showAchievements': prefs.getBool(_showAchievementsKey) ?? true,
       'showMap': prefs.getBool(_showMapKey) ?? true,
       'instagram': prefs.getString('aiwellnesspal_instagram'),
@@ -426,8 +420,6 @@ class StorageService {
           cloudProfile['is_winter_mode'] ?? settings['isWinterMode'];
       settings['showMotivation'] =
           cloudProfile['show_motivation'] ?? settings['showMotivation'];
-      settings['showGarden'] =
-          cloudProfile['show_garden'] ?? settings['showGarden'];
       settings['showAchievements'] =
           cloudProfile['show_achievements'] ?? settings['showAchievements'];
       settings['showMap'] = cloudProfile['show_map'] ?? settings['showMap'];
@@ -570,18 +562,6 @@ class StorageService {
     }
   }
 
-  Future<void> saveGarden(List<int> cells) async {
-    final prefs = await _getPrefs;
-    await prefs.setString(_gardenKey, jsonEncode(cells));
-
-    final user = _currentUser;
-    if (user != null) {
-      await _db.collection('users').doc(user.uid).set({
-        'garden_state': cells,
-      }, SetOptions(merge: true));
-    }
-  }
-
   Future<void> saveUnlockedAchievementsToCloud(List<String> ids) async {
     final user = _currentUser;
     if (user != null) {
@@ -630,9 +610,6 @@ class StorageService {
         ((streakData['streak'] as int? ?? 0) * 10);
     await saveActivityScore(score);
 
-    final garden = await loadGarden();
-    await saveGarden(garden);
-
     if (loadedIds.isNotEmpty) {
       await saveUnlockedAchievementsToCloud(loadedIds);
     }
@@ -652,21 +629,6 @@ class StorageService {
       data['lastActiveDate'] = cloudProfile['last_active_date'] ?? data['lastActiveDate'];
     }
     return data;
-  }
-
-  // --- GARDEN ---
-
-  Future<List<int>> loadGarden({Map<String, dynamic>? cloudProfile}) async {
-    final prefs = await _getPrefs;
-    final localJson = prefs.getString(_gardenKey);
-    List<int> cells = localJson != null
-        ? List<int>.from(jsonDecode(localJson))
-        : List.filled(25, 0);
-
-    if (cloudProfile != null && cloudProfile['garden_state'] != null) {
-      cells = List<int>.from(cloudProfile['garden_state']);
-    }
-    return cells;
   }
 
   // --- PINNED CARDS ---

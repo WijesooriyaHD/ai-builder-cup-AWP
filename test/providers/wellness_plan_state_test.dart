@@ -30,6 +30,10 @@ class FakeAIService implements AIService {
     required CheckIn checkIn,
     required List<WellnessIntention> intentions,
     required List<DailyPlan> recentPlans,
+    String? cycleContext,
+    String? travelContext,
+    List<String> preferredMethods = const [],
+    String? premiumToolkitContext,
   }) async {
     generatePlanCallCount++;
     if (shouldThrow) throw Exception('AI generation failed');
@@ -85,13 +89,58 @@ class FakeAIService implements AIService {
   }
 
   @override
-  Future<VoiceCommand?> parseVoiceCommand(String speech) async {
+  Future<VoiceCommand?> parseVoiceCommand(
+    String speech, {
+    String? recentContext,
+    List<Map<String, String>> history = const [],
+  }) async {
     return null;
   }
 
   @override
-  Future<String?> generateVoiceReply(String question) async {
+  Future<String?> generateVoiceReply(
+    String question, {
+    List<Map<String, String>> history = const [],
+  }) async {
     return null;
+  }
+
+  @override
+  Future<String?> discussJournalEntry({
+    required String entryTitle,
+    required String entryContent,
+    required List<Map<String, String>> history,
+    required String userMessage,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<String?> explainAction({
+    required String actionTitle,
+    required String category,
+    required String intensity,
+    required int durationMinutes,
+    String? method,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<String?> generateConversationTitle(String transcript) async {
+    return null;
+  }
+
+  @override
+  Future<ConversationSummary> summarizeConversationDetailed({
+    required String transcript,
+  }) async {
+    return const ConversationSummary(
+      title: 'Test',
+      summary: 'Test summary.',
+      tags: ['Test', 'Reflection'],
+      mood: '🙂',
+    );
   }
 
   @override

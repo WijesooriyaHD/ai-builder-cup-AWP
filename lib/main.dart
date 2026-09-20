@@ -110,8 +110,7 @@ void main() async {
     debugPrint('Failed to initialize AuthService: $e');
   }
 
-  // Migrate legacy `bloom_*` prefs to `aiwellnesspal_*` BEFORE anything reads
-  // them, so existing users keep their data after the brand rename.
+  //  so existing users keep their data after the brand rename.
   try {
     await PrefsBrandMigration.run();
   } catch (e) {

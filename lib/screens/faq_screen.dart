@@ -24,7 +24,7 @@ class FaqScreen extends StatelessWidget {
           ),
           FaqCard(
             question: "What are Widgets on the Homepage? 🏠",
-            answer: "Your Homepage is a dynamic command center. It features 'Widgets' for your Streak, Garden, Points, and Journal entries. You can customzie these for a quick glance at your daily progress.",
+            answer: "Your Homepage is a dynamic command center. It features 'Widgets' for your Streak, Points, and Journal entries. You can customize these for a quick glance at your daily progress.",
           ),
           FaqCard(
             question: "How do I pin a Todo to Home? 📌",
@@ -45,10 +45,6 @@ class FaqScreen extends StatelessWidget {
           FaqCard(
             question: "What is Winter Mode? ❄️",
             answer: "Winter Mode is a beautiful seasonal effect that adds slow-falling snow to every screen of the app. You can toggle it on or off in the Appearance section of your Settings.",
-          ),
-          FaqCard(
-            question: "What is the Wellness Garden? 🌿",
-            answer: "The Garden is a visual representation of your growth. As you complete daily activities and maintain your streak, your garden blooms with new plants and life!",
           ),
           FaqCard(
             question: "Can I save AI insights? 💡",
