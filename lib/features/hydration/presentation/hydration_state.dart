@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:uuid/uuid.dart';
 
@@ -350,6 +353,9 @@ class HydrationState extends ChangeNotifier {
     );
     _entries = [..._entries, entry];
     notifyListeners();
+    // Sync widget data eagerly — before the AI analysis — so pressing home
+    // immediately after logging still updates the widget ring.
+    unawaited(syncHydrationWidget());
     await _repo.saveEntries(DateTime.now(), _entries);
     await refreshAnalysis();
     await _persistToday();
@@ -359,6 +365,8 @@ class HydrationState extends ChangeNotifier {
   Future<void> removeEntry(String id) async {
     _entries = _entries.where((e) => e.id != id).toList();
     notifyListeners();
+    // Sync widget eagerly, same as logWater.
+    unawaited(syncHydrationWidget());
     await _repo.saveEntries(DateTime.now(), _entries);
     await refreshAnalysis();
     await _persistToday();
@@ -436,23 +444,51 @@ class HydrationState extends ChangeNotifier {
   /// widget `kind` and the Android receiver class name).
   static const String _widgetKind = 'HydrationToolWidget';
 
-  /// Mirrors today's hydration snapshot + a 7-day completion trend into the
-  /// shared app group so the home-screen widget can render live data (progress
-  /// ring on the front, mini bar graph on the back) without opening the app.
+  /// Native method channel for zero-latency hydration→widget sync.
+  /// Calls AppDelegate's HydrationSyncCache.update(), which writes directly
+  /// to the widget app-group UserDefaults and calls defaults.synchronize() —
+  /// no async home_widget plugin chain, guarantees values are on disk before
+  /// applicationDidEnterBackground fires WidgetCenter.reloadTimelines.
+  static const MethodChannel _hydrationSyncChannel =
+      MethodChannel('aiwellnesspal/hydration_sync');
+
+  /// Pushes the current hydration snapshot to the native cache (synchronous
+  /// app-group write) and asks WidgetKit to reload. Call this immediately
+  /// after any state change that should be visible on the widget.
   Future<void> syncHydrationWidget() async {
     try {
-      // Ensure the shared app group is set (safe/idempotent, and needed when
-      // this runs before AppState's constructor on some cold starts).
-      await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
+      // Push via native channel — writes synchronously to app-group
+      // UserDefaults via HydrationSyncCache so the values are guaranteed
+      // to be present when applicationDidEnterBackground calls
+      // WidgetCenter.reloadTimelines, regardless of async timing.
+      await _hydrationSyncChannel.invokeMethod<void>('push', {
+        'consumed': consumedMl,
+        'goal': goalMl,
+        'pct': completionPercentage.clamp(0, 100),
+      });
+    } on MissingPluginException {
+      // Channel not available (e.g. unit test environment) — fall back
+      // to home_widget which handles Android too.
+      debugPrint('ℹ️ hydration_sync channel unavailable, falling back to home_widget');
+      await _syncViaHomeWidget();
+    } catch (e) {
+      debugPrint('ℹ️ HydrationState.syncHydrationWidget: $e');
+    }
+  }
 
-      await HomeWidget.saveWidgetData<bool>('hydration_has_data', true);
+  /// Fallback path for Android (and test environments without the native
+  /// channel). Writes via the home_widget plugin and triggers an updateWidget.
+  Future<void> _syncViaHomeWidget() async {
+    try {
+      await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
       await HomeWidget.saveWidgetData<int>('hydration_consumed_ml', consumedMl);
       await HomeWidget.saveWidgetData<int>('hydration_goal_ml', goalMl);
       await HomeWidget.saveWidgetData<int>(
-          'hydration_pct', completionPercentage.clamp(0, 100));      await HomeWidget.updateWidget(
+          'hydration_pct', completionPercentage.clamp(0, 100));
+      await HomeWidget.updateWidget(
           name: _widgetKind, androidName: _widgetKind);
     } catch (e) {
-      debugPrint('ℹ️ HydrationState.syncHydrationWidget: $e');
+      debugPrint('ℹ️ HydrationState._syncViaHomeWidget: $e');
     }
   }
 

@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import AVFoundation
+import WidgetKit
 import home_widget
 
 @main
@@ -74,6 +75,77 @@ import home_widget
       }
     }
 
+    // Hydration widget sync channel. Dart calls "push" with
+    // {consumed: Int, goal: Int, pct: Int} whenever water is logged so the
+    // native HydrationSyncCache has the latest values. On background transition
+    // the cache flushes directly to the app-group UserDefaults and WidgetKit
+    // reloads — no async platform-channel round-trip needed at that point.
+    if let controller = window?.rootViewController as? FlutterViewController {
+      let hydrationChannel = FlutterMethodChannel(
+        name: "aiwellnesspal/hydration_sync",
+        binaryMessenger: controller.binaryMessenger)
+      hydrationChannel.setMethodCallHandler { call, result in
+        if call.method == "push",
+           let args = call.arguments as? [String: Any]
+        {
+          let consumed = args["consumed"] as? Int ?? 0
+          let goal     = args["goal"]     as? Int ?? 0
+          let pct      = args["pct"]      as? Int ?? 0
+          HydrationSyncCache.shared.update(consumedMl: consumed, goalMl: goal, pct: pct)
+          result(nil)
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// On background transition: write the latest hydration snapshot (cached by
+  /// the HydrationSyncCache channel from Dart) into the widget app-group and
+  /// tell WidgetKit to reload. This runs synchronously in native Swift before
+  /// the process suspends — no dependency on the Dart async chain.
+  override func applicationDidEnterBackground(_ application: UIApplication) {
+    super.applicationDidEnterBackground(application)
+    if #available(iOS 14.0, *) {
+      HydrationSyncCache.shared.flushToAppGroup()
+      WidgetCenter.shared.reloadTimelines(ofKind: "HydrationToolWidget")
+      NSLog("[AppDelegate] Hydration widget reloaded on background transition")
+    }
+  }
+}
+
+// MARK: - HydrationSyncCache
+//
+// A lightweight in-process cache for the latest hydration values. Dart calls
+// the "aiwellnesspal/hydration_sync" channel to push values any time water is
+// logged; AppDelegate.applicationDidEnterBackground flushes them into the
+// widget app-group and triggers a WidgetKit reload. This bypasses the
+// home_widget plugin's async platform-channel path entirely, guaranteeing the
+// app-group is up to date before the process suspends.
+class HydrationSyncCache {
+  static let shared = HydrationSyncCache()
+  private let appGroup = "group.com.aiwellnesspal.app"
+  private var consumedMl: Int = 0
+  private var goalMl: Int = 0
+  private var pct: Int = 0
+
+  func update(consumedMl: Int, goalMl: Int, pct: Int) {
+    self.consumedMl = consumedMl
+    self.goalMl     = goalMl
+    self.pct        = pct
+    // Also write to the app group immediately so WidgetKit's next scheduled
+    // reload picks up the value even if the app is still in the foreground.
+    flushToAppGroup()
+  }
+
+  func flushToAppGroup() {
+    guard let defaults = UserDefaults(suiteName: appGroup) else { return }
+    defaults.set(consumedMl, forKey: "hydration_consumed_ml")
+    defaults.set(goalMl,     forKey: "hydration_goal_ml")
+    defaults.set(pct,        forKey: "hydration_pct")
+    defaults.synchronize()   // force immediate write to disk
+    NSLog("[HydrationSyncCache] flushed consumed=\(consumedMl) goal=\(goalMl) pct=\(pct)%%")
   }
 }
