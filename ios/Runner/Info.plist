@@ -79,9 +79,9 @@
 			</dict>
 		</array>
 		<key>NSSpeechRecognitionUsageDescription</key>
-		<string>Bloom uses speech recognition to let you interact with your wellness assistant using your voice.</string>
+		<string>AI Wellness Pal uses speech recognition to let you interact with your wellness assistant using your voice.</string>
 		<key>NSMicrophoneUsageDescription</key>
-		<string>Bloom needs microphone access for voice commands and conversational check-ins.</string>
+		<string>AI Wellness Pal needs microphone access for voice commands and conversational check-ins.</string>
 		<key>NSHealthShareUsageDescription</key>
 		<string>AI Wellness Pal reads your sleep data so the Sleep Coach can show your sleep score, stages, and personalized recovery insights.</string>
 		<key>NSHealthUpdateUsageDescription</key>

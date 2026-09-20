@@ -51,7 +51,7 @@ void main() {
         Dream(id: 'dream_2', title: 'Run Marathon', description: 'Endurance goal'),
       ];
       SharedPreferences.setMockInitialValues({
-        'bloom_dreams': jsonEncode(dreams.map((d) => d.toMap()).toList()),
+        'aiwellnesspal_dreams': jsonEncode(dreams.map((d) => d.toMap()).toList()),
       });
 
       // Act
@@ -82,7 +82,7 @@ void main() {
       // Arrange: set flag as already done
       SharedPreferences.setMockInitialValues({
         'wellness_migration_v1_done': true,
-        'bloom_dreams': jsonEncode([
+        'aiwellnesspal_dreams': jsonEncode([
           Dream(id: 'dream_x', title: 'Should Not Migrate').toMap(),
         ]),
       });
@@ -118,7 +118,7 @@ void main() {
         Dream(id: 'dream_new', title: 'New Dream'),
       ];
       SharedPreferences.setMockInitialValues({
-        'bloom_dreams': jsonEncode(dreams.map((d) => d.toMap()).toList()),
+        'aiwellnesspal_dreams': jsonEncode(dreams.map((d) => d.toMap()).toList()),
       });
 
       // Act
@@ -139,7 +139,7 @@ void main() {
 
     test('sets migration flag after successful migration', () async {
       SharedPreferences.setMockInitialValues({
-        'bloom_dreams': jsonEncode([
+        'aiwellnesspal_dreams': jsonEncode([
           Dream(id: 'd1', title: 'Test').toMap(),
         ]),
       });
@@ -152,7 +152,7 @@ void main() {
 
     test('handles empty local dreams gracefully', () async {
       SharedPreferences.setMockInitialValues({
-        'bloom_dreams': jsonEncode([]),
+        'aiwellnesspal_dreams': jsonEncode([]),
       });
 
       // Should not throw
@@ -171,7 +171,7 @@ void main() {
       expect(prefs.getBool('wellness_migration_v1_done'), true);
     });
 
-    test('handles missing bloom_dreams key gracefully', () async {
+    test('handles missing aiwellnesspal_dreams key gracefully', () async {
       SharedPreferences.setMockInitialValues({});
 
       await service.migrate();
@@ -201,7 +201,7 @@ void main() {
       );
 
       SharedPreferences.setMockInitialValues({
-        'bloom_dreams': jsonEncode([dream.toMap()]),
+        'aiwellnesspal_dreams': jsonEncode([dream.toMap()]),
       });
 
       await service.migrate();
@@ -234,7 +234,7 @@ void main() {
 
     test('isMigrationCompleted returns true after migration', () async {
       SharedPreferences.setMockInitialValues({
-        'bloom_dreams': jsonEncode([]),
+        'aiwellnesspal_dreams': jsonEncode([]),
       });
 
       await service.migrate();

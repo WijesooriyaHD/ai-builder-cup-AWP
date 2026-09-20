@@ -35,46 +35,57 @@ void main() {
       expect(sourceFile.contains('static const String'), isTrue);
     });
 
-    test('original bloom_ keys are present in StorageService source', () {
-      // Read the actual source file to verify key string values are declared.
-      // This ensures nobody accidentally renames or removes a key.
+    test('rebranded aiwellnesspal_ storage keys are present in source', () {
+      // After the brand rename, StorageService keys use the aiwellnesspal_
+      // prefix. Legacy bloom_ data is migrated at launch by
+      // PrefsBrandMigration (see the migration test below).
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
-      const originalKeys = [
-        "bloom_dreams",
-        "bloom_travel_memories",
-        "bloom_journal_entries",
-        "bloom_garden_state",
-        "bloom_negotiations_completed",
-        "bloom_todo_completions",
-        "bloom_distinct_she_stacks_games",
-        "bloom_total_check_ins",
-        "bloom_has_seed_data",
-        "bloom_pinned_journal_home",
-        "bloom_widget_journal_entry_id",
-        "bloom_widget_travel_map_active",
-        "bloom_is_winter_mode",
-        "bloom_show_motivation",
-        "bloom_show_garden",
-        "bloom_show_achievements",
-        "bloom_show_map",
-        "bloom_theme_mode",
-        "bloom_theme_color",
-        "bloom_text_scale",
-        "bloom_current_streak",
-        "bloom_last_active_date",
-        "bloom_pinned_cards",
+      const storageKeys = [
+        "aiwellnesspal_dreams",
+        "aiwellnesspal_travel_memories",
+        "aiwellnesspal_journal_entries",
+        "aiwellnesspal_garden_state",
+        "aiwellnesspal_negotiations_completed",
+        "aiwellnesspal_todo_completions",
+        "aiwellnesspal_distinct_she_stacks_games",
+        "aiwellnesspal_total_check_ins",
+        "aiwellnesspal_has_seed_data",
+        "aiwellnesspal_pinned_journal_home",
+        "aiwellnesspal_widget_journal_entry_id",
+        "aiwellnesspal_is_winter_mode",
+        "aiwellnesspal_show_motivation",
+        "aiwellnesspal_show_garden",
+        "aiwellnesspal_show_achievements",
+        "aiwellnesspal_show_map",
+        "aiwellnesspal_theme_mode",
+        "aiwellnesspal_theme_color",
+        "aiwellnesspal_text_scale",
+        "aiwellnesspal_current_streak",
+        "aiwellnesspal_last_active_date",
+        "aiwellnesspal_pinned_cards",
       ];
 
-      for (final key in originalKeys) {
+      for (final key in storageKeys) {
         expect(sourceFile.contains("'$key'"), isTrue,
             reason:
-                'StorageService source must contain key "$key" unchanged');
+                'StorageService source must contain key "$key"');
       }
     });
 
-    test('new wellness keys are additive and do not replace bloom keys', () {
+    test('legacy bloom_ prefix migration exists', () {
+      // The rename must be paired with a migration so existing users keep
+      // their data.
+      final migration =
+          File('lib/services/prefs_brand_migration.dart').readAsStringSync();
+      expect(migration.contains("'bloom_'"), isTrue,
+          reason: 'Migration must reference the legacy bloom_ prefix');
+      expect(migration.contains("'aiwellnesspal_'"), isTrue,
+          reason: 'Migration must target the aiwellnesspal_ prefix');
+    });
+
+    test('new wellness keys are additive', () {
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
@@ -105,8 +116,8 @@ void main() {
       // The path is constructed via .collection('journal_entries') or similar
       // but journal entries in this service are stored locally only.
       // The design doc guarantees this path is used by other services.
-      // We verify the local key remains 'bloom_journal_entries'.
-      expect(sourceFile.contains("'bloom_journal_entries'"), isTrue,
+      // We verify the local key remains 'aiwellnesspal_journal_entries'.
+      expect(sourceFile.contains("'aiwellnesspal_journal_entries'"), isTrue,
           reason: 'Local journal entries cache key must be preserved');
     });
 
@@ -508,13 +519,13 @@ void main() {
 
     test('journal_entries Firestore path is not renamed', () {
       // The design doc guarantees journal_entries path stays the same.
-      // StorageService stores journal entries locally under bloom_journal_entries
-      // and other services write to Firestore at users/{uid}/journal_entries.
-      // We verify the local key is still bloom_journal_entries (not renamed).
+      // StorageService stores journal entries locally under
+      // aiwellnesspal_journal_entries and other services write to Firestore at
+      // users/{uid}/journal_entries (that Firestore path is unchanged).
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
-      expect(sourceFile.contains("'bloom_journal_entries'"), isTrue,
+      expect(sourceFile.contains("'aiwellnesspal_journal_entries'"), isTrue,
           reason: 'Journal entries local cache key must remain unchanged');
 
       // Ensure no accidental rename to something like 'wellness_reflections'
@@ -530,7 +541,7 @@ void main() {
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
-      expect(sourceFile.contains("'bloom_travel_memories'"), isTrue);
+      expect(sourceFile.contains("'aiwellnesspal_travel_memories'"), isTrue);
       // Ensure no rename to wellness_milestones or journey_map
       expect(
         sourceFile.contains("_travelMemoriesKey = 'wellness_milestones'"),
@@ -582,44 +593,44 @@ void main() {
   });
 
   group('Local cache keys still work', () {
-    test('bloom_dreams key is used for Dream serialization', () {
+    test('aiwellnesspal_dreams key is used for Dream serialization', () {
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
-      // The saveDreams/loadDreams methods must use _dreamsKey = 'bloom_dreams'
+      // The saveDreams/loadDreams methods must use _dreamsKey = 'aiwellnesspal_dreams'
       expect(sourceFile.contains("_dreamsKey"), isTrue,
           reason: 'StorageService must use _dreamsKey field');
-      expect(sourceFile.contains("'bloom_dreams'"), isTrue);
+      expect(sourceFile.contains("'aiwellnesspal_dreams'"), isTrue);
     });
 
-    test('bloom_journal_entries key is used for journal serialization', () {
+    test('aiwellnesspal_journal_entries key is used for journal serialization', () {
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
       expect(sourceFile.contains("_journalEntriesKey"), isTrue);
-      expect(sourceFile.contains("'bloom_journal_entries'"), isTrue);
+      expect(sourceFile.contains("'aiwellnesspal_journal_entries'"), isTrue);
     });
 
-    test('bloom_travel_memories key is used for travel serialization', () {
+    test('aiwellnesspal_travel_memories key is used for travel serialization', () {
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
       expect(sourceFile.contains("_travelMemoriesKey"), isTrue);
-      expect(sourceFile.contains("'bloom_travel_memories'"), isTrue);
+      expect(sourceFile.contains("'aiwellnesspal_travel_memories'"), isTrue);
     });
 
-    test('bloom_todo_completions key still exists', () {
+    test('aiwellnesspal_todo_completions key still exists', () {
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
-      expect(sourceFile.contains("'bloom_todo_completions'"), isTrue);
+      expect(sourceFile.contains("'aiwellnesspal_todo_completions'"), isTrue);
     });
 
     test('widget-related keys are preserved', () {
       final sourceFile =
           File('lib/services/storage_service.dart').readAsStringSync();
 
-      expect(sourceFile.contains("'bloom_widget_journal_entry_id'"), isTrue);
-      expect(sourceFile.contains("'bloom_widget_travel_map_active'"), isTrue);
+      expect(sourceFile.contains("'aiwellnesspal_widget_journal_entry_id'"), isTrue);
+      expect(sourceFile.contains("'aiwellnesspal_widget_intention_id'"), isTrue);
     });
   });
 }

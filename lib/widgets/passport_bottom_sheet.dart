@@ -45,7 +45,8 @@ class _PassportBottomSheetState extends State<PassportBottomSheet> {
       if (byteData == null) return;
 
       final tempDir = await getTemporaryDirectory();
-      final file = await File('${tempDir.path}/bloom_passport.png').create();
+      final file =
+          await File('${tempDir.path}/aiwellnesspal_passport.png').create();
       await file.writeAsBytes(byteData.buffer.asUint8List());
 
       await Share.shareXFiles([XFile(file.path)], text: 'Check out my AI Wellness Pal Travel Passport! 🌍✈️');
