@@ -756,27 +756,32 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final String wid = uri?.queryParameters['w'] ?? '';
       if (wid.isNotEmpty) {
         final String key = 'widget_theme_dark_$wid';
-        final bool next = !(prefs.getBool(key) ?? false);
-        await prefs.setBool(key, next);
+        // Read the current value from the app-group suite — the same store
+        // the widget extension reads — so the toggle is always consistent,
+        // even after a fresh install or if SharedPreferences ever drifts.
+        final bool current =
+            (await HomeWidget.getWidgetData<bool>(key)) ?? false;
+        final bool next = !current;
         await HomeWidget.saveWidgetData<bool>(key, next);
         debugPrint('Background Widget Theme Toggle [$wid] -> dark=$next');
-        // Reload only the affected widget kind.
         final String kind = _widgetKindForThemeId(wid);
         if (kind.isNotEmpty) {
           await HomeWidget.updateWidget(name: kind, androidName: kind);
         }
       }
     } else if (uri?.host == 'hydration_flip') {
-      // Flip the Hydration widget between its front (progress ring) and back
-      // (7-day mini graph) faces. State is per-widget, stored in the app group
-      // under `hydration_flipped_<id>`; the iOS widget reads it to drive the
-      // rotation3DEffect flip animation.
+      // Toggle the Hydration widget between its default tile (emoji + title)
+      // and the live progress-ring face. State is per-widget, stored in the
+      // app-group suite under `hydration_flipped_<id>`. The ring always shows
+      // when flipped — even on a fresh install before any data has synced —
+      // so the toggle responds immediately without needing the app to be opened.
       final String wid = uri?.queryParameters['w'] ?? 'tool_hydration';
       final String key = 'hydration_flipped_$wid';
-      final bool next = !(prefs.getBool(key) ?? false);
-      await prefs.setBool(key, next);
+      final bool current =
+          (await HomeWidget.getWidgetData<bool>(key)) ?? false;
+      final bool next = !current;
       await HomeWidget.saveWidgetData<bool>(key, next);
-      debugPrint('Background Hydration Flip [$wid] -> back=$next');
+      debugPrint('Background Hydration Flip [$wid] -> flipped=$next');
       await HomeWidget.updateWidget(
           name: 'HydrationToolWidget', androidName: 'HydrationToolWidget');
     } else if (uri?.host == 'habit_toggle') {

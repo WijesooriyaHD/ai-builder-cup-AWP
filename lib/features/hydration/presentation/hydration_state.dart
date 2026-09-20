@@ -449,9 +449,7 @@ class HydrationState extends ChangeNotifier {
       await HomeWidget.saveWidgetData<int>('hydration_consumed_ml', consumedMl);
       await HomeWidget.saveWidgetData<int>('hydration_goal_ml', goalMl);
       await HomeWidget.saveWidgetData<int>(
-          'hydration_pct', completionPercentage.clamp(0, 100));
-
-      await HomeWidget.updateWidget(
+          'hydration_pct', completionPercentage.clamp(0, 100));      await HomeWidget.updateWidget(
           name: _widgetKind, androidName: _widgetKind);
     } catch (e) {
       debugPrint('ℹ️ HydrationState.syncHydrationWidget: $e');

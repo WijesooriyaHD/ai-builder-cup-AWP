@@ -158,20 +158,21 @@ struct CalorieBudgetToolWidget: Widget {
     }
 }
 
-// MARK: - Hydration (live data + flip-to-graph)
+// MARK: - Hydration (live data + flip-to-progress-ring)
 //
 // Unlike the other tool tiles, the Hydration widget shows live data written by
 // the app into the shared app group (see HydrationState.syncHydrationWidget in
-// Dart). The front face is a water-fill progress ring; a flip button rotates
-// the card (rotation3DEffect) to reveal a 7-day completion mini bar graph. The
-// flip state is persisted per-widget under `hydration_flipped_tool_hydration`
-// and toggled via the shared BackgroundIntent (`aiwellnesspal://hydration_flip`).
+// Dart). Default face = standard emoji + label tile. Flip button swaps to a
+// live water-fill progress ring showing today's consumed / goal. The flip state
+// is persisted per-widget under `hydration_flipped_tool_hydration` and toggled
+// via the shared BackgroundIntent (`aiwellnesspal://hydration_flip`). The ring
+// is shown immediately on flip — even before the app has been opened — using a
+// dashed placeholder arc until real data is synced.
 
 private let kHydrationAccent = Color(hex: 0x3FA9F5)
 
 struct HydrationEntry: TimelineEntry {
     let date: Date
-    let hasData: Bool
     let pct: Int          // 0..100 today's completion
     let consumedMl: Int
     let goalMl: Int
@@ -184,8 +185,7 @@ struct HydrationProvider: TimelineProvider {
 
     func placeholder(in context: Context) -> HydrationEntry {
         // Gallery/placeholder shows the default tile (not flipped).
-        HydrationEntry(date: Date(), hasData: false, pct: 0, consumedMl: 0,
-                       goalMl: 0, flipped: false)
+        HydrationEntry(date: Date(), pct: 0, consumedMl: 0, goalMl: 0, flipped: false)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (HydrationEntry) -> Void) {
@@ -208,7 +208,6 @@ struct HydrationProvider: TimelineProvider {
         let d = defaults
         return HydrationEntry(
             date: Date(),
-            hasData: d?.bool(forKey: "hydration_has_data") ?? false,
             pct: d?.integer(forKey: "hydration_pct") ?? 0,
             consumedMl: d?.integer(forKey: "hydration_consumed_ml") ?? 0,
             goalMl: d?.integer(forKey: "hydration_goal_ml") ?? 0,
@@ -253,31 +252,51 @@ struct HydrationFlipButton: View {
 }
 
 /// Water-fill progress ring (data face).
+/// Shows a dashed track and "–" for goal on a fresh install before the app
+/// has been opened — so the flip works immediately without requiring the app
+/// to be launched first.
 private struct HydrationRing: View {
     let entry: HydrationEntry
     let textColor: Color
 
+    private var hasData: Bool { entry.goalMl > 0 }
+
     var body: some View {
         let fraction = min(max(Double(entry.pct) / 100.0, 0), 1)
         return VStack(spacing: 6) {
+            // Push the ring down so it clears the flip/theme toggle buttons.
+            Spacer().frame(height: 18)
             ZStack {
+                // Track: dashed when no data yet, solid otherwise.
                 Circle()
-                    .stroke(kHydrationAccent.opacity(0.15), lineWidth: 8)
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(kHydrationAccent,
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+                    .stroke(
+                        kHydrationAccent.opacity(hasData ? 0.15 : 0.10),
+                        style: hasData
+                            ? StrokeStyle(lineWidth: 8)
+                            : StrokeStyle(lineWidth: 8, dash: [4, 4])
+                    )
+                // Progress arc — only when we have real data.
+                if hasData {
+                    Circle()
+                        .trim(from: 0, to: fraction)
+                        .stroke(kHydrationAccent,
+                                style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }
                 VStack(spacing: 0) {
-                    Text("\(entry.pct)%")
-                        .font(.system(size: 20, weight: .bold))
+                    Text(hasData ? "\(entry.pct)%" : "💧")
+                        .font(.system(size: hasData ? 20 : 24, weight: .bold))
                         .foregroundColor(kHydrationAccent)
-                    Text("💧").font(.system(size: 12))
+                    if hasData {
+                        Text("💧").font(.system(size: 12))
+                    }
                 }
             }
             .frame(width: 74, height: 74)
 
-            Text("\(mlText(entry.consumedMl)) / \(mlText(entry.goalMl))")
+            Text(hasData
+                 ? "\(mlText(entry.consumedMl)) / \(mlText(entry.goalMl))"
+                 : "Open app to sync")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(textColor)
                 .lineLimit(1)
@@ -316,11 +335,13 @@ struct HydrationToolWidgetView: View {
 
     // Default (not flipped) → the standard tool tile: emoji + title, identical
     // to the other Life-toolkit widgets and what shows in the "Add Widget"
-    // gallery. Flipped → the live progress ring + consumed/goal. When no data
-    // has been synced yet, the ring face falls back to the default tile too.
+    // gallery. Flipped → the live progress ring + consumed/goal. The ring
+    // shows 0% / goal with an empty arc on a fresh install before any data
+    // has been synced — the callback flip works immediately without needing
+    // the app to be opened first.
     @ViewBuilder
     private var content: some View {
-        if entry.flipped && entry.hasData {
+        if entry.flipped {
             HydrationRing(entry: entry, textColor: textColor)
         } else {
             defaultTile
