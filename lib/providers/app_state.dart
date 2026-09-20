@@ -94,9 +94,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   final Set<String> _entriesNeedingSync = {};
   
   int _lastMissedDays = 0; // Days missed since last activity
-  int _negotiationsCompleted = 0;
   int _totalTodoCompletions = 0;
-  Set<String> _distinctGamesPlayed = {};
   int _totalCheckIns = 0;
   String? _instagramUsername;
   String _aiVoice = 'default';
@@ -123,7 +121,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// Set of journal entry IDs that failed Firestore sync and need retry.
   Set<String> get entriesNeedingSync => _entriesNeedingSync;
   int get lastMissedDays => _lastMissedDays;
-  int get negotiationsCompleted => _negotiationsCompleted;
   String? get instagramUsername => _instagramUsername;
   /// The selected AI assistant voice id (see kAiVoices).
   String get aiVoice => _aiVoice;
@@ -1251,9 +1248,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         _storage.loadTravelMemories(),
         _storage.loadJournalEntries(),
         _storage.loadPinnedCards(),
-        _storage.loadNegotiationsCompleted(),
         _storage.loadTodoCompletions(),
-        _storage.loadDistinctGames(),
         _storage.loadTotalCheckIns(),
         _storage.loadStreakData(),
         _storage.hasSeedData(),
@@ -1274,17 +1269,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       // that checklist use case is now covered by Wellness Intentions.
       await _purgeDeprecatedEntries();
       _pinnedCardIds = results[4] as List<String>;
-      _negotiationsCompleted = results[5] as int;
-      _totalTodoCompletions = results[6] as int;
-      _distinctGamesPlayed = (results[7] as List<String>).toSet();
-      _totalCheckIns = results[8] as int;
-      final streakData = results[9] as Map<String, dynamic>;
+      _totalTodoCompletions = results[5] as int;
+      _totalCheckIns = results[6] as int;
+      final streakData = results[7] as Map<String, dynamic>;
       _currentStreak = streakData['streak'] ?? 0;
-      _pinnedJournalToHomeIds = results[11] as List<String>;
-      _widgetJournalEntryId = results[12] as String?;
-      _periodData = results[13] as PeriodData;
-      _weightData = results[14] as WeightData;
-      _widgetIntentionId = results[15] as String?;
+      _pinnedJournalToHomeIds = results[9] as List<String>;
+      _widgetJournalEntryId = results[10] as String?;
+      _periodData = results[11] as PeriodData;
+      _weightData = results[12] as WeightData;
+      _widgetIntentionId = results[13] as String?;
 
       // Push the pinned intention to the home-screen widget on load so it
       // reflects the latest tasks (and their completion) without waiting for a
@@ -1588,27 +1581,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<List<Achievement>> recordNegotiationCompletion() async {
-    _negotiationsCompleted++;
-    await _storage.saveNegotiationsCompleted(_negotiationsCompleted);
-    // Also track as a generic She Stacks completion
-    await trackGameCompletion("Negotiation Lab");
-    
-    // Add points for negotiation completion (+250 as seen in SheStacksScreen)
-    await addPoints(250);
-    notifyListeners();
-    return await _checkAchievements();
-  }
-
-  Future<void> trackGameCompletion(String gameTitle) async {
-    if (!_distinctGamesPlayed.contains(gameTitle)) {
-      _distinctGamesPlayed.add(gameTitle);
-      await _storage.saveDistinctGames(_distinctGamesPlayed.toList());
-      notifyListeners();
-      await _checkAchievements();
-    }
-  }
-  
   Future<List<Achievement>> addTravelMemory(
     String place,
     double lat,

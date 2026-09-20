@@ -23,11 +23,7 @@ class StorageService {
   static const String _dreamsKey = 'aiwellnesspal_dreams';
   static const String _travelMemoriesKey = 'aiwellnesspal_travel_memories';
   static const String _journalEntriesKey = 'aiwellnesspal_journal_entries';
-  static const String _negotiationsCompletedKey =
-      'aiwellnesspal_negotiations_completed';
   static const String _todoCompletionsKey = 'aiwellnesspal_todo_completions';
-  static const String _distinctGamesKey =
-      'aiwellnesspal_distinct_she_stacks_games';
   static const String _totalCheckInsKey = 'aiwellnesspal_total_check_ins';
   static const String _hasSeedDataKey = 'aiwellnesspal_has_seed_data';
   static const String _pinnedJournalHomeKey =
@@ -645,20 +641,10 @@ class StorageService {
 
   // --- MISC LOCAL ---
 
-  Future<void> saveNegotiationsCompleted(int count) async =>
-      (await _getPrefs).setInt(_negotiationsCompletedKey, count);
-  Future<int> loadNegotiationsCompleted() async =>
-      (await _getPrefs).getInt(_negotiationsCompletedKey) ?? 0;
-
   Future<void> saveTodoCompletions(int count) async =>
       (await _getPrefs).setInt(_todoCompletionsKey, count);
   Future<int> loadTodoCompletions() async =>
       (await _getPrefs).getInt(_todoCompletionsKey) ?? 0;
-
-  Future<void> saveDistinctGames(List<String> games) async =>
-      (await _getPrefs).setStringList(_distinctGamesKey, games);
-  Future<List<String>> loadDistinctGames() async =>
-      (await _getPrefs).getStringList(_distinctGamesKey) ?? [];
 
   Future<void> saveTotalCheckIns(int count) async =>
       (await _getPrefs).setInt(_totalCheckInsKey, count);
