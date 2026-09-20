@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../meal_planner/domain/meal_planner_models.dart';
@@ -189,6 +190,9 @@ class HydrationState extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+      // Push a fresh snapshot to the home-screen widget after loading.
+      // ignore: unawaited_futures
+      syncHydrationWidget();
     }
   }
 
@@ -421,6 +425,37 @@ class HydrationState extends ChangeNotifier {
       createdAt: today,
     );
     await _repo.saveDaily(day);
+    await syncHydrationWidget();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Home-screen widget sync
+  // ---------------------------------------------------------------------------
+
+  /// Widget kind understood by `HomeWidget.updateWidget` (matches the iOS
+  /// widget `kind` and the Android receiver class name).
+  static const String _widgetKind = 'HydrationToolWidget';
+
+  /// Mirrors today's hydration snapshot + a 7-day completion trend into the
+  /// shared app group so the home-screen widget can render live data (progress
+  /// ring on the front, mini bar graph on the back) without opening the app.
+  Future<void> syncHydrationWidget() async {
+    try {
+      // Ensure the shared app group is set (safe/idempotent, and needed when
+      // this runs before AppState's constructor on some cold starts).
+      await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
+
+      await HomeWidget.saveWidgetData<bool>('hydration_has_data', true);
+      await HomeWidget.saveWidgetData<int>('hydration_consumed_ml', consumedMl);
+      await HomeWidget.saveWidgetData<int>('hydration_goal_ml', goalMl);
+      await HomeWidget.saveWidgetData<int>(
+          'hydration_pct', completionPercentage.clamp(0, 100));
+
+      await HomeWidget.updateWidget(
+          name: _widgetKind, androidName: _widgetKind);
+    } catch (e) {
+      debugPrint('ℹ️ HydrationState.syncHydrationWidget: $e');
+    }
   }
 
   Future<void> evaluateStreak() async {

@@ -766,6 +766,19 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           await HomeWidget.updateWidget(name: kind, androidName: kind);
         }
       }
+    } else if (uri?.host == 'hydration_flip') {
+      // Flip the Hydration widget between its front (progress ring) and back
+      // (7-day mini graph) faces. State is per-widget, stored in the app group
+      // under `hydration_flipped_<id>`; the iOS widget reads it to drive the
+      // rotation3DEffect flip animation.
+      final String wid = uri?.queryParameters['w'] ?? 'tool_hydration';
+      final String key = 'hydration_flipped_$wid';
+      final bool next = !(prefs.getBool(key) ?? false);
+      await prefs.setBool(key, next);
+      await HomeWidget.saveWidgetData<bool>(key, next);
+      debugPrint('Background Hydration Flip [$wid] -> back=$next');
+      await HomeWidget.updateWidget(
+          name: 'HydrationToolWidget', androidName: 'HydrationToolWidget');
     } else if (uri?.host == 'habit_toggle') {
       // Toggle today's completion for a habit from the "Today's Habits" widget.
       final String? habitId = uri?.queryParameters['id'];

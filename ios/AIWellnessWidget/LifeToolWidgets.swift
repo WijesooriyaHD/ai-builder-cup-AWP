@@ -158,14 +158,211 @@ struct CalorieBudgetToolWidget: Widget {
     }
 }
 
+// MARK: - Hydration (live data + flip-to-graph)
+//
+// Unlike the other tool tiles, the Hydration widget shows live data written by
+// the app into the shared app group (see HydrationState.syncHydrationWidget in
+// Dart). The front face is a water-fill progress ring; a flip button rotates
+// the card (rotation3DEffect) to reveal a 7-day completion mini bar graph. The
+// flip state is persisted per-widget under `hydration_flipped_tool_hydration`
+// and toggled via the shared BackgroundIntent (`aiwellnesspal://hydration_flip`).
+
+private let kHydrationAccent = Color(hex: 0x3FA9F5)
+
+struct HydrationEntry: TimelineEntry {
+    let date: Date
+    let hasData: Bool
+    let pct: Int          // 0..100 today's completion
+    let consumedMl: Int
+    let goalMl: Int
+    let flipped: Bool     // showing the data (progress ring) face
+}
+
+struct HydrationProvider: TimelineProvider {
+    private let defaults = UserDefaults(suiteName: kWidgetAppGroup)
+    private let wid = "tool_hydration"
+
+    func placeholder(in context: Context) -> HydrationEntry {
+        // Gallery/placeholder shows the default tile (not flipped).
+        HydrationEntry(date: Date(), hasData: false, pct: 0, consumedMl: 0,
+                       goalMl: 0, flipped: false)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (HydrationEntry) -> Void) {
+        // In the widget gallery ("Add Widget"), always show the default tile
+        // (emoji + title) so it looks consistent with the other tool widgets —
+        // regardless of any persisted flip state.
+        if context.isPreview {
+            completion(placeholder(in: context))
+        } else {
+            completion(load())
+        }
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<HydrationEntry>) -> Void) {
+        let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
+        completion(Timeline(entries: [load()], policy: .after(next)))
+    }
+
+    private func load() -> HydrationEntry {
+        let d = defaults
+        return HydrationEntry(
+            date: Date(),
+            hasData: d?.bool(forKey: "hydration_has_data") ?? false,
+            pct: d?.integer(forKey: "hydration_pct") ?? 0,
+            consumedMl: d?.integer(forKey: "hydration_consumed_ml") ?? 0,
+            goalMl: d?.integer(forKey: "hydration_goal_ml") ?? 0,
+            flipped: d?.bool(forKey: "hydration_flipped_\(wid)") ?? false
+        )
+    }
+}
+
+/// A small circular button that flips the Hydration widget between its default
+/// tile (emoji + title) and the progress-ring data face. Fires the shared
+/// BackgroundIntent, which Dart handles headlessly (no app launch needed).
+struct HydrationFlipButton: View {
+    var flipped: Bool
+    private let wid = "tool_hydration"
+
+    var body: some View {
+        #if canImport(AppIntents)
+        if #available(iOS 17.0, *) {
+            Button(intent: flipIntent()) { icon }
+                .buttonStyle(.plain)
+        } else { icon }
+        #else
+        icon
+        #endif
+    }
+
+    private var icon: some View {
+        Image(systemName: "arrow.2.squarepath")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(kHydrationAccent)
+            .padding(6)
+            .background(Circle().fill(Color.white.opacity(0.9)))
+    }
+
+    #if canImport(AppIntents)
+    @available(iOS 17.0, *)
+    private func flipIntent() -> BackgroundIntent {
+        let url = URL(string: "aiwellnesspal://hydration_flip?w=\(wid)")
+        return BackgroundIntent(url: url, appGroup: kWidgetAppGroup)
+    }
+    #endif
+}
+
+/// Water-fill progress ring (data face).
+private struct HydrationRing: View {
+    let entry: HydrationEntry
+    let textColor: Color
+
+    var body: some View {
+        let fraction = min(max(Double(entry.pct) / 100.0, 0), 1)
+        return VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(kHydrationAccent.opacity(0.15), lineWidth: 8)
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(kHydrationAccent,
+                            style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                VStack(spacing: 0) {
+                    Text("\(entry.pct)%")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(kHydrationAccent)
+                    Text("💧").font(.system(size: 12))
+                }
+            }
+            .frame(width: 74, height: 74)
+
+            Text("\(mlText(entry.consumedMl)) / \(mlText(entry.goalMl))")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(textColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    private func mlText(_ ml: Int) -> String {
+        ml >= 1000 ? String(format: "%.1fL", Double(ml) / 1000.0) : "\(ml)ml"
+    }
+}
+
+struct HydrationToolWidgetView: View {
+    var entry: HydrationEntry
+    private let wid = "tool_hydration"
+    private var textColor: Color { widgetTextColor(wid) }
+
+    private var base: Color {
+        widgetThemeIsDark(wid) ? Color(red: 0.118, green: 0.145, blue: 0.180) : Color.white
+    }
+    private var tintOpacity: Double { widgetThemeIsDark(wid) ? 0.30 : 0.16 }
+
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topLeading) {
+                HydrationFlipButton(flipped: entry.flipped).padding(6)
+            }
+            .overlay(alignment: .topTrailing) {
+                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
+                    .padding(6)
+            }
+            .modifier(HydrationBackground(base: base, tintOpacity: tintOpacity))
+            .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_hydration"))
+    }
+
+    // Default (not flipped) → the standard tool tile: emoji + title, identical
+    // to the other Life-toolkit widgets and what shows in the "Add Widget"
+    // gallery. Flipped → the live progress ring + consumed/goal. When no data
+    // has been synced yet, the ring face falls back to the default tile too.
+    @ViewBuilder
+    private var content: some View {
+        if entry.flipped && entry.hasData {
+            HydrationRing(entry: entry, textColor: textColor)
+        } else {
+            defaultTile
+        }
+    }
+
+    private var defaultTile: some View {
+        VStack(spacing: 8) {
+            Text("💧").font(.system(size: 40))
+            Text("Hydration Coach")
+                .font(.caption).bold()
+                .foregroundColor(textColor)
+                .multilineTextAlignment(.center)
+                .lineLimit(2).minimumScaleFactor(0.8)
+        }
+    }
+}
+
+private struct HydrationBackground: ViewModifier {
+    let base: Color
+    let tintOpacity: Double
+
+    @ViewBuilder private var fill: some View {
+        base.overlay(kHydrationAccent.opacity(tintOpacity))
+    }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.containerBackground(for: .widget) { fill }
+        } else {
+            content.background(fill)
+        }
+    }
+}
+
 struct HydrationToolWidget: Widget {
-    private let tool = LifeToolInfo(id: "hydration", emoji: "💧", label: "Hydration Coach", accent: Color(hex: 0x3FA9F5))
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "HydrationToolWidget", provider: LifeToolProvider(tool: tool)) { entry in
-            LifeToolWidgetView(tool: entry.tool)
+        StaticConfiguration(kind: "HydrationToolWidget", provider: HydrationProvider()) { entry in
+            HydrationToolWidgetView(entry: entry)
         }
         .configurationDisplayName("Hydration Coach")
-        .description("Open the Hydration Coach tool.")
+        .description("Tap the flip button to see today's water progress.")
         .supportedFamilies([.systemSmall])
     }
 }
