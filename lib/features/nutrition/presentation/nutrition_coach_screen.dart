@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../../widgets/ai_wellness_loader.dart';
 import '../domain/nutrition_analysis_service.dart';
 import '../domain/nutrition_models.dart';
 import 'barcode_scanner_screen.dart';
@@ -771,20 +772,37 @@ class _NutritionCoachScreenState extends State<NutritionCoachScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: const Column(
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Theme.of(dialogContext).colorScheme.surface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(color: kNutritionAccent),
-              SizedBox(height: 16),
-              Text('Analyzing your meal…',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              // Same AI + wellness animation used when generating wellness
+              // intentions and meal plans.
+              const AiWellnessLoader(color: kNutritionAccent, size: 160),
+              const SizedBox(height: 20),
+              Text(
+                'Analyzing your meal…',
+                style: Theme.of(dialogContext)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'AI is estimating the calories and macros from your description.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                    fontSize: 14),
+              ),
             ],
           ),
         ),

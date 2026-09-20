@@ -125,6 +125,11 @@ struct ToolRing: View {
     let centerBottom: String    // small text under it (emoji or label)
     let centerTopSize: CGFloat
     var scale: CGFloat = 1.0
+    /// Explicit color for the sub-label, tied to the widget's manual theme.
+    /// Required — never rely on the implicit `.primary`, which resolves against
+    /// the device system appearance (not our manual toggle) and turns the text
+    /// white on a dark-system device even when the widget is in light mode.
+    var subColor: Color = .primary
 
     var body: some View {
         let lineWidth = 8 * scale
@@ -148,7 +153,9 @@ struct ToolRing: View {
                     .foregroundColor(accent)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 if !centerBottom.isEmpty {
-                    Text(centerBottom).font(.system(size: 11 * scale))
+                    Text(centerBottom)
+                        .font(.system(size: 11 * scale))
+                        .foregroundColor(subColor)
                 }
             }
         }
@@ -230,7 +237,8 @@ struct NutritionToolWidgetView: View {
                     accent: kNutritionAccent, hasData: hasData,
                     centerTop: hasData ? "\(entry.calories)" : "🥗",
                     centerBottom: hasData ? "/ \(entry.goal) kcal" : "",
-                    centerTopSize: 20, scale: scale)
+                    centerTopSize: 20, scale: scale,
+                    subColor: widgetTextColor(wid))
                 if hasData {
                     HStack(spacing: 8 * scale) {
                         macro("P", entry.protein, entry.proteinGoal, scale)
@@ -331,12 +339,15 @@ struct MealPlannerToolWidgetView: View {
 
     @ViewBuilder private var content: some View {
         let scale = widgetScale(family)
+        // Only push the arrows below the theme toggle on the wider medium
+        // widget, where the up arrow would otherwise touch it. On small the
+        // compact centered layout is kept as-is.
+        let arrowTopInset: CGFloat = family == .systemMedium ? 34 : 0
         if entry.flipped {
             if entry.count > 0 && !entry.name.isEmpty {
-                HStack(alignment: .top, spacing: 4 * scale) {
-                    // The meal card — vertically centered in the row.
+                HStack(alignment: .center, spacing: 4 * scale) {
+                    // The meal card.
                     VStack(spacing: 4 * scale) {
-                        Spacer(minLength: 0)
                         Text(entry.type.uppercased())
                             .font(.system(size: 9 * scale, weight: .bold))
                             .foregroundColor(kMealAccent)
@@ -344,24 +355,21 @@ struct MealPlannerToolWidgetView: View {
                             .font(.system(size: 13 * scale, weight: .semibold))
                             .foregroundColor(widgetTextColor(wid))
                             .multilineTextAlignment(.center)
-                            .lineLimit(scale > 1.5 ? 5 : 3).minimumScaleFactor(0.7)
+                            .lineLimit(scale > 1.3 ? 5 : 3).minimumScaleFactor(0.7)
                         Text("\(entry.cal) kcal")
                             .font(.system(size: 11 * scale, weight: .bold))
                             .foregroundColor(widgetTextColor(wid))
                         Text("\(entry.index + 1) / \(entry.count)")
                             .font(.system(size: 9 * scale))
                             .foregroundColor(widgetTextColor(wid).opacity(0.6))
-                        Spacer(minLength: 0)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Up/down arrows — top-aligned and pushed below the
-                    // top-trailing theme toggle so the up arrow lines up under
-                    // it without touching, keeping even spacing between arrows.
+                    .frame(maxWidth: .infinity)
+                    // Up/down arrows to browse meals.
                     VStack(spacing: 10 * scale) {
                         mealArrow(systemName: "chevron.up", dir: -1, scale: scale)
                         mealArrow(systemName: "chevron.down", dir: 1, scale: scale)
                     }
-                    .padding(.top, 34)
+                    .padding(.top, arrowTopInset)
                     .padding(.trailing, 2)
                 }
                 .padding(.horizontal, 6)
@@ -492,7 +500,8 @@ struct CalorieBudgetToolWidgetView: View {
                     hasData: hasData,
                     centerTop: hasData ? "\(entry.remaining)" : "🔥",
                     centerBottom: hasData ? "kcal left" : "",
-                    centerTopSize: 22, scale: scale)
+                    centerTopSize: 22, scale: scale,
+                    subColor: widgetTextColor(wid))
                 if hasData {
                     Text("\(entry.consumed) eaten · \(entry.budget) budget")
                         .font(.system(size: 9 * scale, weight: .semibold))
@@ -593,7 +602,8 @@ struct PeriodTrackerToolWidgetView: View {
                     fraction: frac, accent: kPeriodAccent, hasData: hasData,
                     centerTop: hasData ? entry.emoji : "🌸",
                     centerBottom: hasData ? "Day \(entry.cycleDay)" : "",
-                    centerTopSize: 24, scale: scale)
+                    centerTopSize: 24, scale: scale,
+                    subColor: widgetTextColor(wid))
                 if hasData {
                     Text(entry.phase)
                         .font(.system(size: 11 * scale, weight: .bold))
