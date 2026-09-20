@@ -454,14 +454,16 @@ struct AIWellnessWidgetBundle: WidgetBundle {
     // WidgetBundleBuilder arity limit.
     @WidgetBundleBuilder
     private var lifeToolWidgets: some Widget {
+        // Live-data widgets first, then the simple shortcut tiles
+        // (Sleep, Meditation, Mindful Travel) last in the gallery.
+        HydrationToolWidget()
         NutritionToolWidget()
         MealPlannerToolWidget()
         CalorieBudgetToolWidget()
-        HydrationToolWidget()
-        SleepToolWidget()
-        MeditationToolWidget()
         PeriodTrackerToolWidget()
         WeightTrackerToolWidget()
+        SleepToolWidget()
+        MeditationToolWidget()
         MindfulTravelToolWidget()
     }
 }

@@ -217,10 +217,12 @@ struct NutritionToolWidgetView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topLeading) {
-                ToolFlipButton(widgetId: wid, kind: "NutritionToolWidget", accent: kNutritionAccent).padding(6)
+                ToolFlipButton(widgetId: wid, kind: "NutritionToolWidget", accent: kNutritionAccent)
+                    .padding(EdgeInsets(top: 3, leading: 3, bottom: 6, trailing: 6))
             }
             .overlay(alignment: .topTrailing) {
-                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid).padding(6)
+                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
+                    .padding(EdgeInsets(top: 3, leading: 6, bottom: 6, trailing: 3))
             }
             .modifier(LiveToolBackgroundModifier(accent: kNutritionAccent, widgetId: wid))
             .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_nutrition"))
@@ -328,10 +330,12 @@ struct MealPlannerToolWidgetView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topLeading) {
-                ToolFlipButton(widgetId: wid, kind: "MealPlannerToolWidget", accent: kMealAccent).padding(6)
+                ToolFlipButton(widgetId: wid, kind: "MealPlannerToolWidget", accent: kMealAccent)
+                    .padding(EdgeInsets(top: 3, leading: 3, bottom: 6, trailing: 6))
             }
             .overlay(alignment: .topTrailing) {
-                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid).padding(6)
+                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
+                    .padding(EdgeInsets(top: 3, leading: 6, bottom: 6, trailing: 3))
             }
             .modifier(LiveToolBackgroundModifier(accent: kMealAccent, widgetId: wid))
             .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_meal_planner"))
@@ -478,10 +482,12 @@ struct CalorieBudgetToolWidgetView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topLeading) {
-                ToolFlipButton(widgetId: wid, kind: "CalorieBudgetToolWidget", accent: kCalorieAccent).padding(6)
+                ToolFlipButton(widgetId: wid, kind: "CalorieBudgetToolWidget", accent: kCalorieAccent)
+                    .padding(EdgeInsets(top: 3, leading: 3, bottom: 6, trailing: 6))
             }
             .overlay(alignment: .topTrailing) {
-                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid).padding(6)
+                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
+                    .padding(EdgeInsets(top: 3, leading: 6, bottom: 6, trailing: 3))
             }
             .modifier(LiveToolBackgroundModifier(accent: kCalorieAccent, widgetId: wid))
             .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_calorie_budget"))
@@ -582,10 +588,12 @@ struct PeriodTrackerToolWidgetView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topLeading) {
-                ToolFlipButton(widgetId: wid, kind: "PeriodTrackerToolWidget", accent: kPeriodAccent).padding(6)
+                ToolFlipButton(widgetId: wid, kind: "PeriodTrackerToolWidget", accent: kPeriodAccent)
+                    .padding(EdgeInsets(top: 3, leading: 3, bottom: 6, trailing: 6))
             }
             .overlay(alignment: .topTrailing) {
-                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid).padding(6)
+                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
+                    .padding(EdgeInsets(top: 3, leading: 6, bottom: 6, trailing: 3))
             }
             .modifier(LiveToolBackgroundModifier(accent: kPeriodAccent, widgetId: wid))
             .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_period_tracker"))
@@ -690,10 +698,12 @@ struct WeightTrackerToolWidgetView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topLeading) {
-                ToolFlipButton(widgetId: wid, kind: "WeightTrackerToolWidget", accent: kWeightAccent).padding(6)
+                ToolFlipButton(widgetId: wid, kind: "WeightTrackerToolWidget", accent: kWeightAccent)
+                    .padding(EdgeInsets(top: 3, leading: 3, bottom: 6, trailing: 6))
             }
             .overlay(alignment: .topTrailing) {
-                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid).padding(6)
+                WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
+                    .padding(EdgeInsets(top: 3, leading: 6, bottom: 6, trailing: 3))
             }
             .modifier(LiveToolBackgroundModifier(accent: kWeightAccent, widgetId: wid))
             .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_weight_tracker"))

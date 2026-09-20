@@ -288,11 +288,12 @@ struct HydrationToolWidgetView: View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .topLeading) {
-                HydrationFlipButton(flipped: entry.flipped).padding(6)
+                HydrationFlipButton(flipped: entry.flipped)
+                    .padding(EdgeInsets(top: 3, leading: 3, bottom: 6, trailing: 6))
             }
             .overlay(alignment: .topTrailing) {
                 WidgetThemeToggleButton(isDark: widgetThemeIsDark(wid), widgetId: wid)
-                    .padding(6)
+                    .padding(EdgeInsets(top: 3, leading: 6, bottom: 6, trailing: 3))
             }
             .modifier(HydrationBackground(base: base, tintOpacity: tintOpacity))
             .widgetURL(URL(string: "aiwellnesspal://open?homeWidget=1&screen=tool_hydration"))
