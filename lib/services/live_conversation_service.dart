@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
@@ -638,6 +639,54 @@ class LiveConversationService extends ChangeNotifier {
 
   LiveSession? _session;
 
+  // ---------------------------------------------------------------------------
+  // Voice preview (Settings)
+  // ---------------------------------------------------------------------------
+
+  /// The voice name currently being previewed, or null if no preview is active.
+  /// Used by the Settings UI to show a spinner on the active tile.
+  String? _previewingVoice;
+  String? get previewingVoice => _previewingVoice;
+
+  /// Opens a minimal, mic-free Live session with [voiceName], sends a fixed
+  /// greeting so the user can hear the voice, plays the reply, then tears the
+  /// session down automatically.
+  ///
+  /// No-ops silently if a real conversation is already active, or if a preview
+  /// for [voiceName] is already running. [onDone] fires when the preview ends
+  /// (whether successfully or on error).
+  /// 
+  /// NOTE: Live voice previews are currently disabled as the Live API is
+  /// designed for interactive conversations, not one-shot previews.
+  Future<void> previewVoice(String voiceName, {VoidCallback? onDone}) async {
+    // Live voice previews are not supported - the Live API is designed for
+    // interactive conversations with continuous audio input/output.
+    debugPrint('LiveConversationService: Live voice previews are not supported');
+    onDone?.call();
+    return;
+  }
+
+  LiveSession? _previewSession;
+
+  /// Stops any in-progress voice preview immediately.
+  Future<void> cancelPreview() => _cancelPreview();
+
+  Future<void> _cancelPreview({String? voiceName}) async {
+    if (voiceName != null && _previewingVoice != voiceName) return;
+    _previewingVoice = null;
+    final s = _previewSession;
+    _previewSession = null;
+    try {
+      await _audioIO?.stopPlayback();
+      await s?.close();
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversation start / stop
+  // ---------------------------------------------------------------------------
+
   /// Starts a real-time conversation session.
   ///
   /// [isPremium] must be true — the caller (UI) is responsible for showing the
@@ -705,7 +754,7 @@ class LiveConversationService extends ChangeNotifier {
       final liveModel = ai.liveGenerativeModel(
         model: resolvedModel,
         liveGenerationConfig: LiveGenerationConfig(
-          responseModalities: [ResponseModalities.audio],
+          responseModalities: [ResponseModalities.audio, ResponseModalities.text],
           // The pal's voice (a Gemini prebuilt voice name, chosen in
           // Settings → AI Voice). Only voiceName is set — deliberately NOT
           // languageCode: pinning a language here previously made the Live

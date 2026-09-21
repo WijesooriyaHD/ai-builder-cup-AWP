@@ -69,7 +69,7 @@ const List<AiVoiceOption> kAiVoices = [
     pitch: 0.9,
     rate: 0.46,
     icon: Icons.terrain_rounded,
-    isPremium: true,
+    isPremium: false,
   ),
 ];
 

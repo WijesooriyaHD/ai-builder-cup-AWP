@@ -911,84 +911,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          try {
-            appState.setLivePalVoice(voice.id);
-          } on PremiumFeatureException {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${voice.name} is a Premium voice.'),
-              ),
-            );
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? primary.withOpacity(0.1)
-                : (isDark
-                    ? Colors.white.withOpacity(0.04)
-                    : Colors.grey.shade50),
+    // Listen to the service for preview state (spinner + stop button).
+    return Consumer<LiveConversationService>(
+      builder: (context, liveService, _) {
+        final isPreviewing = liveService.previewingVoice == voice.id;
+        final otherPreviewing = !isPreviewing &&
+            liveService.previewingVoice != null;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: InkWell(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? primary : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(voice.icon, color: primary, size: 22),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          voice.name,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 15),
+            onTap: isLocked
+                ? null
+                : () {
+                    try {
+                      appState.setLivePalVoice(voice.id);
+                    } on PremiumFeatureException {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('${voice.name} is a Premium voice.'),
                         ),
-                        if (isLocked) ...[
-                          const SizedBox(width: 8),
-                          Icon(Icons.lock_rounded,
-                              size: 13,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withOpacity(0.4)),
-                        ],
+                      );
+                    }
+                  },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? primary.withOpacity(0.1)
+                    : (isDark
+                        ? Colors.white.withOpacity(0.04)
+                        : Colors.grey.shade50),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isSelected ? primary : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(voice.icon, color: primary, size: 22),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              voice.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            if (isLocked) ...[
+                              const SizedBox(width: 8),
+                              Icon(Icons.lock_rounded,
+                                  size: 13,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withOpacity(0.4)),
+                            ],
+                          ],
+                        ),
+                        Text(
+                          isPreviewing
+                              ? 'Preview not available…'
+                              : 'Test this voice during live conversations',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isPreviewing
+                                ? primary
+                                : isDark
+                                    ? Colors.white60
+                                    : Colors.grey.shade600,
+                          ),
+                        ),
                       ],
                     ),
-                    Text(
-                      voice.description,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? Colors.white60 : Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  // No preview button for Live voices - they can only be tested during conversations
+                  const SizedBox(width: 4),
+                  if (isSelected)
+                    Icon(Icons.check_circle_rounded, color: primary, size: 22),
+                ],
               ),
-              if (isSelected)
-                Icon(Icons.check_circle_rounded, color: primary, size: 22),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -1010,7 +1029,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Expanded(
               child: Text(
-                'Live chat Pal',
+                'Live Chat Pal',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
