@@ -851,7 +851,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 8),
         Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
         const SizedBox(height: 8),
+        _buildLiveChatPalToggle(context, appState),
+        const SizedBox(height: 16),
+        Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
+        const SizedBox(height: 8),
         _buildForceEnglishToggle(context, appState),
+      ],
+    );
+  }
+
+  /// "Live chat Pal" — when on, the mic button opens the real-time streaming
+  /// conversation pal instead of the default tap-to-speak pal. Off by default.
+  Widget _buildLiveChatPalToggle(BuildContext context, AppState appState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final enabled = appState.liveChatPal;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Live chat Pal',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+            Switch.adaptive(
+              value: enabled,
+              onChanged: (value) => appState.setLiveChatPal(value),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, right: 48),
+          child: Text(
+            enabled
+                ? 'Tapping the mic starts a real-time conversation — talk '
+                    'naturally and your pal responds as you speak.'
+                : 'Tapping the mic uses the standard pal: it listens, then '
+                    'replies. Turn this on for a flowing, real-time chat.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                  height: 1.4,
+                ),
+          ),
+        ),
       ],
     );
   }

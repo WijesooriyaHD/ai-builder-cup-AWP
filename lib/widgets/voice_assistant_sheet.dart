@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 
-import '../config/feature_flags.dart';
-import 'conversation_mode_sheet.dart';
+import 'dart:ui' as ui;
+
+import '../services/live_conversation_service.dart';
+import 'live_pal_session.dart';
 import '../models/voice_command.dart';
 import '../models/check_in.dart';
 import '../models/wellness_enums.dart';
@@ -50,19 +52,49 @@ class VoiceAssistantSheet extends StatefulWidget {
   State<VoiceAssistantSheet> createState() => _VoiceAssistantSheetState();
 }
 
-class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
+class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
+    with LivePalSessionMixin<VoiceAssistantSheet> {
   late VoiceCommandService _voiceService;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _debugInputController = TextEditingController();
+
+  /// Which pal this sheet is hosting, decided once when the sheet opens from
+  /// the user's "Live chat Pal" setting. Captured at open time so flipping the
+  /// setting mid-session can't swap engines underneath a running conversation.
+  late final bool _isLivePal;
+
+  /// The Wellness Pal sheet stays open after a Live session ends so the user can
+  /// tap the orb to start a new one.
+  @override
+  bool get popHostOnSessionEnd => false;
+
+  @override
+  void onLiveSessionEnded() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void initState() {
     super.initState();
     _voiceService = Provider.of<VoiceCommandService>(context, listen: false);
+    final appState = Provider.of<AppState>(context, listen: false);
+    // Live pal only when the setting is on AND the feature is available.
+    _isLivePal = appState.liveChatPal && LiveConversationService.isAvailable;
+
+    if (_isLivePal) {
+      // Release the tap-to-speak mic/TTS before the Live pipeline captures, so
+      // two mic listeners are never open on the loudspeaker at once (which
+      // makes the model's audio echo badly).
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _voiceService.shutdownForHandoff();
+        if (mounted) await startLivePalSession();
+      });
+      return;
+    }
+
     _voiceService.addListener(_onServiceUpdate);
     // Honor the user's saved voice preference and Premium status for this
     // session (the assistant tailors upsell hints for free users).
-    final appState = Provider.of<AppState>(context, listen: false);
     _voiceService.setVoice(appState.aiVoice);
     _voiceService.isPremium = appState.isPro;
     _voiceService.initialize().then((_) {
@@ -75,11 +107,43 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
 
   @override
   void dispose() {
-    _voiceService.removeListener(_onServiceUpdate);
+    if (_isLivePal) {
+      // Stop any still-running Live session and hand the mic back to the
+      // tap-to-speak assistant (suspended by shutdownForHandoff above).
+      _liveService?.stop();
+      _voiceService.resumeAfterHandoff();
+    } else {
+      _voiceService.removeListener(_onServiceUpdate);
+    }
     _scrollController.dispose();
     _debugInputController.dispose();
     super.dispose();
   }
+
+  /// Captured in didChangeDependencies so dispose() can stop the session
+  /// without touching `context`.
+  LiveConversationService? _liveService;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_isLivePal) _liveService = context.read<LiveConversationService>();
+  }
+
+  /// Starts (or restarts) the Live conversation from a VoiceOrb tap.
+  Future<void> _restartLiveSession() async {
+    final service = context.read<LiveConversationService>();
+    // Only restart from a settled state; mid-session taps are ignored.
+    if (service.state == LiveConversationState.connecting ||
+        service.state == LiveConversationState.active) {
+      return;
+    }
+    await startLivePalSession();
+    if (mounted) setState(() {});
+  }
+
+  /// The manual End button for the Live pal. Keeps the sheet open.
+  Future<void> _endLiveSession() => finalizeLivePalSession();
 
   /// Submits the typed debug phrase through the voice pipeline.
   void _submitDebugText() {
@@ -688,40 +752,35 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
                   ),
                 ),
                 const Spacer(),
-                // Premium real-time "Conversation Mode" entry (flag-gated).
-                // Hidden entirely unless the feature flag is on; Free-user
-                // gating is handled inside ConversationModeSheet.open.
-                if (FeatureFlags.liveConversationMode)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        // Close this sheet, then open Conversation Mode on the
-                        // root navigator (captured before popping).
-                        final rootContext =
-                            Navigator.of(context, rootNavigator: true).context;
-                        final nav = Navigator.of(context);
-                        // CRITICAL: fully release the Wellness Assistant's mic
-                        // (speech_to_text) and TTS before Conversation Mode's
-                        // `record` capture starts. Otherwise both mic listeners
-                        // are open on the loudspeaker at once, which makes the
-                        // model's audio echo badly.
-                        await _voiceService.shutdownForHandoff();
-                        if (nav.canPop()) nav.pop();
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          ConversationModeSheet.open(rootContext);
-                        });
-                      },
-                      icon: const Icon(Icons.graphic_eq_rounded, size: 18),
-                      label: const Text('Talk'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: theme.colorScheme.primary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                      ),
+                // A quiet "Live" marker so it's clear which pal is active. The
+                // Live pal is selected in Settings → AI Voice, so there's no
+                // longer a "Talk" button to switch modes here.
+                if (_isLivePal)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.graphic_eq_rounded,
+                            size: 13, color: theme.colorScheme.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Live',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                if (_voiceService.isInCheckInFlow)
+                if (!_isLivePal && _voiceService.isInCheckInFlow)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -743,28 +802,219 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet> {
 
           const Divider(height: 1),
 
-          // Recent Live "Talk" conversations (max 3) as tappable cards.
-          _buildRecentConversations(theme, isDark),
+          // The Live pal has its own body (captions + orb + Interrupt/End);
+          // the default pal keeps the message-list layout.
+          if (_isLivePal)
+            Expanded(child: _buildLivePalBody(theme, isDark))
+          else ...[
+            // Recent Live "Talk" conversations (max 3) as tappable cards.
+            _buildRecentConversations(theme, isDark),
 
-          // Conversation messages
-          Expanded(
-            child: _voiceService.messages.isEmpty
-                ? _buildEmptyState(theme)
-                : _buildMessageList(theme, isDark),
-          ),
+            // Conversation messages
+            Expanded(
+              child: _voiceService.messages.isEmpty
+                  ? _buildEmptyState(theme)
+                  : _buildMessageList(theme, isDark),
+            ),
 
-          // Live transcription
-          if (_voiceService.currentWords.isNotEmpty &&
-              _voiceService.state == VoiceAssistantState.listening)
-            _buildTranscriptionBar(theme),
+            // Live transcription
+            if (_voiceService.currentWords.isNotEmpty &&
+                _voiceService.state == VoiceAssistantState.listening)
+              _buildTranscriptionBar(theme),
 
-          // Debug-only text input (no microphone needed — for Simulator
-          // testing of the parse → Gemini reply → response pipeline).
-          if (kDebugMode) _buildDebugInput(theme, isDark),
+            // Debug-only text input (no microphone needed — for Simulator
+            // testing of the parse → Gemini reply → response pipeline).
+            if (kDebugMode) _buildDebugInput(theme, isDark),
 
-          // Orb + controls
-          _buildOrbSection(theme, isDark),
+            // Orb + controls
+            _buildOrbSection(theme, isDark),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// Body for the Live chat pal.
+  ///
+  /// While a conversation is running the orb steps aside and the live captions
+  /// take over; Recent Conversations is blurred so it doesn't compete for
+  /// attention. Once the session ends the orb returns and can be tapped to
+  /// start again.
+  Widget _buildLivePalBody(ThemeData theme, bool isDark) {
+    return Consumer<LiveConversationService>(
+      builder: (context, service, _) {
+        final state = service.state;
+        final isConversing = state == LiveConversationState.connecting ||
+            state == LiveConversationState.active ||
+            state == LiveConversationState.closing;
+        // Interrupt/End only make sense while a session is live.
+        final canInterrupt = state == LiveConversationState.active;
+        final canEnd = isConversing;
+
+        return Column(
+          children: [
+            // Recent conversations, blurred + dimmed while talking.
+            _buildBlurredWhenActive(
+              blurred: isConversing,
+              child: _buildRecentConversations(theme, isDark),
+            ),
+
+            Expanded(
+              child: isConversing
+                  // Talking: captions only, centered.
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _LiveStatusLabel(state: state),
+                          const SizedBox(height: 10),
+                          _LiveReconnectingHint(visible: service.isStalled),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              reverse: true,
+                              child: _LiveCaptions(
+                                text: service.currentReply,
+                                placeholder: _liveCaptionPlaceholder(state),
+                                isDark: isDark,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  // Idle/ended/error: the orb invites a (re)start.
+                  : _buildLiveOrbIdle(theme, service),
+            ),
+
+            // Interrupt + End, side by side, towards the bottom.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: canInterrupt ? service.interrupt : null,
+                      icon: const Icon(Icons.pan_tool_alt_rounded, size: 18),
+                      label: const Text('Interrupt'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: canEnd ? _endLiveSession : null,
+                      icon: const Icon(Icons.call_end_rounded, size: 18),
+                      label: const Text('End'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red.shade400,
+                        disabledBackgroundColor:
+                            theme.colorScheme.onSurface.withOpacity(0.12),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The idle/ended Live view: a tappable orb plus the "Tap to speak" hint.
+  Widget _buildLiveOrbIdle(ThemeData theme, LiveConversationService service) {
+    final isError = service.state == LiveConversationState.error;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              isError ? 'Something went wrong' : 'Ready',
+              style: GoogleFonts.dmSans(
+                fontSize: 13,
+                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _restartLiveSession,
+              child: VoiceOrb(
+                // Idle visual — the Live pal isn't capturing yet.
+                state: VoiceAssistantState.idle,
+                size: 130,
+                primaryColor: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Tap to speak',
+              style: GoogleFonts.dmSans(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withOpacity(0.4),
+              ),
+            ),
+            if (isError && service.lastError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                service.lastError!,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  color: theme.colorScheme.error.withOpacity(0.8),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _liveCaptionPlaceholder(LiveConversationState state) {
+    switch (state) {
+      case LiveConversationState.connecting:
+        return 'Connecting…';
+      case LiveConversationState.closing:
+        return 'Wrapping up…';
+      case LiveConversationState.active:
+        return 'Listening… just start talking.';
+      default:
+        return '';
+    }
+  }
+
+  /// Wraps [child] in a blur + dim while [blurred], so it recedes during an
+  /// active conversation without changing the layout. Ignores pointers while
+  /// blurred so a stray tap can't open a card mid-conversation.
+  Widget _buildBlurredWhenActive({
+    required bool blurred,
+    required Widget child,
+  }) {
+    return IgnorePointer(
+      ignoring: blurred,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: blurred ? 0.35 : 1.0,
+        child: blurred
+            ? ImageFiltered(
+                imageFilter: ui.ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+                child: child,
+              )
+            : child,
       ),
     );
   }
@@ -1186,6 +1436,136 @@ class _ConversationCardState extends State<_ConversationCard> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The Live pal's state caption ("Connecting…", "Listening…", "Wrapping up…").
+class _LiveStatusLabel extends StatelessWidget {
+  const _LiveStatusLabel({required this.state});
+
+  final LiveConversationState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final String label;
+    switch (state) {
+      case LiveConversationState.connecting:
+        label = 'Connecting…';
+        break;
+      case LiveConversationState.active:
+        label = 'Listening…';
+        break;
+      case LiveConversationState.closing:
+        label = 'Wrapping up…';
+        break;
+      case LiveConversationState.error:
+        label = 'Something went wrong';
+        break;
+      case LiveConversationState.idle:
+        label = 'Ready';
+        break;
+    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: Text(
+        label,
+        key: ValueKey(label),
+        style: GoogleFonts.dmSans(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: theme.colorScheme.onSurface.withOpacity(0.5),
+        ),
+      ),
+    );
+  }
+}
+
+/// A subtle "Reconnecting…" pill shown when the Live session appears stalled on
+/// the network. Collapses to zero height when hidden.
+class _LiveReconnectingHint extends StatelessWidget {
+  const _LiveReconnectingHint({required this.visible});
+
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.tertiary;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      child: visible
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(color),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Reconnecting… check your connection',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : const SizedBox(width: double.infinity),
+    );
+  }
+}
+
+/// Live captions of the pal's current reply — the text widget that replaces the
+/// orb while a conversation is running.
+class _LiveCaptions extends StatelessWidget {
+  const _LiveCaptions({
+    required this.text,
+    required this.placeholder,
+    required this.isDark,
+  });
+
+  final String text;
+  final String placeholder;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasText = text.trim().isNotEmpty;
+    final shown = hasText ? text.trim() : placeholder;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Text(
+        shown,
+        key: ValueKey(shown),
+        textAlign: TextAlign.center,
+        style: GoogleFonts.dmSans(
+          fontSize: hasText ? 18 : 15,
+          height: 1.5,
+          fontWeight: hasText ? FontWeight.w500 : FontWeight.normal,
+          color: theme.colorScheme.onSurface
+              .withOpacity(hasText ? 0.88 : 0.45),
         ),
       ),
     );

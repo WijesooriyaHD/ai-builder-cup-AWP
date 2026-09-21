@@ -47,6 +47,9 @@ class StorageService {
   /// language the user speaks. Off by default (the pal mirrors the user).
   static const String _forceEnglishVoiceKey =
       'aiwellnesspal_force_english_voice';
+  /// When true, the mic FAB opens the real-time Live chat pal instead of the
+  /// default tap-to-speak pal. Off by default.
+  static const String _liveChatPalKey = 'aiwellnesspal_live_chat_pal';
   static const String _preferredMethodsKey = 'aiwellnesspal_preferred_methods';
   static const String _periodDataKey = 'aiwellnesspal_period_data';
   static const String _weightDataKey = 'aiwellnesspal_weight_data';
@@ -295,6 +298,7 @@ class StorageService {
     String? instagram,
     String? aiVoice,
     bool? forceEnglishVoice,
+    bool? liveChatPal,
     List<String>? preferredMethods,
     bool syncToCloud = true,
   }) async {
@@ -312,6 +316,9 @@ class StorageService {
     if (aiVoice != null) await prefs.setString(_aiVoiceKey, aiVoice);
     if (forceEnglishVoice != null) {
       await prefs.setBool(_forceEnglishVoiceKey, forceEnglishVoice);
+    }
+    if (liveChatPal != null) {
+      await prefs.setBool(_liveChatPalKey, liveChatPal);
     }
     if (preferredMethods != null) {
       await prefs.setStringList(_preferredMethodsKey, preferredMethods);
@@ -349,6 +356,7 @@ class StorageService {
         if (forceEnglishVoice != null) {
           data['force_english_voice'] = forceEnglishVoice;
         }
+        if (liveChatPal != null) data['live_chat_pal'] = liveChatPal;
         if (preferredMethods != null) data['preferred_methods'] = preferredMethods;
 
         await _db
@@ -415,6 +423,8 @@ class StorageService {
       'aiVoice': prefs.getString(_aiVoiceKey) ?? 'default',
       // Default OFF: the pal mirrors whatever language the user speaks.
       'forceEnglishVoice': prefs.getBool(_forceEnglishVoiceKey) ?? false,
+      // Default OFF: the mic FAB opens the default tap-to-speak pal.
+      'liveChatPal': prefs.getBool(_liveChatPalKey) ?? false,
       'preferredMethods': prefs.getStringList(_preferredMethodsKey) ?? <String>[],
     };
 
@@ -427,6 +437,8 @@ class StorageService {
       settings['aiVoice'] = cloudProfile['ai_voice'] ?? settings['aiVoice'];
       settings['forceEnglishVoice'] =
           cloudProfile['force_english_voice'] ?? settings['forceEnglishVoice'];
+      settings['liveChatPal'] =
+          cloudProfile['live_chat_pal'] ?? settings['liveChatPal'];
       settings['isWinterMode'] =
           cloudProfile['is_winter_mode'] ?? settings['isWinterMode'];
       settings['showMotivation'] =

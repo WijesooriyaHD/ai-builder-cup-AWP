@@ -99,6 +99,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String? _instagramUsername;
   String _aiVoice = 'default';
   bool _forceEnglishVoice = false;
+  bool _liveChatPal = false;
   List<String> _preferredMethods = const [];
   
   List<Dream> get dreams => _dreams;
@@ -130,6 +131,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// the user speaks another language. When false (the default) the pal mirrors
   /// whatever language the user is speaking.
   bool get forceEnglishVoice => _forceEnglishVoice;
+
+  /// When true, the mic button opens the real-time Live chat pal (streaming
+  /// voice conversation). When false (the default) it opens the standard
+  /// tap-to-speak pal.
+  bool get liveChatPal => _liveChatPal;
   /// Stable ids of the user's preferred wellness methods (see kWellnessMethods).
   /// Drives Today's Plan personalization. May be empty for pre-existing users.
   List<String> get preferredMethods => List.unmodifiable(_preferredMethods);
@@ -422,6 +428,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Switches the mic button between the Live chat pal (true) and the default
+  /// tap-to-speak pal (false, the default).
+  void setLiveChatPal(bool value) {
+    if (_liveChatPal == value) return;
+    _liveChatPal = value;
+    _saveSettings();
+    notifyListeners();
+  }
+
   Future<void> _saveSettings() async {
     debugPrint('💾 _saveSettings: aiVoice=$_aiVoice, '
         'cloudSettingsLoaded=$_cloudSettingsLoaded');
@@ -436,6 +451,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       instagram: _instagramUsername,
       aiVoice: _aiVoice,
       forceEnglishVoice: _forceEnglishVoice,
+      liveChatPal: _liveChatPal,
       preferredMethods: _preferredMethods,
       // Don't push settings to the cloud until the authoritative cloud values
       // have been loaded, so a transient pre-sync default can't overwrite them.
@@ -1479,6 +1495,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _instagramUsername = settings['instagram'];
     _aiVoice = settings['aiVoice'] as String? ?? 'default';
     _forceEnglishVoice = settings['forceEnglishVoice'] as bool? ?? false;
+    _liveChatPal = settings['liveChatPal'] as bool? ?? false;
     final methods = settings['preferredMethods'];
     if (methods is List) {
       _preferredMethods = methods.map((e) => e.toString()).toList();

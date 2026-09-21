@@ -10,6 +10,7 @@ import '../screens/habit_builder_screen.dart';
 import '../screens/wellness_reflection_screen.dart';
 import '../screens/settings_screen.dart';
 import '../services/voice_command_service.dart';
+import '../services/live_conversation_service.dart';
 import '../services/app_navigation_service.dart';
 import '../services/life_tool_registry.dart';
 import '../main.dart' show globalNavigatorKey;
@@ -219,9 +220,14 @@ class _MainWrapperState extends State<MainWrapper> {
 
   Widget _buildVoiceFab(BuildContext context) {
     final theme = Theme.of(context);
-    return Consumer<VoiceCommandService>(
-      builder: (context, voiceService, _) {
-        final isActive = voiceService.state != VoiceAssistantState.idle;
+    // Watch BOTH pals so the mic reflects whichever one is running (the Live
+    // pal is selected in Settings → AI Voice).
+    return Consumer2<VoiceCommandService, LiveConversationService>(
+      builder: (context, voiceService, liveService, _) {
+        final isActive =
+            voiceService.state != VoiceAssistantState.idle ||
+                liveService.state == LiveConversationState.connecting ||
+                liveService.state == LiveConversationState.active;
         return Padding(
           padding: const EdgeInsets.only(bottom: 80),
           child: FloatingActionButton(
