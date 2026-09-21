@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
+import 'ai_models.dart';
 import 'content_safety_filter.dart';
 
 /// Context passed to [TravelWellnessService] when requesting guidance.
@@ -38,7 +39,7 @@ class TravelWellnessContext {
 /// jet-lag recovery, movement, local nature, and mindful presence — all
 /// grounded in the destination name the user typed.
 class TravelWellnessService {
-  static const String _modelId = 'gemini-2.5-flash';
+  static const String _modelId = kGeminiFlashModel;
   static const int _timeoutSeconds = 15;
 
   FirebaseAI? _override;
@@ -47,7 +48,7 @@ class TravelWellnessService {
   TravelWellnessService({FirebaseAI? ai}) : _override = ai;
 
   FirebaseAI get _ai =>
-      _override ??= (_lazy ??= FirebaseAI.vertexAI());
+      _override ??= (_lazy ??= FirebaseAI.agentPlatform());
 
   // ---------------------------------------------------------------------------
   // Public API

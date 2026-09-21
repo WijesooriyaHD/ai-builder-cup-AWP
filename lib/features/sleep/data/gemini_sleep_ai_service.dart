@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../services/ai_models.dart';
 import '../../../services/content_safety_filter.dart';
 import '../domain/sleep_ai_service.dart';
 import '../domain/sleep_models.dart';
@@ -13,7 +14,7 @@ import '../domain/sleep_models.dart';
 /// is unavailable. Only structured, privacy-safe context is sent — no
 /// identifiers, tokens, or personal details.
 class GeminiSleepAIService implements SleepAIService {
-  static const String _modelId = 'gemini-2.5-flash';
+  static const String _modelId = kGeminiFlashModel;
   static const int _timeoutSeconds = 15;
 
   FirebaseAI? _override;
@@ -21,7 +22,7 @@ class GeminiSleepAIService implements SleepAIService {
 
   GeminiSleepAIService({FirebaseAI? ai}) : _override = ai;
 
-  FirebaseAI get _ai => _override ??= (_lazy ??= FirebaseAI.vertexAI());
+  FirebaseAI get _ai => _override ??= (_lazy ??= FirebaseAI.agentPlatform());
 
   @override
   Future<SleepInsight> analyze(SleepAnalysisRequest request) async {

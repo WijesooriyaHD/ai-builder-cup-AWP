@@ -12,6 +12,7 @@ import '../models/voice_command.dart';
 import '../models/wellness_enums.dart';
 import '../models/wellness_intention.dart';
 import '../models/wellness_method.dart';
+import 'ai_models.dart';
 import 'content_safety_filter.dart';
 
 /// Structured result of summarizing a Live voice conversation into a saveable
@@ -31,11 +32,14 @@ class ConversationSummary {
 }
 
 /// Service that generates AI-powered wellness content using Firebase AI Logic
-/// (Vertex AI) with the Gemini 2.5 Flash model.
+/// on the Agent Platform (Vertex) backend with the Gemini 3.5 Flash model
+/// (see [kGeminiFlashModel]).
 ///
-/// Calls the model directly from the client via `FirebaseAI.vertexAI()` — no
-/// Gemini API key and no Gemini Developer API. Requests are protected by the
-/// Firebase AI Logic proxy (App Check / Firebase Auth).
+/// Calls the model directly from the client via `FirebaseAI.agentPlatform()`
+/// (location `global`, where the Gemini 3.x models are served — `vertexAI()`
+/// defaulted to `us-central1`, where 3.x models return "model not found").
+/// No Gemini API key and no Gemini Developer API: requests stay protected by
+/// the Firebase AI Logic proxy (App Check / Firebase Auth).
 ///
 /// All responses are passed through [ContentSafetyFilter.sanitize] before
 /// being returned to the caller.
@@ -43,7 +47,8 @@ class ConversationSummary {
 /// Requirements: 1.8, 2.8, 3.12, 8.2, 8.4, 8.8
 class AIService {
   /// The Gemini model ID used for all generation, via Vertex AI.
-  static const String _modelId = 'gemini-2.5-flash';
+  /// Sourced from the central [kGeminiFlashModel] config (Gemini 3.8 Flash).
+  static const String _modelId = kGeminiFlashModel;
 
   static const int _planTimeoutSeconds = 20;
   static const int _promptTimeoutSeconds = 10;
@@ -77,7 +82,7 @@ class AIService {
   /// with App Check and Auth auto-wired by the SDK (firebase_ai 4.0.0+).
   AIService({FirebaseAI? ai})
       : _ai = ai ??
-            FirebaseAI.vertexAI();
+            FirebaseAI.agentPlatform();
 
   /// Builds a [GenerativeModel] for the Gemini 2.5 Flash model.
   ///

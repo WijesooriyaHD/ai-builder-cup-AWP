@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../services/ai_models.dart';
 import '../../../services/content_safety_filter.dart';
 import '../domain/hydration_coach_service.dart';
 import '../domain/hydration_models.dart';
@@ -11,7 +12,7 @@ import '../domain/hydration_models.dart';
 /// [HydrationCoachService] backed by Gemini 2.5 Flash (Firebase Vertex AI) for
 /// richer phrasing, with deterministic heuristics that always work offline.
 class GeminiHydrationCoachService implements HydrationCoachService {
-  static const String _modelId = 'gemini-2.5-flash';
+  static const String _modelId = kGeminiFlashModel;
   static const int _timeoutSeconds = 15;
 
   FirebaseAI? _aiOverride;
@@ -21,7 +22,7 @@ class GeminiHydrationCoachService implements HydrationCoachService {
 
   /// Lazily created so the pure-heuristic paths (e.g. calculateGoal) work
   /// without Firebase being initialized (also keeps unit tests light).
-  FirebaseAI get _ai => _aiOverride ??= (_lazyAi ??= FirebaseAI.vertexAI());
+  FirebaseAI get _ai => _aiOverride ??= (_lazyAi ??= FirebaseAI.agentPlatform());
 
   // ---------------------------------------------------------------------------
   // Goal calculation (pure heuristic — reliable, instant).

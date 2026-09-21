@@ -4,6 +4,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/feature_flags.dart';
+import 'ai_models.dart';
 
 /// Lifecycle of a real-time Gemini Live conversation.
 enum LiveConversationState {
@@ -94,9 +95,9 @@ typedef LiveToolHandler = Future<Map<String, Object?>> Function(
 /// - Intentionally separate from `VoiceCommandService` so the shipping
 ///   command-and-control assistant is never destabilized by this experiment.
 ///
-/// IMPORTANT backend note: in the installed `firebase_ai` (2.3.0),
-/// `liveGenerativeModel` is only supported on the **Vertex AI** backend (it
-/// throws on the Developer API backend), so this uses `FirebaseAI.vertexAI()`
+/// IMPORTANT backend note: `liveGenerativeModel` is only supported on the
+/// **Agent Platform (Vertex)** backend (it throws on the Developer API
+/// backend), so this uses `FirebaseAI.agentPlatform()` (location `global`)
 /// with App Check — matching how [AIService] is wired. (Newer SDK/docs move
 /// Live to the Developer API backend; revisit on upgrade.)
 class LiveConversationService extends ChangeNotifier {
@@ -106,23 +107,23 @@ class LiveConversationService extends ChangeNotifier {
   })  : _audioIO = audioIO,
         _ai = ai;
 
-  /// Live-capable model id. Kept overridable because these preview models are
-  /// retired/renamed frequently — do not hardcode long-term.
+  /// Live-capable model id, sourced from the central [kGeminiLiveModel] config
+  /// (default `gemini-live-2.5-flash-native-audio` — the current Stable
+  /// Live/BidiGenerateContent model on the Agent Platform / Vertex endpoint).
+  /// NOTE: per the Firebase AI Logic docs, the Agent Platform does NOT support
+  /// any Gemini Live 3.x models, so the Live path stays on the 2.5 line even
+  /// though standard generation is on 3.5. Kept overridable because Live model
+  /// ids are retired/renamed periodically — do not hardcode long-term.
   ///
   /// Overridable at build time for debugging which model the Live/BidiGenerate
   /// endpoint accepts (a wrong/retired model closes the WebSocket with code
-  /// 1008 — policy violation):
+  /// 1008 — policy violation), e.g.:
   ///   flutter run --dart-define=LIVE_MODEL_ID=gemini-live-2.5-flash-preview
   ///
-  /// Default: `gemini-live-2.5-flash` — the Live/BidiGenerateContent model
-  /// available on the `global` Vertex AI endpoint for this project. Confirmed
-  /// working with firebase_ai 4.0.0 + FirebaseAI.agentPlatform() which
-  /// defaults to `global` (fixing the 1008 "model not found" error that
-  /// occurred with the old vertexAI() + us-central1 combination).
-  static const String _defaultModelId = String.fromEnvironment(
-    'LIVE_MODEL_ID',
-    defaultValue: 'gemini-live-2.5-flash',
-  );
+  /// Served via firebase_ai 4.0.0 + FirebaseAI.agentPlatform() (location
+  /// `global`, where the Live/BidiGenerateContent models are served — fixing
+  /// the 1008 "model not found" error seen with vertexAI() + us-central1).
+  static const String _defaultModelId = kGeminiLiveModel;
 
   final LiveAudioIO? _audioIO;
   final FirebaseAI? _ai;

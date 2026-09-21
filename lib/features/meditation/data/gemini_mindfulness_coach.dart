@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../services/ai_models.dart';
 import '../../../services/content_safety_filter.dart';
 
 /// Privacy-safe context for a mindfulness recommendation (no identifiers).
@@ -38,7 +39,7 @@ class MindfulnessContext {
 /// Generates a short mindfulness recommendation. Heuristic-first (works
 /// offline / for free users), optionally enriched by Gemini.
 class GeminiMindfulnessCoach {
-  static const String _modelId = 'gemini-2.5-flash';
+  static const String _modelId = kGeminiFlashModel;
   static const int _timeoutSeconds = 12;
 
   FirebaseAI? _override;
@@ -46,7 +47,7 @@ class GeminiMindfulnessCoach {
 
   GeminiMindfulnessCoach({FirebaseAI? ai}) : _override = ai;
 
-  FirebaseAI get _ai => _override ??= (_lazy ??= FirebaseAI.vertexAI());
+  FirebaseAI get _ai => _override ??= (_lazy ??= FirebaseAI.agentPlatform());
 
   Future<String> recommend(MindfulnessContext ctx) async {
     final base = _heuristic(ctx);

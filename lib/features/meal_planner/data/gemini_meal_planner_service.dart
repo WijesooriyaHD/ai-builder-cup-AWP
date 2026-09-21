@@ -5,6 +5,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../services/ai_models.dart';
 import '../../../services/content_safety_filter.dart';
 import '../../nutrition/domain/nutrition_models.dart';
 import '../domain/meal_planner_models.dart';
@@ -15,7 +16,7 @@ import '../domain/meal_planner_service.dart';
 /// Uses the same App Check + Auth setup as the rest of the app. All AI text is
 /// sanitized via [ContentSafetyFilter].
 class GeminiMealPlannerService implements MealPlannerService {
-  static const String _modelId = 'gemini-2.5-flash';
+  static const String _modelId = kGeminiFlashModel;
   static const int _dailyTimeout = 30;
   static const int _weeklyTimeout = 55;
   static const int _shortTimeout = 25;
@@ -25,7 +26,7 @@ class GeminiMealPlannerService implements MealPlannerService {
 
   GeminiMealPlannerService({FirebaseAI? ai})
       : _ai = ai ??
-            FirebaseAI.vertexAI();
+            FirebaseAI.agentPlatform();
 
   GenerativeModel _model({int maxTokens = 2048}) => _ai.generativeModel(
         model: _modelId,

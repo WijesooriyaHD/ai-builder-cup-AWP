@@ -6,6 +6,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../services/ai_models.dart';
 import '../../../services/content_safety_filter.dart';
 import '../domain/nutrition_analysis_service.dart';
 import '../domain/nutrition_models.dart';
@@ -17,7 +18,7 @@ import '../domain/nutrition_models.dart';
 /// Auth), so no API keys are required. All AI text is sanitized via
 /// [ContentSafetyFilter].
 class GeminiNutritionService implements NutritionAnalysisService {
-  static const String _modelId = 'gemini-2.5-flash';
+  static const String _modelId = kGeminiFlashModel;
   static const int _timeoutSeconds = 25;
 
   final FirebaseAI _ai;
@@ -25,7 +26,7 @@ class GeminiNutritionService implements NutritionAnalysisService {
 
   GeminiNutritionService({FirebaseAI? ai, http.Client? httpClient})
       : _ai = ai ??
-            FirebaseAI.vertexAI(),
+            FirebaseAI.agentPlatform(),
         _http = httpClient ?? http.Client();
 
   GenerativeModel _model() => _ai.generativeModel(

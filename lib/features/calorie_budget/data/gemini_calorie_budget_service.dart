@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../services/ai_models.dart';
 import '../../../services/content_safety_filter.dart';
 import '../domain/calorie_budget_models.dart';
 import '../domain/calorie_budget_service.dart';
@@ -12,14 +13,14 @@ import '../domain/calorie_budget_service.dart';
 /// richer phrasing, with a deterministic heuristic that always produces a
 /// sensible prediction/insights even offline or on AI failure.
 class GeminiCalorieBudgetService implements CalorieBudgetService {
-  static const String _modelId = 'gemini-2.5-flash';
+  static const String _modelId = kGeminiFlashModel;
   static const int _timeoutSeconds = 15;
 
   final FirebaseAI _ai;
 
   GeminiCalorieBudgetService({FirebaseAI? ai})
       : _ai = ai ??
-            FirebaseAI.vertexAI();
+            FirebaseAI.agentPlatform();
 
   // ---------------------------------------------------------------------------
   // Prediction — heuristic first, always reliable.
