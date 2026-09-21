@@ -18,6 +18,7 @@ import 'services/personalization_service.dart';
 import 'services/notification_service.dart';
 import 'services/voice_command_service.dart';
 import 'services/live_conversation_service.dart';
+import 'services/native_aec_audio_io.dart';
 import 'services/record_pcm_audio_io.dart';
 import 'services/app_navigation_service.dart';
 import 'services/conversation_store.dart';
@@ -163,8 +164,16 @@ class AiWellnessPalApp extends StatelessWidget {
         // reachable through the feature-flag-gated UI, so registering it here
         // is inert in production.
         ChangeNotifierProvider(
-            create: (_) =>
-                LiveConversationService(audioIO: RecordPcmAudioIO())),
+            create: (_) => LiveConversationService(
+                  // iOS uses the unified AVAudioEngine + Voice-Processing I/O
+                  // pipeline (hardware AEC → no pal-voice echo in the mic).
+                  // Other platforms keep the record + flutter_pcm_sound path.
+                  // To roll back iOS to the old pipeline, replace
+                  // NativeAecAudioIO() with RecordPcmAudioIO().
+                  audioIO: defaultTargetPlatform == TargetPlatform.iOS
+                      ? NativeAecAudioIO()
+                      : RecordPcmAudioIO(),
+                )),
         ChangeNotifierProvider(create: (_) => AppNavigationService()),
         ChangeNotifierProvider(create: (_) => NutritionState()),
         ChangeNotifierProvider(create: (_) => MealPlannerState()),

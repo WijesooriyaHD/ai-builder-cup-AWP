@@ -97,6 +97,12 @@ import home_widget
           result(FlutterMethodNotImplemented)
         }
       }
+
+      // Unified, echo-cancelled Live audio engine (AVAudioEngine +
+      // Voice-Processing I/O). Registers the "aiwellnesspal/live_audio" method
+      // channel + "aiwellnesspal/live_audio/mic" event channel used by the
+      // NativeAecAudioIO Dart bridge for the Gemini Live "pal" conversation.
+      LiveAudioEngine.shared.register(with: controller.binaryMessenger)
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
