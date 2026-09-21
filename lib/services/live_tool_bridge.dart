@@ -45,6 +45,10 @@ enum LiveNavDestination {
   breathing,
   meditationSession,
   checkIn,
+  /// The Wellness Studio (guided activity library, pushed full-screen).
+  wellnessStudio,
+  /// Wellness Reads — the "More" sub-tab on Home holding the article library.
+  wellnessReads,
 }
 
 /// A request from the Live pal to navigate somewhere. Carries whether the
@@ -455,6 +459,8 @@ class LiveToolBridge {
                   'breathing',
                   'meditationSession',
                   'checkIn',
+                  'wellnessStudio',
+                  'wellnessReads',
                 ],
                 description: 'Where to go.',
               ),
@@ -1119,6 +1125,11 @@ class LiveToolBridge {
         // just surface Home here.
         _navService.goToTab(AppTab.home);
         return;
+      case LiveNavDestination.wellnessReads:
+        // Wellness Reads is the "More" sub-tab (index 1) on the Home screen,
+        // not its own route.
+        _navService.goToHomeSubTab(1);
+        return;
       default:
         break;
     }
@@ -1149,6 +1160,9 @@ class LiveToolBridge {
       case LiveNavDestination.habitBuilder:
       case LiveNavDestination.reflection:
       case LiveNavDestination.checkIn:
+      // Wellness Reads is reached by switching Home's inner sub-tab, so it's
+      // handled entirely by the bridge like a tab (no pushed route).
+      case LiveNavDestination.wellnessReads:
         return true;
       default:
         return false;

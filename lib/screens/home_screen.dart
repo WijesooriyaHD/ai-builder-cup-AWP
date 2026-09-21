@@ -20,6 +20,7 @@ import '../providers/app_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../providers/check_in_state.dart';
 import 'add_journal_entry_screen.dart';
+import '../services/app_navigation_service.dart';
 import '../services/auth_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/storage_service.dart';
@@ -80,9 +81,41 @@ class _HomeScreenState extends State<HomeScreen>
 
   }
 
+  /// Listens for voice-pal requests to switch the Home/More sub-tab (e.g.
+  /// "open Wellness Reads"). Held so we can detach in dispose().
+  AppNavigationService? _navService;
+  int _lastHomeSubTabRequestId = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nav = context.read<AppNavigationService>();
+    if (nav != _navService) {
+      _navService?.removeListener(_onNavRequest);
+      _navService = nav;
+      _lastHomeSubTabRequestId = nav.homeSubTabRequestId;
+      nav.addListener(_onNavRequest);
+    }
+  }
+
+  /// Animates the inner switcher when a NEW sub-tab request arrives. Keyed off
+  /// the request id so repeated requests for the same sub-tab still fire, and
+  /// unrelated bottom-tab notifications are ignored.
+  void _onNavRequest() {
+    final nav = _navService;
+    if (nav == null || !mounted) return;
+    if (nav.homeSubTabRequestId == _lastHomeSubTabRequestId) return;
+    _lastHomeSubTabRequestId = nav.homeSubTabRequestId;
+    final target = nav.requestedHomeSubTab;
+    if (target != _tabController.index) {
+      _tabController.animateTo(target);
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _navService?.removeListener(_onNavRequest);
     _tabController.dispose();
     super.dispose();
   }

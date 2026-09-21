@@ -26,6 +26,7 @@ import '../screens/period_tracker_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/travel_screen.dart';
 import '../screens/weight_tracker_screen.dart';
+import '../screens/wellness_studio_screen.dart';
 import '../services/app_navigation_service.dart';
 import '../services/conversation_store.dart';
 import '../services/live_conversation_service.dart';
@@ -106,12 +107,48 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
       'multi-day streak goals (hydration, walking, meditation, sugar detox, '
       'sleep routine).\n'
       '\n'
+      'WELLNESS STUDIO: a library of short, guided activities the user can do '
+      'right now, organized into six categories — Breathing Exercises, '
+      'Recovery Challenges, Mindfulness Sessions, Wellness Quizzes, Pilates '
+      'Knowledge Cards, and Stress Recovery Activities. Activities are quick '
+      '(about 3-12 minutes) and include things like Box Breathing, 4-7-8 Calm '
+      'Breath, 5-Minute Stretch Reset, Body Scan Meditation, Gratitude '
+      'Check-In, Progressive Muscle Relaxation, Guided Visualization, and '
+      'short quizzes like the Stress Awareness Quiz or Sleep Hygiene Check. '
+      'At least three activities per category are free; the rest are Premium. '
+      'Premium users also get a personalized set of AI-picked studio '
+      'activities chosen from their recent wellness journey, refreshed daily. '
+      'Each activity can be marked complete, and completions count toward the '
+      'user\'s progress. The Home screen also shows a "Recommended" studio '
+      'badge that opens the category matching today\'s focus. Suggest the '
+      'Studio when the user wants something concrete and guided to do right '
+      'now — especially for stress, tension, low focus, or recovery.\n'
+      '\n'
+      'WELLNESS READS: a library of short wellness articles (roughly 3-5 '
+      'minute reads) in the "More" tab, filterable by category — Mindfulness, '
+      'Sleep, Movement, Nutrition, Mental Health, Stress Relief, Pilates, and '
+      'Yoga. Examples: "The Science of a Calmer Mind", "Sleep Is a '
+      'Superpower", "Movement You Actually Enjoy", "Eating for Energy, Not '
+      'Rules", "The Power of Self-Compassion", "Breathe Your Way to Calm", '
+      '"Pilates for Beginners: Start With Your Core", "Why Posture Is Your '
+      'Secret to Feeling Better", "Yoga for Every Body", and "A Simple '
+      'Evening Yoga Wind-Down". Most reads end with a quick one-question '
+      'survey so the user can reflect. Suggest a specific relevant read by '
+      'title when the user wants to understand a topic rather than do an '
+      'activity. The "More" tab also holds the Life Toolkit entry point.\n'
+      '\n'
       'BE A PROACTIVE GUIDE: when the user talks about a wellness topic, '
       'suggest the relevant tools and actions. For example, if they mention '
       'hydration, offer to log water, suggest the Hydration Coach, starting a '
       'hydration challenge, or building a daily water habit. If they mention '
       'stress or sleep, suggest a meditation/breathing session, the Sleep '
-      'Coach, or a calming habit. Tie suggestions to what they actually said.\n'
+      'Coach, or a calming habit. Tie suggestions to what they actually said. '
+      'Also draw on the Wellness Studio and Wellness Reads: offer a specific '
+      'Studio activity by name when they want something to DO right now (e.g. '
+      '"Box Breathing" for stress, "5-Minute Stretch Reset" for tension), and '
+      'a specific Wellness Read by title when they want to UNDERSTAND a topic '
+      '(e.g. "Sleep Is a Superpower" if sleep keeps coming up). Offer to open '
+      'either one for them.\n'
       '\n'
       'YOU CAN DO THINGS — use your tools whenever it helps, do not just talk. '
       'You can: change theme/accent color/text size/winter mode; create a '
@@ -401,6 +438,10 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
       case LiveNavDestination.reflection:
         nav.goToTab(AppTab.reflection);
         return;
+      case LiveNavDestination.wellnessReads:
+        // Wellness Reads lives on the Home screen's "More" sub-tab.
+        nav.goToHomeSubTab(1);
+        return;
       default:
         break;
     }
@@ -440,6 +481,8 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
         return const BreathingScreen();
       case LiveNavDestination.meditationSession:
         return const GuidedMeditationScreen();
+      case LiveNavDestination.wellnessStudio:
+        return const WellnessStudioScreen();
       default:
         return null;
     }
