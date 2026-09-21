@@ -98,6 +98,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   int _totalCheckIns = 0;
   String? _instagramUsername;
   String _aiVoice = 'default';
+  bool _forceEnglishVoice = false;
   List<String> _preferredMethods = const [];
   
   List<Dream> get dreams => _dreams;
@@ -124,6 +125,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String? get instagramUsername => _instagramUsername;
   /// The selected AI assistant voice id (see kAiVoices).
   String get aiVoice => _aiVoice;
+
+  /// When true, the AI voice pal always speaks and replies in English, even if
+  /// the user speaks another language. When false (the default) the pal mirrors
+  /// whatever language the user is speaking.
+  bool get forceEnglishVoice => _forceEnglishVoice;
   /// Stable ids of the user's preferred wellness methods (see kWellnessMethods).
   /// Drives Today's Plan personalization. May be empty for pre-existing users.
   List<String> get preferredMethods => List.unmodifiable(_preferredMethods);
@@ -407,6 +413,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Forces the AI voice pal to always converse in English, regardless of the
+  /// language the user speaks. Off by default (the pal mirrors the user).
+  void setForceEnglishVoice(bool value) {
+    if (_forceEnglishVoice == value) return;
+    _forceEnglishVoice = value;
+    _saveSettings();
+    notifyListeners();
+  }
+
   Future<void> _saveSettings() async {
     debugPrint('💾 _saveSettings: aiVoice=$_aiVoice, '
         'cloudSettingsLoaded=$_cloudSettingsLoaded');
@@ -420,6 +435,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       showMap: _showMap,
       instagram: _instagramUsername,
       aiVoice: _aiVoice,
+      forceEnglishVoice: _forceEnglishVoice,
       preferredMethods: _preferredMethods,
       // Don't push settings to the cloud until the authoritative cloud values
       // have been loaded, so a transient pre-sync default can't overwrite them.
@@ -1462,6 +1478,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _showMap = settings['showMap'] ?? true;
     _instagramUsername = settings['instagram'];
     _aiVoice = settings['aiVoice'] as String? ?? 'default';
+    _forceEnglishVoice = settings['forceEnglishVoice'] as bool? ?? false;
     final methods = settings['preferredMethods'];
     if (methods is List) {
       _preferredMethods = methods.map((e) => e.toString()).toList();

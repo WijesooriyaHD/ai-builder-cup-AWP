@@ -93,14 +93,6 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
       'Google, large language models, or any underlying model/provider. Simply '
       'present yourself as the AI Wellness Pal.\n'
       '\n'
-      'LANGUAGE: reply in the SAME language the user is speaking — both your '
-      'spoken voice and your words — and keep following their language if they '
-      'switch. For example, if they speak Japanese, respond in Japanese. '
-      'However, if you cannot actually SPEAK a given language aloud, respond in '
-      'English instead (do not attempt it in a different or wrong language). '
-      'Prefer matching the user; fall back to English only when you truly '
-      'cannot speak their language.\n'
-      '\n'
       'ABOUT THE APP (know this well so you can guide the user):\n'
       'The app\'s main purpose is a personalized daily wellness plan called '
       '"Today\'s Plan", built from a quick daily check-in (energy, mood, body '
@@ -152,6 +144,35 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
       'close the session. Do NOT ask about saving — the conversation is kept '
       'automatically and can become a reflection later. Always call '
       'end_conversation; never just say goodbye without it.';
+
+  /// The LANGUAGE section of the system instruction. Split out of [_persona]
+  /// because it depends on the user's "Always speak English" setting
+  /// (Settings → AI Voice).
+  ///
+  /// When [forceEnglish] is false (the default) the pal mirrors the user's
+  /// language. When true, the pal stays in English no matter what language it
+  /// hears — useful when the user's accent or mixed-language speech makes the
+  /// model drift into the wrong language.
+  static String _languageRule({required bool forceEnglish}) {
+    if (forceEnglish) {
+      return 'LANGUAGE (STRICT): ALWAYS speak and reply in ENGLISH ONLY, for '
+          'the entire conversation, no matter what language the user speaks. '
+          'This is a hard requirement set by the user in Settings. Even if the '
+          'user greets you, speaks to you, or switches entirely into another '
+          'language (Japanese, Sinhala, Spanish, Hindi, etc.), you must still '
+          'respond ONLY in English. Do NOT mirror their language. Do NOT '
+          'apologize for using English or comment on the language choice — '
+          'just answer naturally in clear, simple English. Open the '
+          'conversation in English.';
+    }
+    return 'LANGUAGE: reply in the SAME language the user is speaking — both '
+        'your spoken voice and your words — and keep following their language '
+        'if they switch. For example, if they speak Japanese, respond in '
+        'Japanese. However, if you cannot actually SPEAK a given language '
+        'aloud, respond in English instead (do not attempt it in a different '
+        'or wrong language). Prefer matching the user; fall back to English '
+        'only when you truly cannot speak their language.';
+  }
 
   /// Held so we can re-enable the Assistant when this sheet closes, without
   /// touching `context` during dispose().
@@ -207,8 +228,13 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
     };
 
     // Seed the pal with the user's current context (profile + plan + habits)
-    // so it remembers who it's talking to and what's going on today.
-    final systemInstruction = '$_persona\n\n${_buildContextMemory()}';
+    // so it remembers who it's talking to and what's going on today. The
+    // language rule is injected separately because it depends on the user's
+    // "Always speak English" setting (Settings → AI Voice).
+    final forceEnglish = context.read<AppState>().forceEnglishVoice;
+    final systemInstruction = '$_persona\n\n'
+        '${_languageRule(forceEnglish: forceEnglish)}\n\n'
+        '${_buildContextMemory()}';
 
     // TEMP(test): pass isPremium: true unconditionally (Premium gate disabled).
     // Restore with `isPremium: context.read<AppState>().isPro`.
@@ -277,10 +303,15 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
     _finalize(navRequest: request);
   }
 
-  /// Called (from the tool bridge) when the pal ENDS the conversation.
+  /// Called (from the tool bridge) when the pal ENDS the conversation via the
+  /// `end_conversation` tool. Route through [LiveConversationService.deferEnd]
+  /// so we wait for the pal's spoken goodbye to actually finish playing out of
+  /// the speaker before tearing the session down. The service will fire
+  /// `onUserEndIntent` when the audio has drained, which routes to [_finalize].
   void _onEndRequested(LiveEndRequest request) {
     if (!mounted) return;
-    _finalize();
+    if (_ending) return;
+    context.read<LiveConversationService>().deferEnd();
   }
 
   /// Guards against re-entrancy: the End button, a pal navigate(), and a pal

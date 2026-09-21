@@ -43,6 +43,10 @@ class StorageService {
   static const String _lastActiveDateKey = 'aiwellnesspal_last_active_date';
   static const String _pinnedCardsKey = 'aiwellnesspal_pinned_cards';
   static const String _aiVoiceKey = 'aiwellnesspal_ai_voice';
+  /// When true, the AI voice pal always speaks English regardless of the
+  /// language the user speaks. Off by default (the pal mirrors the user).
+  static const String _forceEnglishVoiceKey =
+      'aiwellnesspal_force_english_voice';
   static const String _preferredMethodsKey = 'aiwellnesspal_preferred_methods';
   static const String _periodDataKey = 'aiwellnesspal_period_data';
   static const String _weightDataKey = 'aiwellnesspal_weight_data';
@@ -290,6 +294,7 @@ class StorageService {
     bool? showMap,
     String? instagram,
     String? aiVoice,
+    bool? forceEnglishVoice,
     List<String>? preferredMethods,
     bool syncToCloud = true,
   }) async {
@@ -305,6 +310,9 @@ class StorageService {
       await prefs.setString('aiwellnesspal_instagram', instagram);
     }
     if (aiVoice != null) await prefs.setString(_aiVoiceKey, aiVoice);
+    if (forceEnglishVoice != null) {
+      await prefs.setBool(_forceEnglishVoiceKey, forceEnglishVoice);
+    }
     if (preferredMethods != null) {
       await prefs.setStringList(_preferredMethodsKey, preferredMethods);
     }
@@ -338,6 +346,9 @@ class StorageService {
         if (showMotivation != null) data['show_motivation'] = showMotivation;
         if (showAchievements != null) data['show_achievements'] = showAchievements;
         if (showMap != null) data['show_map'] = showMap;
+        if (forceEnglishVoice != null) {
+          data['force_english_voice'] = forceEnglishVoice;
+        }
         if (preferredMethods != null) data['preferred_methods'] = preferredMethods;
 
         await _db
@@ -402,6 +413,8 @@ class StorageService {
       'showMap': prefs.getBool(_showMapKey) ?? true,
       'instagram': prefs.getString('aiwellnesspal_instagram'),
       'aiVoice': prefs.getString(_aiVoiceKey) ?? 'default',
+      // Default OFF: the pal mirrors whatever language the user speaks.
+      'forceEnglishVoice': prefs.getBool(_forceEnglishVoiceKey) ?? false,
       'preferredMethods': prefs.getStringList(_preferredMethodsKey) ?? <String>[],
     };
 
@@ -412,6 +425,8 @@ class StorageService {
           (cloudProfile['text_scale'] as num?)?.toDouble() ?? settings['textScale'];
       settings['instagram'] = cloudProfile['instagram'] ?? settings['instagram'];
       settings['aiVoice'] = cloudProfile['ai_voice'] ?? settings['aiVoice'];
+      settings['forceEnglishVoice'] =
+          cloudProfile['force_english_voice'] ?? settings['forceEnglishVoice'];
       settings['isWinterMode'] =
           cloudProfile['is_winter_mode'] ?? settings['isWinterMode'];
       settings['showMotivation'] =

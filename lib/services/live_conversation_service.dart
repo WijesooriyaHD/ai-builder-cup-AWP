@@ -399,38 +399,180 @@ class LiveConversationService extends ChangeNotifier {
             '"$utterance" — ending after the pal\'s goodbye.');
       }
       // Fallback: if the pal never produces a goodbye turn at all, end anyway
-      // after a generous wait (the normal path ends right after the goodbye
-      // audio goes quiet, via _scheduleEndAfterGoodbye).
+      // after a wait. This DEFERS to the drain loop if the pal is actually
+      // mid sign-off, so a long goodbye is never truncated.
       _endFallbackTimer?.cancel();
-      _endFallbackTimer = Timer(const Duration(seconds: 10), _fireEndIfPending);
+      _endFallbackTimer =
+          Timer(const Duration(seconds: 6), _onEndFallbackTimeout);
     }
   }
 
   Timer? _endFallbackTimer;
 
-  /// Waits for the pal's goodbye AUDIO to finish (a quiet gap after the last
-  /// audio chunk) before ending, so the user hears the whole sign-off. Polls
-  /// briefly since playback lags the transcript's turnComplete.
-  void _scheduleEndAfterGoodbye() {
-    const quietGap = Duration(milliseconds: 1200);
-    const maxWait = Duration(seconds: 8);
-    final startedAt = DateTime.now();
+  // True once the pal's goodbye turn has been reported complete by the server.
+  // After this, NO more audio chunks will arrive for that turn, so the only
+  // thing left to wait for is the on-device player to drain.
+  bool _endTurnCompleteSeen = false;
+  // Guards against spawning multiple concurrent drain-poll loops (turnComplete
+  // can fire more than once if the pal produces a follow-up turn).
+  bool _endWaitActive = false;
 
-    void check() {
-      if (!_endPending || _endIntentFired) return;
-      final sinceAudio = DateTime.now().difference(_lastModelAudioAt);
-      final waited = DateTime.now().difference(startedAt);
-      // End once the goodbye audio has been quiet long enough, or we've waited
-      // the max (safety net).
-      if (sinceAudio >= quietGap || waited >= maxWait) {
+  /// Waits for the pal's sign-off to finish actually coming out of the speaker
+  /// before ending, so the user always hears the whole thing.
+  ///
+  /// This is PROGRESS-driven, not deadline-driven — that distinction matters:
+  ///  - A short "Take care!" ends almost immediately (as soon as the few
+  ///    hundred ms of buffered audio drains).
+  ///  - A long multi-sentence sign-off plays to completion however long it
+  ///    takes; there is no fixed ceiling that could truncate it.
+  ///  - A genuinely broken/stalled pipeline still ends promptly, because we
+  ///    bail when no PROGRESS has been made (no new audio arriving AND the
+  ///    playback buffer not shrinking) — not when some arbitrary timer expires.
+  void _scheduleEndAfterGoodbye() {
+    if (_endWaitActive) return; // already polling
+    _endWaitActive = true;
+
+    // Player is considered drained below this (avoids chasing the last few ms).
+    const drainThreshold = Duration(milliseconds: 120);
+    // Small settle after drain so the final syllable isn't clipped by the
+    // abrupt stopPlayback() inside stop().
+    const tailSettle = Duration(milliseconds: 200);
+    // If the turn is NOT yet complete we also want a brief network-quiet gap,
+    // so we don't end between two chunks of an in-progress sentence.
+    const quietGap = Duration(milliseconds: 700);
+    // Bail only when nothing is progressing: no new audio AND the buffer isn't
+    // draining. This is the real "something is wrong" signal.
+    const noProgressTimeout = Duration(seconds: 3);
+    // Absolute backstop purely to prevent a leaked poll loop. Deliberately
+    // generous so it can never truncate a legitimately long sign-off.
+    const absoluteCeiling = Duration(minutes: 2);
+
+    final startedAt = DateTime.now();
+    var lastProgressAt = DateTime.now();
+    var lastRemainingMs = (_audioIO?.playbackRemaining ?? Duration.zero)
+        .inMilliseconds;
+    var lastAudioAt = _lastModelAudioAt;
+
+    void finishAfterSettle() {
+      Future.delayed(tailSettle, () {
+        if (!_endPending || _endIntentFired) return;
+        _endWaitActive = false;
         _fireEndIfPending();
-      } else {
-        Future.delayed(const Duration(milliseconds: 250), check);
-      }
+      });
     }
 
-    // Give playback a beat to start, then begin polling for the quiet gap.
-    Future.delayed(const Duration(milliseconds: 400), check);
+    void check() {
+      if (!_endPending || _endIntentFired) {
+        _endWaitActive = false;
+        return;
+      }
+
+      final now = DateTime.now();
+      final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
+      final remainingMs = remaining.inMilliseconds;
+
+      // --- Progress accounting -------------------------------------------
+      // Progress = new audio arrived from the network, OR the player drained
+      // some of its buffer. Either means the pipeline is alive and the user is
+      // still hearing (or about to hear) the pal.
+      final newAudioArrived = _lastModelAudioAt.isAfter(lastAudioAt);
+      final bufferDrained = remainingMs < lastRemainingMs - 20;
+      if (newAudioArrived || bufferDrained) {
+        lastProgressAt = now;
+        lastAudioAt = _lastModelAudioAt;
+      }
+      lastRemainingMs = remainingMs;
+
+      // --- Normal completion ---------------------------------------------
+      final playbackDrained = remainingMs <= drainThreshold.inMilliseconds;
+      // Once the server says the turn is complete, no more chunks are coming,
+      // so draining the player is sufficient → fast exit for short goodbyes.
+      // If the turn ISN'T complete yet, also require a short network-quiet gap
+      // so we don't cut in between chunks of an in-flight sentence.
+      final networkSettled = _endTurnCompleteSeen ||
+          now.difference(_lastModelAudioAt) >= quietGap;
+
+      if (playbackDrained && networkSettled) {
+        if (kDebugMode) {
+          debugPrint('LiveConversationService: goodbye drained after '
+              '${now.difference(startedAt).inMilliseconds}ms '
+              '(turnComplete=$_endTurnCompleteSeen) — ending.');
+        }
+        finishAfterSettle();
+        return;
+      }
+
+      // --- Stall / safety bail -------------------------------------------
+      final sinceProgress = now.difference(lastProgressAt);
+      if (sinceProgress >= noProgressTimeout) {
+        if (kDebugMode) {
+          debugPrint('LiveConversationService: goodbye wait saw no progress '
+              'for ${sinceProgress.inMilliseconds}ms '
+              '(remaining=${remainingMs}ms) — ending anyway.');
+        }
+        finishAfterSettle();
+        return;
+      }
+      if (now.difference(startedAt) >= absoluteCeiling) {
+        if (kDebugMode) {
+          debugPrint('LiveConversationService: goodbye wait hit absolute '
+              'ceiling — ending.');
+        }
+        _endWaitActive = false;
+        _fireEndIfPending();
+        return;
+      }
+
+      // Poll at 100ms so a short sign-off ends snappily.
+      Future.delayed(const Duration(milliseconds: 100), check);
+    }
+
+    // Give playback a beat to actually start before the first sample, so we
+    // don't mistake "hasn't started yet" for "already drained".
+    Future.delayed(const Duration(milliseconds: 250), check);
+  }
+
+  /// Public entry point for external end triggers (e.g. the model calls the
+  /// `end_conversation` tool). Arms the same defer-then-drain path used by the
+  /// spoken-goodbye detector so the pal's final phrase is never clipped.
+  /// Safe to call multiple times — only the first arms the end.
+  void deferEnd() {
+    if (_endIntentFired || _endPending) return;
+    if (onUserEndIntent == null) return;
+    _endPending = true;
+    if (kDebugMode) {
+      debugPrint('LiveConversationService: deferEnd() — ending after the '
+          "pal's goodbye finishes playing.");
+    }
+    // Fallback: end anyway if we somehow never see a turnComplete AND no
+    // playback comes through. Defers to the drain loop if the pal IS speaking.
+    _endFallbackTimer?.cancel();
+    _endFallbackTimer =
+        Timer(const Duration(seconds: 6), _onEndFallbackTimeout);
+    // Start the drain wait right away. It tolerates the pal still streaming
+    // (it requires a network-quiet gap until turnComplete arrives), so this is
+    // safe whether or not the pal is mid-sentence.
+    _scheduleEndAfterGoodbye();
+  }
+
+  /// Fallback path for when the pal never produces a goodbye turn at all (no
+  /// turnComplete, no audio). Critically, this DEFERS to an in-flight drain
+  /// wait: if [_scheduleEndAfterGoodbye] is actively polling, the pal is mid
+  /// sign-off and we must NOT cut it off — the drain loop owns the ending.
+  void _onEndFallbackTimeout() {
+    if (!_endPending || _endIntentFired) return;
+    if (_endWaitActive) {
+      if (kDebugMode) {
+        debugPrint('LiveConversationService: end fallback fired but the drain '
+            'wait is active (pal still speaking) — deferring to it.');
+      }
+      return;
+    }
+    if (kDebugMode) {
+      debugPrint('LiveConversationService: end fallback fired with no goodbye '
+          'turn — ending.');
+    }
+    _fireEndIfPending();
   }
 
   /// Fires the end callback (once) after the pal has finished its goodbye.
@@ -438,6 +580,7 @@ class LiveConversationService extends ChangeNotifier {
     if (!_endPending || _endIntentFired) return;
     _endIntentFired = true;
     _endPending = false;
+    _endWaitActive = false;
     _endFallbackTimer?.cancel();
     _endFallbackTimer = null;
     onUserEndIntent?.call();
@@ -491,6 +634,8 @@ class LiveConversationService extends ChangeNotifier {
     _modelTurnBuf.clear();
     _endIntentFired = false;
     _endPending = false;
+    _endTurnCompleteSeen = false;
+    _endWaitActive = false;
     _thinkingCuePlayed = false;
     _recentModelSpeech.clear();
 
@@ -764,11 +909,16 @@ class LiveConversationService extends ChangeNotifier {
         // On turn boundary, commit any buffered partials as clean turns.
         if (message.turnComplete == true) {
           _flushTranscriptBuffers();
-          // If the user asked to end, the pal has finished its goodbye turn —
-          // but the goodbye AUDIO may still be playing (playback lags the
-          // transcript). Wait until the audio has actually gone quiet before
-          // ending, so the user hears the whole sign-off.
-          if (_endPending) _scheduleEndAfterGoodbye();
+          // If the user asked to end, the pal has finished GENERATING its
+          // goodbye — but the audio may still be buffered on-device and playing
+          // out of the speaker. Mark the turn complete (which lets the drain
+          // wait skip its network-quiet gap and exit as soon as the player
+          // empties → short sign-offs end fast) and make sure the wait is
+          // running.
+          if (_endPending) {
+            _endTurnCompleteSeen = true;
+            _scheduleEndAfterGoodbye();
+          }
         }
         // As soon as the model produces ANY turn content it has taken the floor:
         // pause the mic so its loudspeaker output can't be captured and echoed

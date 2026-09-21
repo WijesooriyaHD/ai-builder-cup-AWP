@@ -848,6 +848,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return _buildVoiceTile(
               context, appState, voice, isSelected, isLocked);
         }),
+        const SizedBox(height: 8),
+        Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
+        const SizedBox(height: 8),
+        _buildForceEnglishToggle(context, appState),
+      ],
+    );
+  }
+
+  /// "Always speak English" — when on, the voice pal replies only in English
+  /// even if the user speaks another language. Off by default, in which case
+  /// the pal mirrors whatever language it hears.
+  Widget _buildForceEnglishToggle(BuildContext context, AppState appState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final enabled = appState.forceEnglishVoice;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Always speak English',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+            Switch.adaptive(
+              value: enabled,
+              onChanged: (value) => appState.setForceEnglishVoice(value),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, right: 48),
+          child: Text(
+            enabled
+                ? 'Your pal replies only in English, even if you speak another '
+                    'language.'
+                : 'Your pal replies in whatever language you speak. Turn this '
+                    'on to keep every conversation in English.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                  height: 1.4,
+                ),
+          ),
+        ),
       ],
     );
   }
