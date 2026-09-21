@@ -807,8 +807,9 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
           if (_isLivePal)
             Expanded(child: _buildLivePalBody(theme, isDark))
           else ...[
-            // Recent Live "Talk" conversations (max 3) as tappable cards.
-            _buildRecentConversations(theme, isDark),
+            // NOTE: "Recent Conversations" is intentionally NOT shown for the
+            // default pal — those cards are saved Live conversations, so they
+            // only belong in the Live pal's view.
 
             // Conversation messages
             Expanded(
