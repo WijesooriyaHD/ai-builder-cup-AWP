@@ -961,6 +961,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min, // Added to prevent overflow
           children: [
             Text(
               isError ? 'Something went wrong' : 'Ready',
@@ -970,17 +971,17 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8), // Reduced from 12
             GestureDetector(
               onTap: _restartLiveSession,
               child: VoiceOrb(
                 // Idle visual — the Live pal isn't capturing yet.
                 state: VoiceAssistantState.idle,
-                size: 130,
+                size: 120, // Reduced from 130
                 primaryColor: theme.colorScheme.primary,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8), // Reduced from 12
             Text(
               'Tap to speak',
               style: GoogleFonts.dmSans(
@@ -989,15 +990,17 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
               ),
             ),
             if (isError && service.lastError != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                service.lastError!,
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.dmSans(
-                  fontSize: 12,
-                  color: theme.colorScheme.error.withOpacity(0.8),
+              const SizedBox(height: 8), // Reduced from 10
+              Flexible( // Added to prevent overflow
+                child: Text(
+                  service.lastError!,
+                  textAlign: TextAlign.center,
+                  maxLines: 2, // Reduced from 3
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11, // Reduced from 12
+                    color: theme.colorScheme.error.withOpacity(0.8),
+                  ),
                 ),
               ),
             ],

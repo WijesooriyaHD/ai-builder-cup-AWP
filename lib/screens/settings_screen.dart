@@ -854,7 +854,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 8),
         _buildLiveChatPalToggle(context, appState),
         if (LiveConversationService.isAvailable && appState.liveChatPal) ...[
-          const SizedBox(height: 18),
+          const SizedBox(height: 12), // Reduced from 18
           _buildLivePalVoiceSelector(context, appState),
         ],
         const SizedBox(height: 16),
@@ -874,6 +874,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min, // Added to minimize height
       children: [
         Text(
           'LIVE CHAT PAL VOICE',
@@ -883,14 +884,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
               ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4), // Reduced from 6
         Text(
-          'Applies to your next live conversation.',
+          'Test these voices during live conversations.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: isDark ? Colors.white54 : Colors.grey.shade600,
               ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8), // Reduced from 12
+        // Make the voice list more compact
         ...kLivePalVoices.map((voice) {
           final isSelected = voice.id == selectedId;
           final isLocked = voice.isPremium && !appState.isPro;
@@ -911,101 +913,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final primary = Theme.of(context).colorScheme.primary;
 
-    // Listen to the service for preview state (spinner + stop button).
-    return Consumer<LiveConversationService>(
-      builder: (context, liveService, _) {
-        final isPreviewing = liveService.previewingVoice == voice.id;
-        final otherPreviewing = !isPreviewing &&
-            liveService.previewingVoice != null;
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8), // Reduced from 10
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12), // Reduced from 16
-            onTap: isLocked
-                ? null
-                : () {
-                    try {
-                      appState.setLivePalVoice(voice.id);
-                    } on PremiumFeatureException {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('${voice.name} is a Premium voice.'),
-                        ),
-                      );
-                    }
-                  },
-            child: Container(
-              padding: const EdgeInsets.all(10), // Reduced from 12
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? primary.withOpacity(0.1)
-                    : (isDark
-                        ? Colors.white.withOpacity(0.04)
-                        : Colors.grey.shade50),
-                borderRadius: BorderRadius.circular(12), // Reduced from 16
-                border: Border.all(
-                  color: isSelected ? primary : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8), // Reduced from 10
-                    decoration: BoxDecoration(
-                      color: primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10), // Reduced from 12
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: isLocked
+            ? null
+            : () {
+                try {
+                  appState.setLivePalVoice(voice.id);
+                } on PremiumFeatureException {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${voice.name} is a Premium voice.'),
                     ),
-                    child: Icon(voice.icon, color: primary, size: 20), // Reduced from 22
-                  ),
-                  const SizedBox(width: 12), // Reduced from 16
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min, // Added to minimize height
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              voice.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 14), // Reduced from 15
-                            ),
-                            if (isLocked) ...[
-                              const SizedBox(width: 6), // Reduced from 8
-                              Icon(Icons.lock_rounded,
-                                  size: 12, // Reduced from 13
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withOpacity(0.4)),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 2), // Added small gap instead of no gap
-                        Text(
-                          'Test during live conversations',
-                          style: TextStyle(
-                            fontSize: 11, // Reduced from 13 for more compact
-                            color: isDark
-                                ? Colors.white60
-                                : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // No preview button for Live voices - they can only be tested during conversations
-                  const SizedBox(width: 4),
-                  if (isSelected)
-                    Icon(Icons.check_circle_rounded, color: primary, size: 20), // Reduced from 22
-                ],
-              ),
+                  );
+                }
+              },
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? primary.withOpacity(0.1)
+                : (isDark
+                    ? Colors.white.withOpacity(0.04)
+                    : Colors.grey.shade50),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? primary : Colors.transparent,
+              width: 2,
             ),
           ),
-        );
-      },
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(voice.icon, color: primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          voice.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        if (isLocked) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.lock_rounded,
+                              size: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.4)),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      voice.description,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark ? Colors.white60 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              if (isSelected)
+                Icon(Icons.check_circle_rounded, color: primary, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

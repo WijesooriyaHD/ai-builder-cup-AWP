@@ -172,7 +172,7 @@ const List<LivePalVoiceOption> kLivePalVoices = [
   LivePalVoiceOption(
     id: 'Sadaltager',
     name: 'Sadaltager',
-    description: 'A coach / expert feel',
+    description: 'Good if you want a coach / expert feel',
     icon: Icons.emoji_events_rounded,
     isPremium: false,
   ),
@@ -186,7 +186,7 @@ const List<LivePalVoiceOption> kLivePalVoices = [
 ];
 
 /// The default Live pal voice id.
-const String kDefaultLivePalVoice = 'Aoede';
+const String kDefaultLivePalVoice = 'Sadaltager';
 
 /// Returns the Live voice option for [id], or the default when not found.
 LivePalVoiceOption livePalVoiceById(String? id) {

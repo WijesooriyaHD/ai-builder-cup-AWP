@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
@@ -747,14 +746,21 @@ class LiveConversationService extends ChangeNotifier {
       // where the Live/BidiGenerateContent models (e.g. gemini-live-2.5-flash)
       // are served. The old vertexAI() + us-central1 combination caused a 1008
       // "Publisher model was not found" close on every Live connect().
-      final ai = _ai ??
-          FirebaseAI.agentPlatform();
+      final ai = _ai ?? FirebaseAI.agentPlatform();
+      debugPrint('LiveConversationService: using Firebase AI agentPlatform (global location)');
+      
       // Resolve the model id: explicit override, else the default constant.
       final resolvedModel = modelId ?? _defaultModelId;
+      debugPrint('LiveConversationService: creating live model with ID: $resolvedModel');
       final liveModel = ai.liveGenerativeModel(
         model: resolvedModel,
         liveGenerationConfig: LiveGenerationConfig(
-          responseModalities: [ResponseModalities.audio, ResponseModalities.text],
+          // Gemini Live supports exactly ONE response modality per session.
+          // Requesting [audio, text] together makes the Agent Platform close
+          // the WebSocket immediately (0 responses, then every mic send fails
+          // → "Lost the audio connection"). Audio-only is the verified-working
+          // config; the transcript still arrives via outputAudioTranscription.
+          responseModalities: [ResponseModalities.audio],
           // The pal's voice (a Gemini prebuilt voice name, chosen in
           // Settings → AI Voice). Only voiceName is set — deliberately NOT
           // languageCode: pinning a language here previously made the Live
@@ -791,8 +797,14 @@ class LiveConversationService extends ChangeNotifier {
 
       debugPrint('LiveConversationService: connecting to "$resolvedModel" '
           '(voice=${voiceName ?? "model default"})…');
-      _session = await liveModel.connect();
-      debugPrint('LiveConversationService: connected — session active.');
+      try {
+        _session = await liveModel.connect();
+        debugPrint('LiveConversationService: connected — session active.');
+      } catch (e) {
+        debugPrint('LiveConversationService: connection failed: $e');
+        _fail('Could not connect to the live conversation: $e');
+        return;
+      }
       _setState(LiveConversationState.active);
       _startMicWatchdog();
 
@@ -834,6 +846,11 @@ class LiveConversationService extends ChangeNotifier {
     try {
       await for (final data in micStream) {
         if (_state != LiveConversationState.active || _session == null) break;
+        // Check if session is still valid before sending
+        if (_session != session) {
+          debugPrint('LiveConversationService: session changed during mic pump, stopping');
+          break;
+        }
         // Half-duplex gate: don't forward mic audio while the model is speaking
         // OR while its audio is still playing out of the speaker, so the
         // loudspeaker output isn't captured and transcribed back as the user
@@ -872,15 +889,16 @@ class LiveConversationService extends ChangeNotifier {
         } catch (e) {
           // Skip THIS chunk and keep pumping; see the doc comment above.
           consecutiveFailures++;
-          if (kDebugMode) {
-            debugPrint('LiveConversationService: mic send failed '
-                '(#$consecutiveFailures, sent=$chunksSent): $e');
+          // Always log send failures — critical for diagnosing audio issues.
+          debugPrint('LiveConversationService: mic send failed '
+              '(#$consecutiveFailures, sent=$chunksSent): $e');
+          // Log more details about the first few failures
+          if (consecutiveFailures <= 5) {
+            debugPrint('LiveConversationService: detailed error: ${e.runtimeType} - $e');
           }
           if (consecutiveFailures >= maxConsecutiveFailures) {
-            if (kDebugMode) {
-              debugPrint('LiveConversationService: giving up on the mic pump '
-                  'after $consecutiveFailures consecutive send failures.');
-            }
+            debugPrint('LiveConversationService: giving up on the mic pump '
+                'after $consecutiveFailures consecutive send failures.');
             if (_state == LiveConversationState.active) {
               _fail('Lost the audio connection. Please try again.');
             }
@@ -890,12 +908,9 @@ class LiveConversationService extends ChangeNotifier {
       }
     } catch (e) {
       // The mic STREAM itself failed (not a send) — that's terminal.
-      if (kDebugMode) {
-        debugPrint('LiveConversationService: mic stream error '
-            '(sent=$chunksSent): $e');
-      }
+      debugPrint('LiveConversationService: mic stream error (sent=$chunksSent): $e');
       if (_state == LiveConversationState.active) {
-        _fail('Lost the microphone. Please try again.');
+        _fail('Lost the microphone: $e');
       }
     }
   }
@@ -1013,11 +1028,18 @@ class LiveConversationService extends ChangeNotifier {
       }
       debugPrint('LiveConversationService: receive stream ended '
           '(responses=$responses).');
+      // If the stream closed WITHOUT ever delivering a response while we were
+      // still active, the server rejected the session right after connect
+      // (e.g. bad config/modality). Surface it instead of leaving the session
+      // "active" with a dead socket — otherwise the mic pump just racks up 40
+      // send failures and reports the misleading "Lost the audio connection".
+      if (responses == 0 && _state == LiveConversationState.active) {
+        _fail('The live session closed before responding. Please try again.');
+      }
     } catch (e) {
       // The error (incl. any WebSocket closeReason) is surfaced to the UI.
-      if (kDebugMode) {
-        debugPrint('LiveConversationService: receive error: $e');
-      }
+      // Always log — this is the most informative error in the whole service.
+      debugPrint('LiveConversationService: receive error: $e');
       if (_state == LiveConversationState.active) {
         _fail('Live session error: $e');
       }
