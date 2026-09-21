@@ -853,7 +853,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
         const SizedBox(height: 8),
         _buildLiveChatPalToggle(context, appState),
-        if (LiveConversationService.isAvailable) ...[
+        if (LiveConversationService.isAvailable && appState.liveChatPal) ...[
           const SizedBox(height: 18),
           _buildLivePalVoiceSelector(context, appState),
         ],
@@ -919,9 +919,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             liveService.previewingVoice != null;
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.only(bottom: 8), // Reduced from 10
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12), // Reduced from 16
             onTap: isLocked
                 ? null
                 : () {
@@ -936,14 +936,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
             child: Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10), // Reduced from 12
               decoration: BoxDecoration(
                 color: isSelected
                     ? primary.withOpacity(0.1)
                     : (isDark
                         ? Colors.white.withOpacity(0.04)
                         : Colors.grey.shade50),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12), // Reduced from 16
                 border: Border.all(
                   color: isSelected ? primary : Colors.transparent,
                   width: 2,
@@ -952,29 +952,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8), // Reduced from 10
                     decoration: BoxDecoration(
                       color: primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10), // Reduced from 12
                     ),
-                    child: Icon(voice.icon, color: primary, size: 22),
+                    child: Icon(voice.icon, color: primary, size: 20), // Reduced from 22
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12), // Reduced from 16
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min, // Added to minimize height
                       children: [
                         Row(
                           children: [
                             Text(
                               voice.name,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15),
+                                  fontWeight: FontWeight.bold, fontSize: 14), // Reduced from 15
                             ),
                             if (isLocked) ...[
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 6), // Reduced from 8
                               Icon(Icons.lock_rounded,
-                                  size: 13,
+                                  size: 12, // Reduced from 13
                                   color: Theme.of(context)
                                       .colorScheme
                                       .onSurface
@@ -982,17 +983,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ],
                           ],
                         ),
+                        const SizedBox(height: 2), // Added small gap instead of no gap
                         Text(
-                          isPreviewing
-                              ? 'Preview not available…'
-                              : 'Test this voice during live conversations',
+                          'Test during live conversations',
                           style: TextStyle(
-                            fontSize: 13,
-                            color: isPreviewing
-                                ? primary
-                                : isDark
-                                    ? Colors.white60
-                                    : Colors.grey.shade600,
+                            fontSize: 11, // Reduced from 13 for more compact
+                            color: isDark
+                                ? Colors.white60
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ],
@@ -1001,7 +999,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   // No preview button for Live voices - they can only be tested during conversations
                   const SizedBox(width: 4),
                   if (isSelected)
-                    Icon(Icons.check_circle_rounded, color: primary, size: 22),
+                    Icon(Icons.check_circle_rounded, color: primary, size: 20), // Reduced from 22
                 ],
               ),
             ),
