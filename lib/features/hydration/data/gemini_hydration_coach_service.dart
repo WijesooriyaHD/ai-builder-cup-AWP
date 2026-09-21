@@ -9,7 +9,7 @@ import '../../../services/content_safety_filter.dart';
 import '../domain/hydration_coach_service.dart';
 import '../domain/hydration_models.dart';
 
-/// [HydrationCoachService] backed by Gemini 2.5 Flash (Firebase Vertex AI) for
+/// [HydrationCoachService] backed by Gemini Flash (Firebase Vertex AI) for
 /// richer phrasing, with deterministic heuristics that always work offline.
 class GeminiHydrationCoachService implements HydrationCoachService {
   static const String _modelId = kGeminiFlashModel;

@@ -586,7 +586,7 @@ class _AddDreamScreenState extends State<AddDreamScreen> {
 
         List<Map<String, dynamic>>? aiSteps;
 
-        // Generate task steps via Firebase AI (Vertex, Gemini 2.5 Flash).
+        // Generate task steps via Firebase AI (Vertex, Gemini Flash).
         if (_generateWithAi) {
            try {
              aiSteps = await AIService().generateDreamTasks(

@@ -37,6 +37,14 @@ class VoiceCommandService extends ChangeNotifier {
   /// assistant can tailor upsell hints (only suggests Premium to free users).
   bool _isPremium = false;
   set isPremium(bool value) => _isPremium = value;
+
+  /// The app-feature knowledge block injected into conversational replies, so
+  /// this pal knows the app as well as the Live pal does (tabs, Today's Plan,
+  /// the Wellness Toolkit, Challenges, the Wellness Studio, Wellness Reads).
+  ///
+  /// Set by the UI layer, which owns the shared persona text — that keeps this
+  /// service free of UI imports. Null means "no extra knowledge".
+  String? appKnowledge;
   double _soundLevel = 0.0;
   String _currentWords = '';
   final List<VoiceMessage> _messages = [];
@@ -128,6 +136,9 @@ class VoiceCommandService extends ChangeNotifier {
       _tts.setCompletionHandler(() {
         _state = VoiceAssistantState.idle;
         notifyListeners();
+        // Chain anything queued to run after this utterance (e.g. open the mic
+        // once the opening greeting has finished).
+        _runAfterSpeakOnce();
       });
 
       _isInitialized = true;
@@ -172,8 +183,7 @@ class VoiceCommandService extends ChangeNotifier {
   Future<void> previewVoice(String voiceId) async {
     await setVoice(voiceId);
     if (!_isInitialized) await initialize();
-    await speak(
-        "Hi, I'm your wellness assistant. This is how I'll sound.");
+    await speak("Hi, I'm your wellness pal. This is how I'll sound.");
   }
 
   // ---------------------------------------------------------------------------
@@ -274,6 +284,65 @@ class VoiceCommandService extends ChangeNotifier {
     _state = VoiceAssistantState.speaking;
     notifyListeners();
     await _tts.speak(text);
+  }
+
+  /// One-shot callback fired when the current utterance finishes speaking.
+  /// Used to chain "greet, then listen" without talking over ourselves.
+  VoidCallback? _afterSpeakOnce;
+  Timer? _afterSpeakFallback;
+
+  void _runAfterSpeakOnce() {
+    _afterSpeakFallback?.cancel();
+    _afterSpeakFallback = null;
+    final cb = _afterSpeakOnce;
+    _afterSpeakOnce = null;
+    cb?.call();
+  }
+
+  /// Greets the user out loud when the pal opens, then starts listening once
+  /// the greeting has finished playing.
+  ///
+  /// Mirrors how the Live pal opens the conversation itself, so the default pal
+  /// no longer starts in silence.
+  Future<void> greetAndListen() async {
+    if (_liveActive) return;
+    if (!_isInitialized) await initialize();
+    if (_liveActive) return;
+
+    final greeting = openingGreeting();
+    _addAssistantMessage(greeting);
+
+    _afterSpeakOnce = () {
+      if (_liveActive) return;
+      // Short settle so the speaker's tail doesn't leak into the mic.
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (_liveActive) return;
+        if (_state == VoiceAssistantState.idle) startListening();
+      });
+    };
+    // Safety net: if the TTS engine never reports completion (or is muted),
+    // open the mic anyway so the pal can't get stuck silent.
+    _afterSpeakFallback?.cancel();
+    _afterSpeakFallback =
+        Timer(const Duration(seconds: 8), _runAfterSpeakOnce);
+
+    if (!_speechAvailable) {
+      // No mic — still greet, just don't promise to listen.
+      await speak(greeting);
+      return;
+    }
+    await speak(greeting);
+  }
+
+  /// A warm, time-aware opening line in the pal's voice.
+  String openingGreeting() {
+    final hour = DateTime.now().hour;
+    final timeGreeting = hour < 12
+        ? 'Good morning'
+        : hour < 17
+            ? 'Good afternoon'
+            : 'Good evening';
+    return "$timeGreeting! I'm your wellness pal. What's on your mind today?";
   }
 
   /// Starts the conversational check-in flow.
@@ -477,7 +546,7 @@ class VoiceCommandService extends ChangeNotifier {
   /// Tries the local keyword-based [VoiceIntentParser] FIRST — it's instant,
   /// offline, and handles the common phrasings with zero latency. Only when it
   /// can't confidently match (returns `unknown`) do we fall back to the
-  /// AI-backed parser (Gemini 2.5 Flash via [AIService]) for flexible
+  /// AI-backed parser (Gemini Flash via [AIService]) for flexible
   /// natural-language understanding. If the AI is unavailable/errors/unsure,
   /// the original `unknown` command is used so the assistant still responds.
   Future<VoiceCommand> _parseCommand(String text) async {
@@ -704,9 +773,7 @@ class VoiceCommandService extends ChangeNotifier {
         response = "Generating a new plan for you.";
         break;
       case VoiceCommandType.greeting:
-        final hour = DateTime.now().hour;
-        final timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-        response = "$timeGreeting! I'm your wellness assistant. How can I help you today?";
+        response = openingGreeting();
         break;
       case VoiceCommandType.howAmI:
         response = "You're doing great by checking in with your wellness. Keep it up!";
@@ -717,7 +784,7 @@ class VoiceCommandService extends ChangeNotifier {
         if (!_isPremium) {
           response +=
               " With Premium, I can also regenerate your plan, adjust your "
-              "energy and recovery by voice, and unlock more assistant voices. "
+              "energy and recovery by voice, and unlock more pal voices. "
               "You can upgrade to Premium in Settings.";
         }
         break;
@@ -777,7 +844,7 @@ class VoiceCommandService extends ChangeNotifier {
         break;
       case VoiceCommandType.unknown:
         // Not an app command — treat it as a free-form question and let
-        // Gemini 2.5 Flash generate a conversational spoken answer. Fall back
+        // Gemini Flash generate a conversational spoken answer. Fall back
         // to the help prompt only if the AI is unavailable.
         final aiReply = await _generateConversationalReply(command.rawText);
         if (aiReply != null) {
@@ -811,6 +878,7 @@ class VoiceCommandService extends ChangeNotifier {
         question,
         // Exclude the current utterance (already appended to _messages).
         history: _recentHistory(dropLast: 1),
+        appKnowledge: appKnowledge,
       );
     } catch (e) {
       debugPrint('VoiceCommandService: conversational reply failed: $e');

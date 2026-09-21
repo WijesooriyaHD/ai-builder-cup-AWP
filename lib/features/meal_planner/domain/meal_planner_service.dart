@@ -2,7 +2,7 @@ import 'meal_planner_models.dart';
 
 /// Provider-agnostic contract for generating meal plans.
 ///
-/// Implementations wrap a specific AI backend (e.g. Gemini 2.5 Flash via
+/// Implementations wrap a specific AI backend (e.g. Gemini Flash via
 /// Firebase Vertex AI, or a future provider). Presentation and repository
 /// layers depend only on this interface, so the AI can be swapped freely.
 abstract class MealPlannerService {

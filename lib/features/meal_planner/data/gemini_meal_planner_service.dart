@@ -11,7 +11,7 @@ import '../../nutrition/domain/nutrition_models.dart';
 import '../domain/meal_planner_models.dart';
 import '../domain/meal_planner_service.dart';
 
-/// [MealPlannerService] backed by Gemini 2.5 Flash via Firebase Vertex AI.
+/// [MealPlannerService] backed by Gemini Flash via Firebase Vertex AI.
 ///
 /// Uses the same App Check + Auth setup as the rest of the app. All AI text is
 /// sanitized via [ContentSafetyFilter].

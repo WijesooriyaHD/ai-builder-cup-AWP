@@ -9,7 +9,7 @@ import '../../../services/content_safety_filter.dart';
 import '../domain/calorie_budget_models.dart';
 import '../domain/calorie_budget_service.dart';
 
-/// [CalorieBudgetService] backed by Gemini 2.5 Flash (Firebase Vertex AI) for
+/// [CalorieBudgetService] backed by Gemini Flash (Firebase Vertex AI) for
 /// richer phrasing, with a deterministic heuristic that always produces a
 /// sensible prediction/insights even offline or on AI failure.
 class GeminiCalorieBudgetService implements CalorieBudgetService {

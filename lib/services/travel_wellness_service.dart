@@ -32,7 +32,7 @@ class TravelWellnessContext {
   });
 }
 
-/// Generates travel-specific wellness guidance using Gemini 2.5 Flash,
+/// Generates travel-specific wellness guidance using Gemini Flash,
 /// degrading gracefully to a curated heuristic when AI is unavailable.
 ///
 /// Guidance is intentionally non-clinical: practical tips on hydration,

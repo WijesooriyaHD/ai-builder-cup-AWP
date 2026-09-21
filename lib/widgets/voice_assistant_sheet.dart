@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'dart:ui' as ui;
 
 import '../services/live_conversation_service.dart';
+import 'conversation_mode_sheet.dart' show kWellnessPalAppKnowledge;
 import 'live_pal_session.dart';
 import '../models/voice_command.dart';
 import '../models/check_in.dart';
@@ -94,13 +95,19 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
 
     _voiceService.addListener(_onServiceUpdate);
     // Honor the user's saved voice preference and Premium status for this
-    // session (the assistant tailors upsell hints for free users).
+    // session (the pal tailors upsell hints for free users).
     _voiceService.setVoice(appState.aiVoice);
     _voiceService.isPremium = appState.isPro;
+    // Give the default pal the SAME app-feature knowledge the Live pal has, so
+    // it can answer questions about Today's Plan, the Toolkit, Challenges, the
+    // Wellness Studio, and Wellness Reads just as well.
+    _voiceService.appKnowledge = kWellnessPalAppKnowledge;
     _voiceService.initialize().then((_) {
-      // Auto-start listening when sheet opens
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) _voiceService.startListening();
+      if (!mounted) return;
+      // Greet out loud (like the Live pal opens the conversation), then start
+      // listening once the greeting has finished playing.
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) _voiceService.greetAndListen();
       });
     });
   }
@@ -1087,7 +1094,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
             ),
             const SizedBox(height: 8),
             Text(
-              'Try: "Switch to dark mode"\n"Start my check-in"\n"How am I doing?"',
+              'Try: "Start my check-in"\n"What\'s in the Wellness Studio?"\n'
+              '"I\'m feeling stressed"',
               textAlign: TextAlign.center,
               style: GoogleFonts.dmSans(
                 fontSize: 14,

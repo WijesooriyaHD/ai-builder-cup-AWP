@@ -2,7 +2,7 @@ import 'hydration_models.dart';
 
 /// Provider-agnostic contract for hydration intelligence.
 ///
-/// Implementations may use an AI backend (e.g. Gemini 2.5 Flash via Firebase
+/// Implementations may use an AI backend (e.g. Gemini Flash via Firebase
 /// Vertex AI) but MUST degrade gracefully to a deterministic heuristic so the
 /// tool works offline / for free users.
 abstract class HydrationCoachService {

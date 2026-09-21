@@ -836,7 +836,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Choose how your wellness assistant sounds.',
+          'Choose how your wellness pal sounds.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: isDark ? Colors.white60 : Colors.grey.shade600,
               ),
@@ -1103,7 +1103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Premium voices let you personalize how your wellness assistant '
+              'Premium voices let you personalize how your wellness pal '
               'sounds. Upgrade to Premium to unlock ${voice.name} and more.',
               textAlign: TextAlign.center,
               style: TextStyle(

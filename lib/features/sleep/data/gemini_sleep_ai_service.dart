@@ -9,7 +9,7 @@ import '../../../services/content_safety_filter.dart';
 import '../domain/sleep_ai_service.dart';
 import '../domain/sleep_models.dart';
 
-/// [SleepAIService] backed by Gemini 2.5 Flash (Firebase Vertex AI), with a
+/// [SleepAIService] backed by Gemini Flash (Firebase Vertex AI), with a
 /// deterministic heuristic so the dashboard always has an insight even when AI
 /// is unavailable. Only structured, privacy-safe context is sent — no
 /// identifiers, tokens, or personal details.

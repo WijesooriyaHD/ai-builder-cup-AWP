@@ -53,7 +53,7 @@ const List<AiVoiceOption> kAiVoices = [
   AiVoiceOption(
     id: 'default',
     name: 'Default',
-    description: 'The standard assistant voice',
+    description: 'The standard pal voice',
     ttsVoiceName: null,
     pitch: 1.0,
     rate: 0.48,

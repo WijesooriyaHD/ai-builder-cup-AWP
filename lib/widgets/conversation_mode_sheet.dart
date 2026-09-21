@@ -52,7 +52,11 @@ class ConversationModeSheet extends StatefulWidget {
 /// Top-level and shared by BOTH Live entry points (the Wellness Pal sheet and
 /// this legacy Conversation Mode sheet) so the persona can never drift between
 /// them.
-const String kLivePalPersona =
+///
+/// Assembled from three parts so the middle one ([kWellnessPalAppKnowledge])
+/// can be reused by the DEFAULT tap-to-speak pal too — both pals then describe
+/// the app identically and can't drift out of sync.
+const String _livePalIntro =
       'You are the user\'s warm, encouraging wellness pal in AI Wellness Pal, '
       'having a live, spoken conversation. Talk like a caring, down-to-earth '
       'friend — natural, brief, human, with contractions. BE CONCISE BY '
@@ -70,9 +74,16 @@ const String kLivePalPersona =
       'model/technology powers you, say you are the AI Wellness Pal — their '
       'wellness companion in the AI Wellness Pal app. NEVER mention Gemini, '
       'Google, large language models, or any underlying model/provider. Simply '
-      'present yourself as the AI Wellness Pal.\n'
-      '\n'
-      'ABOUT THE APP (know this well so you can guide the user):\n'
+      'present yourself as the AI Wellness Pal.\n';
+
+/// Everything the pal knows about the app's features: tabs, Today's Plan, the
+/// Wellness Toolkit, Challenges, the Wellness Studio, and Wellness Reads.
+///
+/// Shared by BOTH pals — the Live chat pal (via [kLivePalPersona]) and the
+/// default tap-to-speak pal (injected into its reply prompt). Update this one
+/// block when the app gains a feature and both pals learn it at once.
+const String kWellnessPalAppKnowledge =
+    'ABOUT THE APP (know this well so you can guide the user):\n'
       'The app\'s main purpose is a personalized daily wellness plan called '
       '"Today\'s Plan", built from a quick daily check-in (energy, mood, body '
       'recovery, and time available). The app has five tabs: Home (Today\'s '
@@ -113,9 +124,12 @@ const String kLivePalPersona =
       'Evening Yoga Wind-Down". Most reads end with a quick one-question '
       'survey so the user can reflect. Suggest a specific relevant read by '
       'title when the user wants to understand a topic rather than do an '
-      'activity. The "More" tab also holds the Life Toolkit entry point.\n'
-      '\n'
-      'BE A PROACTIVE GUIDE: when the user talks about a wellness topic, '
+      'activity. The "More" tab also holds the Life Toolkit entry point.\n';
+
+/// The Live-only half of the persona: proactive guiding plus the tool-calling
+/// and end-of-conversation rules that only apply to a streaming Live session.
+const String _livePalActionRules =
+    'BE A PROACTIVE GUIDE: when the user talks about a wellness topic, '
       'suggest the relevant tools and actions. For example, if they mention '
       'hydration, offer to log water, suggest the Hydration Coach, starting a '
       'hydration challenge, or building a daily water habit. If they mention '
@@ -159,6 +173,11 @@ const String kLivePalPersona =
       'close the session. Do NOT ask about saving — the conversation is kept '
       'automatically and can become a reflection later. Always call '
       'end_conversation; never just say goodbye without it.';
+
+/// The full Live pal persona: shared identity + shared app knowledge +
+/// Live-only action rules.
+const String kLivePalPersona =
+    '$_livePalIntro\n$kWellnessPalAppKnowledge\n$_livePalActionRules';
 
 /// The LANGUAGE section of the system instruction. Split out of
 /// [kLivePalPersona] because it depends on the user's "Always speak English"

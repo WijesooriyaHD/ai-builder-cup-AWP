@@ -47,7 +47,8 @@ class ConversationSummary {
 /// Requirements: 1.8, 2.8, 3.12, 8.2, 8.4, 8.8
 class AIService {
   /// The Gemini model ID used for all generation, via Vertex AI.
-  /// Sourced from the central [kGeminiFlashModel] config (Gemini 3.8 Flash).
+  /// Sourced from the central [kGeminiFlashModel] config (Gemini 3.5 Flash by
+  /// default; override with `--dart-define=GEMINI_FLASH_MODEL=<id>`).
   static const String _modelId = kGeminiFlashModel;
 
   static const int _planTimeoutSeconds = 20;
@@ -84,7 +85,7 @@ class AIService {
       : _ai = ai ??
             FirebaseAI.agentPlatform();
 
-  /// Builds a [GenerativeModel] for the Gemini 2.5 Flash model.
+  /// Builds a [GenerativeModel] for [_modelId] (see [kGeminiFlashModel]).
   ///
   /// [temperature] and [systemInstruction] mirror the previous server-side
   /// configuration. When [jsonOutput] is true the model is asked to return
@@ -190,7 +191,7 @@ class AIService {
   // Daily plan
   // ---------------------------------------------------------------------------
 
-  /// Generates a personalized [DailyPlan] using Gemini 2.5 Flash.
+  /// Generates a personalized [DailyPlan] using Gemini Flash.
   ///
   /// Enforces a 20-second timeout. Returns a [DailyPlan] on success, or `null`
   /// on timeout/error so callers can use a fallback.
@@ -506,7 +507,7 @@ Respond ONLY with valid JSON in this exact format:
   // Reflection prompts
   // ---------------------------------------------------------------------------
 
-  /// Generates exactly 3 reflection prompts using Gemini 2.5 Flash.
+  /// Generates exactly 3 reflection prompts using Gemini Flash.
   ///
   /// Enforces a 10-second timeout. On timeout or error, returns 3 pre-written
   /// fallback prompts.
@@ -586,7 +587,7 @@ Respond ONLY with valid JSON in this exact format:
         buffer.toString(),
         // Slightly warmer/more natural tone for a coach-like conversation.
         temperature: 0.85,
-        // Gemini 2.5 Flash is a "thinking" model that spends output tokens on
+        // Gemini Flash is a "thinking" model that spends output tokens on
         // internal reasoning before the visible reply, so a low cap truncates
         // the answer mid-sentence (finish=maxTokens). Give it ample room; the
         // system instruction still keeps the visible reply short (2–5 sentences).
@@ -700,7 +701,7 @@ Respond ONLY with a JSON array of exactly 3 strings, e.g.:
   // Wellness insight
   // ---------------------------------------------------------------------------
 
-  /// Generates a 30–80 word wellness insight using Gemini 2.5 Flash.
+  /// Generates a 30–80 word wellness insight using Gemini Flash.
   ///
   /// Provide either a [plan] (uses its structured summary) or a plain-text
   /// [summary] (e.g. an intention summary). At least one must be non-null.
@@ -720,7 +721,7 @@ Respond ONLY with a JSON array of exactly 3 strings, e.g.:
         prompt,
         temperature: 0.7,
         // Ample room so internal "thinking" tokens don't truncate the visible
-        // insight (Gemini 2.5 Flash). The prompt keeps it to 30–80 words.
+        // insight (Gemini Flash). The prompt keeps it to 30–80 words.
         maxOutputTokens: 1024,
         systemInstruction:
             'You are a supportive wellness companion. Respond only with plain '
@@ -807,7 +808,7 @@ Respond ONLY with the insight text (no JSON, no quotes, no labels).''';
         prompt,
         temperature: 0.7,
         // Ample room so the model's internal "thinking" tokens don't truncate
-        // the visible insight (Gemini 2.5 Flash). The prompt keeps it concise.
+        // the visible insight (Gemini Flash). The prompt keeps it concise.
         maxOutputTokens: 1024,
         systemInstruction:
             'You are a supportive wellness companion. Respond only with plain '
@@ -866,7 +867,7 @@ Respond ONLY with the insight text (no JSON, no quotes, no labels).''';
       final lesson = await _generateText(
         buffer.toString(),
         temperature: 0.7,
-        // Gemini 2.5 Flash spends output tokens on internal reasoning before
+        // Gemini Flash spends output tokens on internal reasoning before
         // the visible reply, so give it ample room to avoid mid-lesson
         // truncation. The system instruction keeps the lesson concise.
         maxOutputTokens: 2048,
@@ -1083,7 +1084,7 @@ Respond ONLY with the JSON object.''';
   // Weekly summary
   // ---------------------------------------------------------------------------
 
-  /// Generates an 80–200 word weekly reflection summary using Gemini 2.5 Flash.
+  /// Generates an 80–200 word weekly reflection summary using Gemini Flash.
   ///
   /// Returns `null` on error.
   Future<String?> generateWeeklySummary({
@@ -1236,7 +1237,7 @@ Respond ONLY with the summary text (no JSON, no labels).''';
   };
 
   /// Interprets free-form [speech] into a structured [VoiceCommand] using
-  /// Gemini 2.5 Flash with a constrained JSON response schema.
+  /// Gemini Flash with a constrained JSON response schema.
   ///
   /// Returns `null` on timeout, error, or when the model is unsure (type
   /// `unknown`), so the caller can fall back to the keyword-based
@@ -1465,7 +1466,7 @@ Respond ONLY with the summary text (no JSON, no labels).''';
   }
 
   /// Generates a conversational spoken reply to a free-form voice question
-  /// that didn't match any app command, using Gemini 2.5 Flash.
+  /// that didn't match any app command, using Gemini Flash.
   ///
   /// Kept short (suitable for text-to-speech) and in a warm wellness-companion
   /// tone. Returns `null` on timeout/error so the caller can fall back to a
@@ -1495,36 +1496,61 @@ Respond ONLY with the summary text (no JSON, no labels).''';
   Future<String?> generateVoiceReply(
     String question, {
     List<Map<String, String>> history = const [],
+    String? appKnowledge,
   }) async {
     if (question.trim().isEmpty) return null;
     try {
       final transcript = _formatVoiceHistory(history);
+      // The app-feature knowledge block is injected by the UI layer (which owns
+      // the shared persona text) so this service stays free of UI dependencies.
+      // With it, the default pal can answer feature questions as well as the
+      // Live pal does.
+      final knowledge =
+          (appKnowledge != null && appKnowledge.trim().isNotEmpty)
+              ? '\n\n${appKnowledge.trim()}'
+              : '';
       final text = await _generateText(
-        '${transcript}The user said to the voice assistant: "$question"\n\n'
+        '${transcript}The user said to their wellness pal: "$question"\n\n'
         'Reply helpfully, staying consistent with the conversation so far. '
         'Always finish your sentences completely.',
         temperature: 0.7,
-        // Gemini 2.5 Flash is a "thinking" model that spends output tokens on
+        // Gemini Flash is a "thinking" model that spends output tokens on
         // internal reasoning before the visible answer, so a low cap can
         // truncate the reply mid-sentence. Give it ample room; the prompt
         // still keeps the spoken answer short.
         maxOutputTokens: 800,
         systemInstruction:
-            'You are the friendly voice assistant inside a wellness app called '
-            'AI Wellness Pal. Answer the user\'s question or respond to their '
-            'message conversationally in 2-4 complete sentences suitable for '
-            'being read aloud. Always finish your thought — never stop '
-            'mid-sentence. Be warm, supportive, and practical. Do NOT use '
-            'markdown, lists, or emojis. Do NOT give medical, legal, or '
-            'financial advice, and avoid clinical language. If the user asks '
-            'who or what you are, who made you, or what powers you, say you are '
-            'the AI Wellness Pal — their wellness companion in this app. NEVER '
+            'You are the user\'s warm, encouraging wellness pal in a wellness '
+            'app called AI Wellness Pal. Talk like a caring, down-to-earth '
+            'friend — natural, brief, human, with contractions. Answer the '
+            'user\'s question or respond to their message conversationally in '
+            '2-4 complete sentences suitable for being read aloud. Always '
+            'finish your thought — never stop mid-sentence. Be warm, '
+            'supportive, and practical. Do NOT use markdown, lists, or emojis. '
+            'Be positive; never shame or alarm the user. Only suggest safe, '
+            'gentle, healthy actions. Do NOT give medical, legal, or '
+            'financial advice, and avoid clinical language. For signs of '
+            'crisis, respond with compassion and gently encourage reaching out '
+            'to a trusted person or professional.\n'
+            '\n'
+            'IDENTITY: if the user asks who or what you are, who made you, or '
+            'what model/technology powers you, say you are the AI Wellness '
+            'Pal — their wellness companion in the AI Wellness Pal app. NEVER '
             'mention Gemini, Google, large language models, or any underlying '
-            'model/provider. If the request is '
-            'something the app can do (themes, check-in, journal, plans), gently '
-            'guide them. Use the conversation so far for context — resolve '
-            'follow-ups like "it", "that", or "how about tomorrow?" from the '
-            'earlier turns, and don\'t repeat yourself.',
+            'model/provider. Never call yourself an "assistant" — you are '
+            'their wellness pal.\n'
+            '\n'
+            'BE A PROACTIVE GUIDE: when the user mentions a wellness topic, '
+            'point them to the relevant part of the app and offer a concrete '
+            'next step — a Wellness Toolkit tool, a Wellness Studio activity '
+            'by name, a Wellness Read by title, a habit, or a challenge. Tie '
+            'suggestions to what they actually said. You cannot perform '
+            'actions in this mode, so TELL them where to go rather than '
+            'claiming you did it.\n'
+            '\n'
+            'Use the conversation so far for context — resolve follow-ups like '
+            '"it", "that", or "how about tomorrow?" from the earlier turns, '
+            'and don\'t repeat yourself.$knowledge',
         timeout: const Duration(seconds: _promptTimeoutSeconds),
       );
       if (text == null) return null;
@@ -1621,7 +1647,7 @@ Respond ONLY with the summary text (no JSON, no labels).''';
   // ---------------------------------------------------------------------------
 
   /// Generates a short, tidy wellness-intention title from a longer/raw
-  /// spoken phrase using Gemini 2.5 Flash (e.g. "i really want to get better
+  /// spoken phrase using Gemini Flash (e.g. "i really want to get better
   /// at doing yoga every morning" -> "Morning Yoga Practice").
   ///
   /// Returns a concise Title Case string (≤ 4 words), or `null` on
@@ -1700,7 +1726,7 @@ Respond ONLY with the summary text (no JSON, no labels).''';
   }
 
   /// Breaks a wellness intention (e.g. "Learn Yoga") into [days] small daily
-  /// task steps using Gemini 2.5 Flash.
+  /// task steps using Gemini Flash.
   ///
   /// Returns a list of `{title, duration, isCompleted}` maps. On failure,
   /// returns a generic sequence so callers always receive usable tasks.
@@ -1795,7 +1821,7 @@ Respond ONLY with a valid JSON array of strings, e.g.:
   ];
 
   /// Generates a small set of personalized Wellness Studio activities tailored
-  /// to the user's recent wellness journey, using Gemini 2.5 Flash.
+  /// to the user's recent wellness journey, using Gemini Flash.
   ///
   /// Inputs: today's/most-recent [checkIn], recent [recentPlans] (focus +
   /// completed actions), and the user's [intentions]. Returns up to [count]

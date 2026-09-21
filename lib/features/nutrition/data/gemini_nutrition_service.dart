@@ -11,7 +11,7 @@ import '../../../services/content_safety_filter.dart';
 import '../domain/nutrition_analysis_service.dart';
 import '../domain/nutrition_models.dart';
 
-/// [NutritionAnalysisService] backed by Gemini 2.5 Flash (Firebase Vertex AI)
+/// [NutritionAnalysisService] backed by Gemini Flash (Firebase Vertex AI)
 /// for photo/text analysis and Open Food Facts for barcode lookups.
 ///
 /// Uses the same Firebase AI Logic setup as the rest of the app (App Check +

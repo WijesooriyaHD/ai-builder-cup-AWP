@@ -2,7 +2,7 @@ import 'calorie_budget_models.dart';
 
 /// Provider-agnostic contract for calorie-budget intelligence.
 ///
-/// Implementations wrap a specific AI backend (e.g. Gemini 2.5 Flash via
+/// Implementations wrap a specific AI backend (e.g. Gemini Flash via
 /// Firebase Vertex AI) but must always degrade gracefully to a deterministic
 /// heuristic so the tool works offline / for free users.
 abstract class CalorieBudgetService {

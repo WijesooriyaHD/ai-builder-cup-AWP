@@ -4,7 +4,7 @@ import 'nutrition_models.dart';
 
 /// Provider-agnostic contract for analyzing food into a [NutritionResult].
 ///
-/// Implementations wrap a specific backend (e.g. Gemini 2.5 Flash via Firebase
+/// Implementations wrap a specific backend (e.g. Gemini Flash via Firebase
 /// Vertex AI, Open Food Facts for barcodes, or a future provider). The
 /// presentation and repository layers depend only on this interface, so the
 /// underlying AI can be swapped without touching UI code.
