@@ -60,6 +60,8 @@ final class LiveAudioEngine: NSObject {
   /// Counts mic chunks pushed to Dart; logged once so a silent session is easy
   /// to diagnose (0 = the model is receiving no audio at all).
   private var micBuffersSent = 0
+  /// Counts pal-audio chunks handed to the player node.
+  private var playerChunksScheduled = 0
 
   // Playback progress tracking (so Dart's turn/echo logic can tell when audio
   // is still playing). We count frames scheduled vs. a start time.
@@ -122,6 +124,54 @@ final class LiveAudioEngine: NSObject {
     }
   }
 
+  // MARK: - Voice processing (AEC)
+
+  /// Turns on the acoustic echo canceller. This is the crux of the whole
+  /// pipeline: it uses the engine's output (the pal's voice) as the reference
+  /// and subtracts it from the captured mic signal.
+  ///
+  /// MUST be re-applied after any engine reset or configuration change —
+  /// `engine.reset()` and I/O reconfiguration drop it. If it is lost, the mic
+  /// hears the loudspeaker, the server's VAD treats the pal's own voice as the
+  /// user barging in, and the reply is cut off mid-sentence.
+  ///
+  /// Enabled on the OUTPUT node too: voice processing is a paired I/O unit, and
+  /// enabling only one side can leave the engine unable to start at all.
+  private func enableVoiceProcessing() {
+    guard #available(iOS 13.0, *) else { return }
+    do {
+      if !engine.inputNode.isVoiceProcessingEnabled {
+        try engine.inputNode.setVoiceProcessingEnabled(true)
+      }
+      if !engine.outputNode.isVoiceProcessingEnabled {
+        try engine.outputNode.setVoiceProcessingEnabled(true)
+      }
+    } catch {
+      NSLog("[LiveAudioEngine] could not enable voice processing: \(error)")
+    }
+    NSLog("[LiveAudioEngine] voice processing — input="
+      + "\(engine.inputNode.isVoiceProcessingEnabled), "
+      + "output=\(engine.outputNode.isVoiceProcessingEnabled)")
+  }
+
+  // MARK: - Graph wiring
+
+  /// Attaches (once) and connects the pal-playback node to the main mixer.
+  ///
+  /// MUST be re-run after an engine reset or configuration change. iOS tears
+  /// down connections involving the I/O nodes when the configuration changes,
+  /// and a player node that isn't connected silently swallows every scheduled
+  /// buffer — the pal's reply arrives and its captions render, but nothing is
+  /// audible.
+  private func connectPlayerNode() {
+    if playerNode.engine == nil {
+      engine.attach(playerNode)
+    }
+    // Connect player → main mixer at the player's format; the engine handles
+    // conversion to the hardware output format.
+    engine.connect(playerNode, to: engine.mainMixerNode, format: playerFormat)
+  }
+
   // MARK: - Engine start / tap
 
   /// Installs the mic tap (idempotent — removes any existing tap first).
@@ -164,6 +214,10 @@ final class LiveAudioEngine: NSObject {
       engine.stop()
       engine.reset()
       Thread.sleep(forTimeInterval: 0.12)
+      // reset() drops voice processing AND the player connection — re-arm both
+      // or the next attempt runs with no echo cancellation and no audio out.
+      enableVoiceProcessing()
+      connectPlayerNode()
     }
     throw lastError ?? NSError(
       domain: "LiveAudioEngine", code: -1,
@@ -193,10 +247,19 @@ final class LiveAudioEngine: NSObject {
     micSourceFormat = nil
     let session = AVAudioSession.sharedInstance()
     do {
+      // Re-arm AEC FIRST: the configuration change that stopped the engine also
+      // drops voice processing. Rebuilding without this leaves the first reply
+      // running with no echo cancellation, so the pal interrupts itself.
+      enableVoiceProcessing()
+      // Re-wire playback BEFORE starting: the configuration change broke the
+      // player → mixer connection, so without this the pal is inaudible even
+      // though its captions still render.
+      connectPlayerNode()
       try startEngineVerified(session: session)
       installMicTap()
-      if !playerNode.isPlaying { playerNode.play() }
-      NSLog("[LiveAudioEngine] graph rebuilt after configuration change")
+      playerNode.play()
+      NSLog("[LiveAudioEngine] graph rebuilt after configuration change "
+        + "(playerPlaying=\(playerNode.isPlaying))")
     } catch {
       NSLog("[LiveAudioEngine] failed to rebuild after configuration change: \(error)")
     }
@@ -214,9 +277,26 @@ final class LiveAudioEngine: NSObject {
       "micPaused": micPaused,
       "hasEventSink": micEventSink != nil,
       "micBuffersSent": micBuffersSent,
+      // Playback health: if playerAttached/playerPlaying is false, or frames are
+      // being scheduled with nothing audible, the player lost its connection to
+      // the mixer (happens on a configuration change).
+      "playerAttached": playerNode.engine != nil,
+      "playerPlaying": playerNode.isPlaying,
+      "playerChunksScheduled": playerChunksScheduled,
+      "scheduledFrames": scheduledPlaybackFrames,
       "inputSampleRate": inFmt.sampleRate,
       "inputChannels": Int(inFmt.channelCount),
       "converterReady": micConverter != nil,
+      // If either of these is false, echo cancellation is OFF and the pal will
+      // hear itself (cutting its own reply short via the server's VAD).
+      "aecInput": {
+        if #available(iOS 13.0, *) { return engine.inputNode.isVoiceProcessingEnabled }
+        return false
+      }(),
+      "aecOutput": {
+        if #available(iOS 13.0, *) { return engine.outputNode.isVoiceProcessingEnabled }
+        return false
+      }(),
       // The category is the crux: if something else (e.g. audio_service) has
       // taken the session to .playback, recording is silently dead.
       "category": session.category.rawValue,
@@ -259,17 +339,7 @@ final class LiveAudioEngine: NSObject {
     try? session.overrideOutputAudioPort(.speaker)
     observeRouteChanges()
 
-    let input = engine.inputNode
-    // Turn on the acoustic echo canceller. This is the crux: it uses the
-    // engine's output (the pal's voice) as the reference and removes it from
-    // the captured mic signal.
-    //
-    // Enable it on the OUTPUT node too: voice processing is a paired I/O unit,
-    // and enabling only one side can leave the engine unable to start.
-    if #available(iOS 13.0, *) {
-      try input.setVoiceProcessingEnabled(true)
-      try? engine.outputNode.setVoiceProcessingEnabled(true)
-    }
+    enableVoiceProcessing()
 
     // Enabling voice processing (and the speaker override above) reconfigures
     // the I/O unit, which STOPS the engine. Watch for that and rebuild, or the
@@ -302,10 +372,7 @@ final class LiveAudioEngine: NSObject {
     micConverter = nil
     micSourceFormat = nil
 
-    engine.attach(playerNode)
-    // Connect player → main mixer at the player's format; the engine handles
-    // conversion to the hardware output format.
-    engine.connect(playerNode, to: engine.mainMixerNode, format: playerFormat)
+    connectPlayerNode()
 
     // Start the engine BEFORE installing the tap. `engine.start()` can return
     // without throwing while the engine is not actually running (the I/O unit
@@ -328,11 +395,12 @@ final class LiveAudioEngine: NSObject {
     // will hear nothing from the loudspeaker.
     let outputs = session.currentRoute.outputs.map { "\($0.portType.rawValue)" }
       .joined(separator: ",")
-    let inFmt = input.outputFormat(forBus: 0)
+    let inFmt = engine.inputNode.outputFormat(forBus: 0)
     NSLog("[LiveAudioEngine] started — output route: [\(outputs)], "
       + "input node format: \(inFmt.sampleRate)Hz ch\(inFmt.channelCount) "
       + "(0Hz here is OK — the mic converter is built from the first real buffer)")
     micBuffersSent = 0
+    playerChunksScheduled = 0
   }
 
   private func stop() {
@@ -481,7 +549,20 @@ final class LiveAudioEngine: NSObject {
       scheduledPlaybackFrames = 0
     }
     scheduledPlaybackFrames += AVAudioFramePosition(frameCount)
+    // Defensive: if a configuration change broke the player's connection, the
+    // scheduled buffer would be discarded silently. Re-wire before scheduling.
+    if playerNode.engine == nil || engine.outputConnectionPoints(
+        for: playerNode, outputBus: 0).isEmpty {
+      NSLog("[LiveAudioEngine] player was disconnected — re-wiring for playback")
+      connectPlayerNode()
+      if engine.isRunning { playerNode.play() }
+    }
     playerNode.scheduleBuffer(buffer, completionHandler: nil)
+    playerChunksScheduled += 1
+    if playerChunksScheduled == 1 {
+      NSLog("[LiveAudioEngine] first pal audio chunk scheduled "
+        + "(playerPlaying=\(playerNode.isPlaying), engineRunning=\(engine.isRunning))")
+    }
     if !playerNode.isPlaying { playerNode.play() }
   }
 

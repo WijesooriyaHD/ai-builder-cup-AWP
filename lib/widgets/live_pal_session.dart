@@ -158,9 +158,17 @@ mixin LivePalSessionMixin<T extends StatefulWidget> on State<T> {
         '${livePalLanguageRule(forceEnglish: forceEnglish)}\n\n'
         '${buildLivePalContextMemory(context)}';
 
+    // The pal's voice is fixed when the session is created, so a change in
+    // Settings applies to the NEXT conversation.
+    final voiceName = context.read<AppState>().livePalVoice;
+
     // TEMP(test): pass isPremium: true unconditionally (Premium gate disabled).
     // Restore with `isPremium: context.read<AppState>().isPro`.
-    await service.start(isPremium: true, systemInstruction: systemInstruction);
+    await service.start(
+      isPremium: true,
+      systemInstruction: systemInstruction,
+      voiceName: voiceName,
+    );
   }
 
   /// Called (from the tool bridge) when the pal wants to navigate somewhere.

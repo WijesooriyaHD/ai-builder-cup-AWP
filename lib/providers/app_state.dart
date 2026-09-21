@@ -100,6 +100,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String _aiVoice = 'default';
   bool _forceEnglishVoice = false;
   bool _liveChatPal = false;
+  String _livePalVoice = kDefaultLivePalVoice;
   List<String> _preferredMethods = const [];
   
   List<Dream> get dreams => _dreams;
@@ -136,6 +137,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// voice conversation). When false (the default) it opens the standard
   /// tap-to-speak pal.
   bool get liveChatPal => _liveChatPal;
+
+  /// The selected Gemini prebuilt voice for the Live chat pal (see
+  /// [kLivePalVoices]). Applied when a Live session is created, so a change
+  /// takes effect on the next conversation.
+  String get livePalVoice => _livePalVoice;
   /// Stable ids of the user's preferred wellness methods (see kWellnessMethods).
   /// Drives Today's Plan personalization. May be empty for pre-existing users.
   List<String> get preferredMethods => List.unmodifiable(_preferredMethods);
@@ -437,6 +443,19 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Selects the Live chat pal's voice. Throws [PremiumFeatureException] if the
+  /// chosen voice requires Premium and the user is not subscribed.
+  void setLivePalVoice(String voiceId) {
+    final voice = livePalVoiceById(voiceId);
+    if (voice.isPremium && !_isPro) {
+      throw PremiumFeatureException('livePalVoice:$voiceId');
+    }
+    if (_livePalVoice == voice.id) return;
+    _livePalVoice = voice.id;
+    _saveSettings();
+    notifyListeners();
+  }
+
   Future<void> _saveSettings() async {
     debugPrint('💾 _saveSettings: aiVoice=$_aiVoice, '
         'cloudSettingsLoaded=$_cloudSettingsLoaded');
@@ -452,6 +471,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       aiVoice: _aiVoice,
       forceEnglishVoice: _forceEnglishVoice,
       liveChatPal: _liveChatPal,
+      livePalVoice: _livePalVoice,
       preferredMethods: _preferredMethods,
       // Don't push settings to the cloud until the authoritative cloud values
       // have been loaded, so a transient pre-sync default can't overwrite them.
@@ -1496,6 +1516,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _aiVoice = settings['aiVoice'] as String? ?? 'default';
     _forceEnglishVoice = settings['forceEnglishVoice'] as bool? ?? false;
     _liveChatPal = settings['liveChatPal'] as bool? ?? false;
+    _livePalVoice =
+        settings['livePalVoice'] as String? ?? kDefaultLivePalVoice;
     final methods = settings['preferredMethods'];
     if (methods is List) {
       _preferredMethods = methods.map((e) => e.toString()).toList();

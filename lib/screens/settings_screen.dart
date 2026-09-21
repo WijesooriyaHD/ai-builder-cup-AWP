@@ -853,11 +853,142 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
         const SizedBox(height: 8),
         _buildLiveChatPalToggle(context, appState),
+        if (LiveConversationService.isAvailable) ...[
+          const SizedBox(height: 18),
+          _buildLivePalVoiceSelector(context, appState),
+        ],
         const SizedBox(height: 16),
         Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
         const SizedBox(height: 8),
         _buildForceEnglishToggle(context, appState),
       ],
+    );
+  }
+
+  /// Voice picker for the real-time Live chat pal. These are server-side Gemini
+  /// voices, so there's no local preview — the voice is applied when the next
+  /// conversation starts.
+  Widget _buildLivePalVoiceSelector(BuildContext context, AppState appState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedId = appState.livePalVoice;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'LIVE CHAT PAL VOICE',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
+              ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Applies to your next live conversation.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isDark ? Colors.white54 : Colors.grey.shade600,
+              ),
+        ),
+        const SizedBox(height: 12),
+        ...kLivePalVoices.map((voice) {
+          final isSelected = voice.id == selectedId;
+          final isLocked = voice.isPremium && !appState.isPro;
+          return _buildLivePalVoiceTile(
+              context, appState, voice, isSelected, isLocked);
+        }),
+      ],
+    );
+  }
+
+  Widget _buildLivePalVoiceTile(
+    BuildContext context,
+    AppState appState,
+    LivePalVoiceOption voice,
+    bool isSelected,
+    bool isLocked,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primary = Theme.of(context).colorScheme.primary;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          try {
+            appState.setLivePalVoice(voice.id);
+          } on PremiumFeatureException {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${voice.name} is a Premium voice.'),
+              ),
+            );
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? primary.withOpacity(0.1)
+                : (isDark
+                    ? Colors.white.withOpacity(0.04)
+                    : Colors.grey.shade50),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? primary : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(voice.icon, color: primary, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          voice.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        if (isLocked) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.lock_rounded,
+                              size: 13,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.4)),
+                        ],
+                      ],
+                    ),
+                    Text(
+                      voice.description,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark ? Colors.white60 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected)
+                Icon(Icons.check_circle_rounded, color: primary, size: 22),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

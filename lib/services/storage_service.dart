@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:path/path.dart' as p;
+import '../data/ai_voices.dart' show kDefaultLivePalVoice;
 import '../models/dream.dart';
 import '../models/travel_memory.dart';
 import '../models/journal_entry.dart';
@@ -50,6 +51,8 @@ class StorageService {
   /// When true, the mic FAB opens the real-time Live chat pal instead of the
   /// default tap-to-speak pal. Off by default.
   static const String _liveChatPalKey = 'aiwellnesspal_live_chat_pal';
+  /// The selected Gemini prebuilt voice for the Live chat pal.
+  static const String _livePalVoiceKey = 'aiwellnesspal_live_pal_voice';
   static const String _preferredMethodsKey = 'aiwellnesspal_preferred_methods';
   static const String _periodDataKey = 'aiwellnesspal_period_data';
   static const String _weightDataKey = 'aiwellnesspal_weight_data';
@@ -299,6 +302,7 @@ class StorageService {
     String? aiVoice,
     bool? forceEnglishVoice,
     bool? liveChatPal,
+    String? livePalVoice,
     List<String>? preferredMethods,
     bool syncToCloud = true,
   }) async {
@@ -319,6 +323,9 @@ class StorageService {
     }
     if (liveChatPal != null) {
       await prefs.setBool(_liveChatPalKey, liveChatPal);
+    }
+    if (livePalVoice != null) {
+      await prefs.setString(_livePalVoiceKey, livePalVoice);
     }
     if (preferredMethods != null) {
       await prefs.setStringList(_preferredMethodsKey, preferredMethods);
@@ -357,6 +364,7 @@ class StorageService {
           data['force_english_voice'] = forceEnglishVoice;
         }
         if (liveChatPal != null) data['live_chat_pal'] = liveChatPal;
+        if (livePalVoice != null) data['live_pal_voice'] = livePalVoice;
         if (preferredMethods != null) data['preferred_methods'] = preferredMethods;
 
         await _db
@@ -425,6 +433,8 @@ class StorageService {
       'forceEnglishVoice': prefs.getBool(_forceEnglishVoiceKey) ?? false,
       // Default OFF: the mic FAB opens the default tap-to-speak pal.
       'liveChatPal': prefs.getBool(_liveChatPalKey) ?? false,
+      'livePalVoice':
+          prefs.getString(_livePalVoiceKey) ?? kDefaultLivePalVoice,
       'preferredMethods': prefs.getStringList(_preferredMethodsKey) ?? <String>[],
     };
 
@@ -439,6 +449,8 @@ class StorageService {
           cloudProfile['force_english_voice'] ?? settings['forceEnglishVoice'];
       settings['liveChatPal'] =
           cloudProfile['live_chat_pal'] ?? settings['liveChatPal'];
+      settings['livePalVoice'] =
+          cloudProfile['live_pal_voice'] ?? settings['livePalVoice'];
       settings['isWinterMode'] =
           cloudProfile['is_winter_mode'] ?? settings['isWinterMode'];
       settings['showMotivation'] =

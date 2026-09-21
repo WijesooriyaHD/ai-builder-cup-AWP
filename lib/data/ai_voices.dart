@@ -80,3 +80,96 @@ AiVoiceOption aiVoiceById(String? id) {
     orElse: () => kAiVoices.first,
   );
 }
+
+/// A selectable voice for the real-time Live chat pal.
+///
+/// These are SERVER-side prebuilt voices from the Gemini Live API, not device
+/// TTS voices — so unlike [AiVoiceOption] there is no locale/pitch/rate to set
+/// and no local preview: the voice is chosen when the session is created and
+/// rendered by the model. [id] must be the exact prebuilt voice name the API
+/// expects (it is sent as `speech_config.voice_config.prebuilt_voice_config
+/// .voice_name`).
+class LivePalVoiceOption {
+  /// The exact Gemini prebuilt voice name. Also the value persisted in settings.
+  final String id;
+
+  /// User-facing display name.
+  final String name;
+
+  /// Short descriptor shown under the name.
+  final String description;
+
+  /// Icon shown in the selector.
+  final IconData icon;
+
+  /// Whether this voice requires a Pro subscription.
+  final bool isPremium;
+
+  const LivePalVoiceOption({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.icon,
+    this.isPremium = false,
+  });
+}
+
+/// The catalog of selectable Live chat pal voices.
+///
+/// All are free for now. Because the voice is fixed when the Live session is
+/// created, changing it takes effect on the NEXT conversation.
+const List<LivePalVoiceOption> kLivePalVoices = [
+  LivePalVoiceOption(
+    id: 'Aoede',
+    name: 'Aoede',
+    description: 'Calm, warm, conversational',
+    icon: Icons.spa_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(
+    id: 'Achernar',
+    name: 'Achernar',
+    description: 'Soft and gentle',
+    icon: Icons.nightlight_round,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(
+    id: 'Callirrhoe',
+    name: 'Callirrhoe',
+    description: 'Relaxed and natural',
+    icon: Icons.water_drop_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(
+    id: 'Leda',
+    name: 'Leda',
+    description: 'Energetic without sounding robotic',
+    icon: Icons.bolt_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(
+    id: 'Sadaltager',
+    name: 'Sadaltager',
+    description: 'A coach / expert feel',
+    icon: Icons.emoji_events_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(
+    id: 'Puck',
+    name: 'Puck',
+    description: 'Safest general-purpose voice',
+    icon: Icons.record_voice_over_rounded,
+    isPremium: false,
+  ),
+];
+
+/// The default Live pal voice id.
+const String kDefaultLivePalVoice = 'Aoede';
+
+/// Returns the Live voice option for [id], or the default when not found.
+LivePalVoiceOption livePalVoiceById(String? id) {
+  return kLivePalVoices.firstWhere(
+    (v) => v.id == id,
+    orElse: () => kLivePalVoices.first,
+  );
+}

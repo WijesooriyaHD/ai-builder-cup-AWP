@@ -647,6 +647,7 @@ class LiveConversationService extends ChangeNotifier {
     required bool isPremium,
     String? systemInstruction,
     String? modelId,
+    String? voiceName,
   }) async {
     if (!isAvailable) {
       _fail('Conversation Mode is not enabled in this build.');
@@ -705,6 +706,14 @@ class LiveConversationService extends ChangeNotifier {
         model: resolvedModel,
         liveGenerationConfig: LiveGenerationConfig(
           responseModalities: [ResponseModalities.audio],
+          // The pal's voice (a Gemini prebuilt voice name, chosen in
+          // Settings → AI Voice). Only voiceName is set — deliberately NOT
+          // languageCode: pinning a language here previously made the Live
+          // session return silence, and the language is steered via the system
+          // instruction instead.
+          speechConfig: (voiceName != null && voiceName.trim().isNotEmpty)
+              ? SpeechConfig(voiceName: voiceName.trim())
+              : null,
           // Ask the server for text transcriptions of BOTH sides of the
           // conversation: the model's spoken reply (output) and the user's
           // speech (input). We stitch these into a running two-sided transcript
@@ -731,7 +740,8 @@ class LiveConversationService extends ChangeNotifier {
             systemInstruction != null ? Content.system(systemInstruction) : null,
       );
 
-      debugPrint('LiveConversationService: connecting to "$resolvedModel"…');
+      debugPrint('LiveConversationService: connecting to "$resolvedModel" '
+          '(voice=${voiceName ?? "model default"})…');
       _session = await liveModel.connect();
       debugPrint('LiveConversationService: connected — session active.');
       _setState(LiveConversationState.active);
@@ -978,6 +988,13 @@ class LiveConversationService extends ChangeNotifier {
       if (message is LiveServerContent) {
         // Model asked to interrupt (user barged in) — stop current playback.
         if (message.interrupted == true) {
+          // Logged because a spurious interrupt is the signature of failed echo
+          // cancellation: the pal's own voice reaches the mic, the server's VAD
+          // reads it as the user speaking, and the reply is cut mid-sentence.
+          // An interrupt arriving while the pal is mid-reply and the user is
+          // silent means AEC is not doing its job.
+          debugPrint('LiveConversationService: server sent INTERRUPTED '
+              '(palSpeaking=$_modelSpeaking) — stopping playback.');
           _setModelSpeaking(false);
           await audio.stopPlayback();
           unawaited(audio.resumeCapture());
