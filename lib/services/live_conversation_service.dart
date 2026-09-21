@@ -70,6 +70,15 @@ abstract class LiveAudioIO {
   /// Stops any in-progress playback (used for barge-in).
   Future<void> stopPlayback();
 
+  /// Estimated time until all audio fed so far has finished playing.
+  ///
+  /// Because playback lags receive (chunks are buffered inside the player),
+  /// this lets the service know the model is still audibly speaking even when
+  /// no *new* chunk has arrived recently — so it doesn't re-open the mic or end
+  /// the turn mid-sentence on a long reply. Returns [Duration.zero] when
+  /// nothing is buffered/playing.
+  Duration get playbackRemaining => Duration.zero;
+
   /// Releases audio resources.
   Future<void> dispose();
 }
@@ -225,6 +234,17 @@ class LiveConversationService extends ChangeNotifier {
     final t = text.trim();
     if (t.isEmpty) return;
     if (speaker == LiveSpeaker.user) {
+      // ECHO GUARD: mic-vs-speaker isolation can never be perfect (two separate
+      // audio engines), so the mic sometimes catches the pal's own voice and
+      // the server transcribes it as USER input. Rather than rely only on the
+      // mic gate, we reject "user" text that is really an echo of what the pal
+      // just said — a content-level check on the actual transcription output.
+      if (_looksLikeModelEcho(t)) {
+        if (kDebugMode) {
+          debugPrint('LiveConversationService: dropped echoed user text: "$t"');
+        }
+        return;
+      }
       // Committing a new user turn flushes any pending model turn first.
       _flushModelTurn();
       _userTurnBuf.write(_userTurnBuf.isEmpty ? t : ' $t');
@@ -236,8 +256,71 @@ class LiveConversationService extends ChangeNotifier {
       _flushUserTurn();
       _modelTurnBuf.write(_modelTurnBuf.isEmpty ? t : ' $t');
       _lastTranscript = t;
+      // Remember what the pal recently said so the echo guard above can
+      // recognise it if the mic loops it back as "user" input.
+      _rememberModelSpeech(t);
     }
     notifyListeners();
+  }
+
+  // Rolling record of the pal's recent spoken words (lowercased) + when, used
+  // to detect when a "user" transcription is actually an echo of the pal.
+  final List<({String text, DateTime at})> _recentModelSpeech = [];
+
+  void _rememberModelSpeech(String text) {
+    _recentModelSpeech.add((text: text.toLowerCase(), at: DateTime.now()));
+    // Keep only the last few seconds' worth so old replies don't false-match.
+    final cutoff = DateTime.now().subtract(const Duration(seconds: 6));
+    _recentModelSpeech.removeWhere((e) => e.at.isBefore(cutoff));
+    if (_recentModelSpeech.length > 12) {
+      _recentModelSpeech.removeRange(0, _recentModelSpeech.length - 12);
+    }
+  }
+
+  /// Whether a supposed "user" utterance is really the pal's own voice looped
+  /// back through the mic. Two independent signals, either is enough:
+  ///  1. Timing: it arrived while the model was speaking or within a short
+  ///     window of the pal's last audio — a genuine barge-in would come via the
+  ///     server `interrupted` path, not as clean input mid-playback.
+  ///  2. Content: the words overlap what the pal recently said.
+  bool _looksLikeModelEcho(String userText) {
+    final sinceModelAudio =
+        DateTime.now().difference(_lastModelAudioAt).inMilliseconds;
+    final playing = (_audioIO?.playbackRemaining ?? Duration.zero) >
+        const Duration(milliseconds: 50);
+
+    // STRONGEST SIGNAL — the pal currently has the floor. The mic is gated
+    // while the model is speaking / its audio is still playing, so a "user"
+    // transcription arriving now is the speaker leaking into the mic, not real
+    // user speech (a genuine barge-in comes via the server `interrupted`
+    // path, not as clean input transcription). Drop it regardless of content.
+    if (_modelSpeaking || playing) return true;
+
+    // Otherwise only scrutinise text that arrived shortly AFTER the pal's audio
+    // (the tail window); anything later is clearly the user's own turn.
+    if (sinceModelAudio >= 1500) return false;
+
+    final u = userText.toLowerCase();
+    for (final spoken in _recentModelSpeech) {
+      final m = spoken.text;
+      if (m.isEmpty) continue;
+      // Echo if the user text is contained in the pal's words (or vice versa),
+      // or they share a meaningful word overlap.
+      if (m.contains(u) || u.contains(m) || _wordOverlap(u, m) >= 0.34) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Fraction of [a]'s words that also appear in [b] (0..1). Simple bag-of-words
+  /// overlap — enough to catch echoed fragments without heavy NLP.
+  double _wordOverlap(String a, String b) {
+    final aw = a.split(RegExp(r'\s+')).where((w) => w.length > 2).toList();
+    if (aw.isEmpty) return 0;
+    final bw = b.split(RegExp(r'\s+')).toSet();
+    final hits = aw.where(bw.contains).length;
+    return hits / aw.length;
   }
 
   void _flushUserTurn() {
@@ -383,6 +466,7 @@ class LiveConversationService extends ChangeNotifier {
     _endIntentFired = false;
     _endPending = false;
     _thinkingCuePlayed = false;
+    _recentModelSpeech.clear();
 
     try {
       final granted = await audio.requestPermission();
@@ -460,13 +544,23 @@ class LiveConversationService extends ChangeNotifier {
       await for (final data in micStream) {
         if (_state != LiveConversationState.active || _session == null) break;
         // Half-duplex gate: don't forward mic audio while the model is speaking
-        // (plus a short tail after its last audio chunk) so the loudspeaker
-        // output isn't captured and echoed back. `_modelSpeaking` is cleared on
-        // the server's turnComplete signal (see _onServerResponse), which is
-        // what keeps the conversation flowing turn-to-turn.
+        // OR while its audio is still playing out of the speaker, so the
+        // loudspeaker output isn't captured and transcribed back as the user
+        // (the "pal hears himself" echo). `_modelSpeaking` is cleared on the
+        // server's turnComplete; the extra guards below cover the gap where
+        // turnComplete arrives but buffered audio is still playing.
+        //
+        // 1. `_modelSpeaking` — model has the floor.
+        // 2. `playbackRemaining` — audio is still audibly playing (the accurate
+        //    signal; playback lags receive, so a fixed time tail isn't enough).
+        // 3. a short fixed tail after the last received chunk as a final safety
+        //    net for the moment right after playback drains.
+        final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
         final sinceAudio =
             DateTime.now().difference(_lastModelAudioAt).inMilliseconds;
-        if (_modelSpeaking || sinceAudio < 600) {
+        if (_modelSpeaking ||
+            remaining > const Duration(milliseconds: 200) ||
+            sinceAudio < 800) {
           continue;
         }
         await session
@@ -491,7 +585,31 @@ class LiveConversationService extends ChangeNotifier {
         _scheduleMicResume();
         return;
       }
-      unawaited(_audioIO?.resumeCapture() ?? Future.value());
+      // The transcript's turnComplete arrives before the audio finishes
+      // playing (playback lags receive). If audio is still buffered/playing,
+      // wait for it to drain before re-opening the mic — otherwise the mic
+      // captures the speaker's own tail and can cut off the reply via a VAD
+      // interrupt.
+      final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
+      if (remaining > const Duration(milliseconds: 250)) {
+        _scheduleMicResume();
+        return;
+      }
+      // Playback has drained. Wait a short settle before re-opening the
+      // hardware mic so the speaker's acoustic tail + iOS render buffer fully
+      // clear — otherwise the mic can catch the last of the pal's own voice and
+      // it gets transcribed back as the user ("pal hears himself").
+      Timer(const Duration(milliseconds: 350), () {
+        if (_state != LiveConversationState.active) return;
+        if (_modelSpeaking ||
+            (_audioIO?.playbackRemaining ?? Duration.zero) >
+                const Duration(milliseconds: 200)) {
+          // A late chunk started more audio during the settle — reschedule.
+          _scheduleMicResume();
+          return;
+        }
+        unawaited(_audioIO?.resumeCapture() ?? Future.value());
+      });
     });
   }
 
@@ -504,11 +622,20 @@ class LiveConversationService extends ChangeNotifier {
     _micWatchdog = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_state != LiveConversationState.active) return;
       if (!_modelSpeaking) return;
+      // Don't fire while audio is still audibly playing: on a long reply the
+      // model can pause >_micGateMaxHold between received chunks while earlier
+      // audio is still buffered in the player. Re-opening the mic then would
+      // capture the speaker's own output and trip a VAD `interrupted`, which
+      // releases playback mid-sentence. Only treat the turn as stalled once the
+      // buffered audio has drained too.
+      final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
+      if (remaining > const Duration(milliseconds: 250)) return;
       final sinceAudio = DateTime.now().difference(_lastModelAudioAt);
       if (sinceAudio >= _micGateMaxHold) {
         if (kDebugMode) {
           debugPrint('LiveConversationService: mic watchdog fired after '
-              '${sinceAudio.inMilliseconds}ms — force-resuming mic.');
+              '${sinceAudio.inMilliseconds}ms (playback drained) — '
+              'force-resuming mic.');
         }
         _modelSpeaking = false;
         unawaited(_audioIO?.resumeCapture() ?? Future.value());

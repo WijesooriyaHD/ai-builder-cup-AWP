@@ -1,7 +1,4 @@
-import 'dart:typed_data';
-
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -27,6 +24,13 @@ class RecordPcmAudioIO implements LiveAudioIO {
   static const MethodChannel _audioChannel =
       MethodChannel('aiwellnesspal/audio');
   bool _playbackReady = false;
+
+  // Playback-progress tracking so the service can tell when audio is still
+  // audibly playing even if no new chunk has arrived recently (playback lags
+  // receive). We accumulate the total audio *duration* fed to the player and
+  // mark when playback started; `playbackRemaining` = fed - elapsed.
+  Duration _fedAudio = Duration.zero;
+  DateTime? _playbackStartedAt;
 
   @override
   Future<bool> requestPermission() async {
@@ -147,10 +151,27 @@ class RecordPcmAudioIO implements LiveAudioIO {
       if (!_playbackStarted) {
         pcm.FlutterPcmSound.start();
         _playbackStarted = true;
+        _playbackStartedAt = DateTime.now();
+        _fedAudio = Duration.zero;
       }
+      // Track how much audio time we've fed so `playbackRemaining` can report
+      // whether the player is still speaking. 24 kHz mono PCM16 → 2 bytes/
+      // sample, so seconds = bytes / (sampleRate * 2).
+      final micros =
+          (bytes.lengthInBytes / (_outputSampleRate * 2) * 1e6).round();
+      _fedAudio += Duration(microseconds: micros);
     } catch (e) {
       debugPrint('RecordPcmAudioIO: playChunk failed: $e');
     }
+  }
+
+  @override
+  Duration get playbackRemaining {
+    final startedAt = _playbackStartedAt;
+    if (!_playbackStarted || startedAt == null) return Duration.zero;
+    final elapsed = DateTime.now().difference(startedAt);
+    final remaining = _fedAudio - elapsed;
+    return remaining > Duration.zero ? remaining : Duration.zero;
   }
 
   bool _cuePlaying = false;
@@ -221,6 +242,8 @@ class RecordPcmAudioIO implements LiveAudioIO {
         await pcm.FlutterPcmSound.release();
         _playbackReady = false;
         _playbackStarted = false;
+        _playbackStartedAt = null;
+        _fedAudio = Duration.zero;
       }
     } catch (e) {
       debugPrint('RecordPcmAudioIO: stopPlayback failed: $e');
