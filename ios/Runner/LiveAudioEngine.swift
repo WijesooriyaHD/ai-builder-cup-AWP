@@ -64,9 +64,13 @@ final class LiveAudioEngine: NSObject {
   private var playerChunksScheduled = 0
 
   // Playback progress tracking (so Dart's turn/echo logic can tell when audio
-  // is still playing). We count frames scheduled vs. a start time.
+  // is still playing). This is deliberately completion-driven rather than a
+  // wall-clock estimate: network gaps or output-route reconfiguration can make
+  // wall time advance while no PCM is rendered, falsely reporting that a reply
+  // has drained and cutting off its final words.
+  private let playbackStateLock = NSLock()
   private var scheduledPlaybackFrames: AVAudioFramePosition = 0
-  private var playbackStartHostTime: UInt64 = 0
+  private var playbackGeneration: UInt64 = 0
 
   // MARK: - Channel registration
 
@@ -242,6 +246,10 @@ final class LiveAudioEngine: NSObject {
     guard isRunning else { return }
     NSLog("[LiveAudioEngine] configuration change — engineRunning="
       + "\(engine.isRunning); rebuilding graph")
+    // Configuration changes discard AVAudioPlayerNode's queued buffers. Reset
+    // our completion-based counter too, so Dart never mistakes lost buffers for
+    // speech that is still safely draining.
+    resetPlaybackTracking()
     // The converter's source format may have changed with the new route.
     micConverter = nil
     micSourceFormat = nil
@@ -387,8 +395,7 @@ final class LiveAudioEngine: NSObject {
     playerNode.play()
     isRunning = true
     micPaused = false
-    scheduledPlaybackFrames = 0
-    playbackStartHostTime = 0
+    resetPlaybackTracking()
 
     // One-shot log: which port is the pal's audio actually going to? If this
     // says `builtInReceiver`, the earpiece override didn't stick and the user
@@ -417,8 +424,7 @@ final class LiveAudioEngine: NSObject {
     // session's real input format (the route may differ).
     micConverter = nil
     micSourceFormat = nil
-    scheduledPlaybackFrames = 0
-    playbackStartHostTime = 0
+    resetPlaybackTracking()
     NotificationCenter.default.removeObserver(self,
       name: AVAudioSession.routeChangeNotification, object: nil)
     NotificationCenter.default.removeObserver(self,
@@ -544,20 +550,26 @@ final class LiveAudioEngine: NSObject {
       }
     }
 
-    if playbackStartHostTime == 0 {
-      playbackStartHostTime = mach_absolute_time()
-      scheduledPlaybackFrames = 0
-    }
-    scheduledPlaybackFrames += AVAudioFramePosition(frameCount)
     // Defensive: if a configuration change broke the player's connection, the
-    // scheduled buffer would be discarded silently. Re-wire before scheduling.
+    // scheduled buffer would otherwise be discarded silently.
     if playerNode.engine == nil || engine.outputConnectionPoints(
         for: playerNode, outputBus: 0).isEmpty {
       NSLog("[LiveAudioEngine] player was disconnected — re-wiring for playback")
       connectPlayerNode()
       if engine.isRunning { playerNode.play() }
     }
-    playerNode.scheduleBuffer(buffer, completionHandler: nil)
+
+    // Count audio as pending until AVAudioPlayerNode confirms it has played
+    // back. This intentionally overestimates by at most one small PCM chunk,
+    // which is safe: an overestimate delays mic reopening/end teardown slightly
+    // while an underestimate truncates audible speech.
+    let generation = currentPlaybackGenerationAfterScheduling(frameCount)
+    playerNode.scheduleBuffer(
+      buffer,
+      completionCallbackType: .dataPlayedBack
+    ) { [weak self] _ in
+      self?.completePlaybackBuffer(frameCount, generation: generation)
+    }
     playerChunksScheduled += 1
     if playerChunksScheduled == 1 {
       NSLog("[LiveAudioEngine] first pal audio chunk scheduled "
@@ -566,29 +578,58 @@ final class LiveAudioEngine: NSObject {
     if !playerNode.isPlaying { playerNode.play() }
   }
 
+  private func currentPlaybackGenerationAfterScheduling(
+    _ frameCount: AVAudioFrameCount
+  ) -> UInt64 {
+    playbackStateLock.lock()
+    scheduledPlaybackFrames += AVAudioFramePosition(frameCount)
+    let generation = playbackGeneration
+    playbackStateLock.unlock()
+    return generation
+  }
+
+  private func completePlaybackBuffer(
+    _ frameCount: AVAudioFrameCount,
+    generation: UInt64
+  ) {
+    playbackStateLock.lock()
+    defer { playbackStateLock.unlock() }
+    // Completions from a previous turn can arrive after stopPlayback(). They
+    // must never decrement audio queued for a newer turn.
+    guard generation == playbackGeneration else { return }
+    scheduledPlaybackFrames = max(
+      0, scheduledPlaybackFrames - AVAudioFramePosition(frameCount))
+  }
+
+  private func resetPlaybackTracking() {
+    playbackStateLock.lock()
+    playbackGeneration &+= 1
+    scheduledPlaybackFrames = 0
+    playbackStateLock.unlock()
+  }
+
   private func stopPlayback() {
     guard isRunning else { return }
     // Drop any queued/buffered pal audio immediately (barge-in / turn end).
     playerNode.stop()
     playerNode.play() // re-arm for the next turn
-    scheduledPlaybackFrames = 0
-    playbackStartHostTime = 0
+    resetPlaybackTracking()
   }
 
-  /// Estimated ms of pal audio still to play (scheduled frames minus elapsed).
+  /// Conservative remaining ms based on PCM buffers that AVAudioPlayerNode has
+  /// not yet reported as played. Unlike a wall-clock estimate, this stays
+  /// correct through network gaps and prevents an early stop from clipping a
+  /// reply's final syllable.
   private func playbackRemainingMs() -> Int {
-    if playbackStartHostTime == 0 || scheduledPlaybackFrames == 0 { return 0 }
-    let scheduledMs = Double(scheduledPlaybackFrames) / playbackSampleRate * 1000
-    let elapsedMs = hostTimeToMs(mach_absolute_time() - playbackStartHostTime)
-    let remaining = scheduledMs - elapsedMs
-    return remaining > 0 ? Int(remaining) : 0
-  }
-
-  private func hostTimeToMs(_ hostTime: UInt64) -> Double {
-    var info = mach_timebase_info_data_t()
-    mach_timebase_info(&info)
-    let nanos = Double(hostTime) * Double(info.numer) / Double(info.denom)
-    return nanos / 1_000_000.0
+    playbackStateLock.lock()
+    let pendingFrames = scheduledPlaybackFrames
+    playbackStateLock.unlock()
+    guard pendingFrames > 0 else { return 0 }
+    let queuedMs = Double(pendingFrames) / playbackSampleRate * 1000
+    // Include the output route's render latency; without it teardown can stop
+    // the final buffer after the player consumed it but before it is audible.
+    let outputLatencyMs = AVAudioSession.sharedInstance().outputLatency * 1000
+    return Int(ceil(queuedMs + outputLatencyMs))
   }
 }
 

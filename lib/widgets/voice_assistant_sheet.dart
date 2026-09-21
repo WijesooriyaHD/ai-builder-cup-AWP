@@ -158,8 +158,9 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
     if (mounted) setState(() {});
   }
 
-  /// The manual End button for the Live pal. Keeps the sheet open.
-  Future<void> _endLiveSession() => finalizeLivePalSession();
+  /// The manual End button for the Live pal. Keeps the sheet open and lets any
+  /// queued pal speech finish before teardown.
+  Future<void> _endLiveSession() => requestGracefulLivePalEnd();
 
   /// Submits the typed debug phrase through the voice pipeline.
   void _submitDebugText() {
@@ -888,6 +889,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                           _LiveStatusLabel(
                             state: state,
                             isPalSpeaking: service.isPalSpeaking,
+                            isCheckingIn: service.isCheckingIn,
                           ),
                           const SizedBox(height: 10),
                           _LiveReconnectingHint(visible: service.isStalled),
@@ -1482,6 +1484,7 @@ class _LiveStatusLabel extends StatelessWidget {
   const _LiveStatusLabel({
     required this.state,
     required this.isPalSpeaking,
+    required this.isCheckingIn,
   });
 
   final LiveConversationState state;
@@ -1490,6 +1493,9 @@ class _LiveStatusLabel extends StatelessWidget {
   /// than a misleading "Listening…". The conversation is full duplex, so the mic
   /// really is still open — but what the user cares about is whose turn it is.
   final bool isPalSpeaking;
+
+  /// A gentle idle prompt has been sent and the pal is preparing its check-in.
+  final bool isCheckingIn;
 
   @override
   Widget build(BuildContext context) {
@@ -1505,6 +1511,9 @@ class _LiveStatusLabel extends StatelessWidget {
         if (isPalSpeaking) {
           label = 'Your pal is speaking…';
           icon = Icons.graphic_eq_rounded;
+        } else if (isCheckingIn) {
+          label = 'Checking in…';
+          icon = Icons.favorite_outline_rounded;
         } else {
           label = 'Listening…';
           icon = Icons.mic_rounded;

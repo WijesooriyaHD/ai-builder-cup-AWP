@@ -237,8 +237,8 @@ class _ConversationModeSheetState extends State<ConversationModeSheet>
 
   Future<void> _start() => startLivePalSession();
 
-  /// The manual End button.
-  Future<void> _end() => finalizeLivePalSession();
+  /// The manual End button waits for queued Live audio to finish.
+  Future<void> _end() => requestGracefulLivePalEnd();
 
   @override
   Widget build(BuildContext context) {

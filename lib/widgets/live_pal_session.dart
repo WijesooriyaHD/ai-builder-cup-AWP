@@ -190,6 +190,15 @@ mixin LivePalSessionMixin<T extends StatefulWidget> on State<T> {
     context.read<LiveConversationService>().deferEnd();
   }
 
+  /// Requests an end without cutting off audio already queued for playback.
+  /// [LiveConversationService.deferEnd] waits for the current model turn (or a
+  /// pal sign-off) to drain, then calls the existing end callback which runs
+  /// [finalizeLivePalSession] exactly once.
+  Future<void> requestGracefulLivePalEnd() async {
+    if (_ending) return;
+    context.read<LiveConversationService>().deferEnd();
+  }
+
   /// Unified teardown: stop the session, auto-save the conversation as a card
   /// (max 3, FIFO) with NO prompt/dialog/voice ask, then optionally pop and
   /// navigate. Turning a conversation into a reflection happens later, from the

@@ -32,6 +32,13 @@ class NativeAecAudioIO implements LiveAudioIO {
   int _playbackRemainingMs = 0;
   DateTime _remainingSampledAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // Full-duplex is safe only when native Voice-Processing I/O has successfully
+  // enabled AEC on BOTH sides. Start pessimistically; otherwise a failed iOS
+  // audio-session reconfiguration lets speaker audio reach the mic and the
+  // server falsely interrupts the pal mid-sentence.
+  bool _hasVerifiedAec = false;
+  DateTime _aecSampledAt = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   Future<bool> requestPermission() async {
     try {
@@ -74,17 +81,14 @@ class NativeAecAudioIO implements LiveAudioIO {
     // Kick off native start and log the returned native audio diagnostics
     // (NSLog does not reach `flutter run`, so this is how we see them).
     _method.invokeMethod<dynamic>('start').then((diag) {
+      _updateAecStatus(diag);
       debugPrint('NativeAecAudioIO: native start OK — $diag');
       // Re-check shortly after: if something else grabs the audio session
       // (e.g. audio_service finishing its init and forcing .playback), the
       // category/converter state here will show it.
-      Future.delayed(const Duration(seconds: 2), () async {
-        try {
-          final later = await _method.invokeMethod<dynamic>('diagnostics');
-          debugPrint('NativeAecAudioIO: native state +2s — $later');
-        } catch (_) {}
-      });
+      Future.delayed(const Duration(seconds: 2), _refreshAecStatus);
     }).catchError((e) {
+      _hasVerifiedAec = false;
       debugPrint('NativeAecAudioIO: native start FAILED: $e');
       return null;
     });
@@ -94,6 +98,7 @@ class NativeAecAudioIO implements LiveAudioIO {
 
   @override
   Future<void> stopCapture() async {
+    _hasVerifiedAec = false;
     await _invoke('stop');
     await _micSub?.cancel();
     _micSub = null;
@@ -117,11 +122,33 @@ class NativeAecAudioIO implements LiveAudioIO {
     }
   }
 
-  /// This pipeline runs one AVAudioEngine with Voice-Processing I/O, so iOS
-  /// cancels the pal's voice out of the mic in hardware. That lets the service
-  /// run full duplex (natural barge-in, no swallowed user speech).
+  /// Full duplex (and therefore barge-in) is enabled only after native iOS
+  /// diagnostics confirm both Voice-Processing I/O directions are active.
   @override
-  bool get hasHardwareAec => true;
+  bool get hasHardwareAec => _hasVerifiedAec;
+
+  void _updateAecStatus(dynamic diagnostics) {
+    final map = diagnostics is Map ? diagnostics : null;
+    final enabled = map?['aecInput'] == true && map?['aecOutput'] == true;
+    if (_hasVerifiedAec != enabled) {
+      _hasVerifiedAec = enabled;
+      debugPrint('NativeAecAudioIO: verified hardware AEC=$enabled');
+    }
+  }
+
+  void _refreshAecStatus() {
+    if (DateTime.now().difference(_aecSampledAt) <
+        const Duration(seconds: 2)) {
+      return;
+    }
+    _aecSampledAt = DateTime.now();
+    _method.invokeMethod<dynamic>('diagnostics').then((diagnostics) {
+      _updateAecStatus(diagnostics);
+      debugPrint('NativeAecAudioIO: native audio state — $diagnostics');
+    }).catchError((_) {
+      _hasVerifiedAec = false;
+    });
+  }
 
   @override
   Future<void> playThinkingCue() async {
@@ -144,8 +171,9 @@ class NativeAecAudioIO implements LiveAudioIO {
     // between the periodic async refreshes below.
     final elapsed = DateTime.now().difference(_remainingSampledAt).inMilliseconds;
     final remaining = _playbackRemainingMs - elapsed;
-    // Opportunistically refresh from native (async, non-blocking).
+    // Opportunistically refresh native state (async, non-blocking).
     _refreshPlaybackRemaining();
+    _refreshAecStatus();
     return remaining > 0 ? Duration(milliseconds: remaining) : Duration.zero;
   }
 

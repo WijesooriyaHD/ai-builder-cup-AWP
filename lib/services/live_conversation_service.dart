@@ -206,12 +206,38 @@ class LiveConversationService extends ChangeNotifier {
   // the mic resumes so the speaker's trailing audio doesn't leak in.
   DateTime _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // When the SERVER most recently confirmed the user actually spoke (i.e. the
+  // input transcription passed the echo guard). Used to distinguish a genuine
+  // barge-in from a false server-side interrupt caused by AEC leakage. Without
+  // this evidence, the pal was cutting itself off mid-sentence.
+  DateTime _lastConfirmedUserSpeechAt =
+      DateTime.fromMillisecondsSinceEpoch(0);
+
   // Watchdog: if the mic stays gated (paused) for longer than this with no new
   // model audio arriving, we assume a missed/dropped turnComplete and force the
   // mic back open so the conversation can't silently deadlock ("stops
   // responding"). This is the safety net behind the turnComplete resume.
   static const Duration _micGateMaxHold = Duration(seconds: 4);
   Timer? _micWatchdog;
+
+  // Gentle conversational presence: after a genuine period of silence, the
+  // pal asks once whether the user is still there. The timer intentionally
+  // resets only on transcribed user speech—not raw mic buffers—so ordinary room
+  // noise cannot prevent the check-in forever.
+  static const Duration _idleCheckInDelay = Duration(seconds: 45);
+  static const Duration _idleCheckInDeferral = Duration(seconds: 12);
+  static const Duration _idleGoodbyeGracePeriod = Duration(seconds: 10);
+  static const Duration _idleGoodbyeFallback = Duration(seconds: 15);
+  Timer? _idleCheckInTimer;
+  Timer? _idleGoodbyeTimer;
+  bool _idleCheckInSent = false;
+  bool _idleCheckInInFlight = false;
+  bool _awaitingIdleResponse = false;
+
+  /// True while the pal has been asked to make its single idle check-in.
+  /// The UI uses this for a brief, reassuring "Checking in…" status.
+  bool get isCheckingIn =>
+      _idleCheckInInFlight && _state == LiveConversationState.active;
 
   // Stall detection: while the model is mid-turn (speaking) but no audio has
   // arrived for [_stallThreshold] with playback already drained, the session
@@ -308,6 +334,7 @@ class LiveConversationService extends ChangeNotifier {
       // Committing a new user turn flushes any pending model turn first.
       _flushModelTurn();
       _userTurnBuf.write(_userTurnBuf.isEmpty ? t : ' $t');
+      _lastConfirmedUserSpeechAt = DateTime.now();
       // Check the current buffer AND this fresh fragment for an end phrase.
       // (The buffer can be flushed when the model starts speaking, so also
       // matching the raw fragment makes "bye" detection reliable.)
@@ -480,13 +507,14 @@ class LiveConversationService extends ChangeNotifier {
     const drainThreshold = Duration(milliseconds: 120);
     // Small settle after drain so the final syllable isn't clipped by the
     // abrupt stopPlayback() inside stop().
-    const tailSettle = Duration(milliseconds: 200);
+    const tailSettle = Duration(milliseconds: 400);
     // If the turn is NOT yet complete we also want a brief network-quiet gap,
     // so we don't end between two chunks of an in-progress sentence.
     const quietGap = Duration(milliseconds: 700);
-    // Bail only when nothing is progressing: no new audio AND the buffer isn't
-    // draining. This is the real "something is wrong" signal.
-    const noProgressTimeout = Duration(seconds: 3);
+    // Only bail when nothing is progressing: no new audio AND the buffer isn't
+    // draining. Give a slow network/model ample time between PCM chunks;
+    // ending a living turn is worse than waiting briefly for a clean goodbye.
+    const noProgressTimeout = Duration(seconds: 8);
     // Absolute backstop purely to prevent a leaked poll loop. Deliberately
     // generous so it can never truncate a legitimately long sign-off.
     const absoluteCeiling = Duration(minutes: 2);
@@ -605,11 +633,18 @@ class LiveConversationService extends ChangeNotifier {
   /// sign-off and we must NOT cut it off — the drain loop owns the ending.
   void _onEndFallbackTimeout() {
     if (!_endPending || _endIntentFired) return;
-    if (_endWaitActive) {
+    // A late server turn may begin after the fallback was armed. Once there is
+    // either generated speech or queued PCM, the drain loop owns the ending so
+    // this timer must never cut the farewell off mid-sentence.
+    if (_endWaitActive ||
+        _modelSpeaking ||
+        (_audioIO?.playbackRemaining ?? Duration.zero) >
+            const Duration(milliseconds: 120)) {
       if (kDebugMode) {
-        debugPrint('LiveConversationService: end fallback fired but the drain '
-            'wait is active (pal still speaking) — deferring to it.');
+        debugPrint('LiveConversationService: end fallback deferred to the '
+            'audio drain wait.');
       }
+      _scheduleEndAfterGoodbye();
       return;
     }
     if (kDebugMode) {
@@ -731,6 +766,9 @@ class LiveConversationService extends ChangeNotifier {
     _endWaitActive = false;
     _thinkingCuePlayed = false;
     _recentModelSpeech.clear();
+    _lastConfirmedUserSpeechAt = DateTime.fromMillisecondsSinceEpoch(0);
+    _stopIdleCheckIn();
+    _idleCheckInSent = false;
 
     debugPrint('LiveConversationService: start() — requesting mic permission…');
     try {
@@ -807,6 +845,7 @@ class LiveConversationService extends ChangeNotifier {
       }
       _setState(LiveConversationState.active);
       _startMicWatchdog();
+      _armIdleCheckIn(newSilencePeriod: true);
 
       // Stream mic audio up as realtime PCM chunks. The Live API expects raw
       // 16-bit LE PCM at 16 kHz, tagged 'audio/pcm;rate=16000'. firebase_ai
@@ -1000,6 +1039,153 @@ class LiveConversationService extends ChangeNotifier {
     });
   }
 
+  void _armIdleCheckIn({bool newSilencePeriod = false}) {
+    if (newSilencePeriod) {
+      _idleCheckInSent = false;
+      _idleCheckInInFlight = false;
+      _awaitingIdleResponse = false;
+      _idleGoodbyeTimer?.cancel();
+      _idleGoodbyeTimer = null;
+    }
+    _idleCheckInTimer?.cancel();
+    _idleCheckInTimer = null;
+    if (_state != LiveConversationState.active ||
+        _idleCheckInSent ||
+        _endPending) {
+      return;
+    }
+    _idleCheckInTimer = Timer(_idleCheckInDelay, _sendIdleCheckIn);
+  }
+
+  void _deferIdleCheckIn() {
+    _idleCheckInTimer?.cancel();
+    _idleCheckInTimer = Timer(_idleCheckInDeferral, _sendIdleCheckIn);
+  }
+
+  Future<void> _sendIdleCheckIn() async {
+    _idleCheckInTimer = null;
+    final session = _session;
+    if (session == null ||
+        _state != LiveConversationState.active ||
+        _idleCheckInSent ||
+        _endPending) {
+      return;
+    }
+
+    // Never compete with a reply that is being generated or is still audible.
+    // The native queue is completion-driven, so this remains conservative even
+    // when network delivery has gaps between PCM chunks.
+    if (_modelSpeaking ||
+        (_audioIO?.playbackRemaining ?? Duration.zero) >
+            const Duration(milliseconds: 150)) {
+      _deferIdleCheckIn();
+      return;
+    }
+
+    _idleCheckInSent = true; // At most once until the user speaks again.
+    _idleCheckInInFlight = true;
+    _awaitingIdleResponse = true;
+    notifyListeners();
+    try {
+      // Firebase AI Logic exposes no server-originated Live turn trigger. This
+      // explicit system-event marker produces one short spoken check-in through
+      // the normal audio pipeline, without stopping existing playback.
+      await session.send(
+        input: Content.text(
+          '[SYSTEM EVENT: The conversation has been quiet. Briefly and warmly '
+          'ask the user, "Are you still there?" Do not imply they said this.]',
+        ),
+        turnComplete: true,
+      );
+      debugPrint('LiveConversationService: sent one idle check-in.');
+    } catch (e) {
+      // Do not repeatedly nag the user on a transient send failure. A real user
+      // turn starts a fresh silence period.
+      _idleCheckInInFlight = false;
+      _awaitingIdleResponse = false;
+      notifyListeners();
+      debugPrint('LiveConversationService: idle check-in send failed: $e');
+    }
+  }
+
+  /// Called after the model completes the spoken "Are you still there?" turn.
+  /// The user gets exactly ten seconds to reply, measured only after queued PCM
+  /// has actually drained—never while the check-in itself is still audible.
+  void _scheduleIdleGoodbyeGrace() {
+    if (!_awaitingIdleResponse || _endPending) return;
+    _idleGoodbyeTimer?.cancel();
+
+    void waitForCheckInAudio() {
+      if (!_awaitingIdleResponse ||
+          _state != LiveConversationState.active ||
+          _endPending) {
+        return;
+      }
+      if (_modelSpeaking ||
+          (_audioIO?.playbackRemaining ?? Duration.zero) >
+              const Duration(milliseconds: 120)) {
+        Future.delayed(const Duration(milliseconds: 150), waitForCheckInAudio);
+        return;
+      }
+      _idleGoodbyeTimer = Timer(_idleGoodbyeGracePeriod, _sendIdleGoodbye);
+    }
+
+    waitForCheckInAudio();
+  }
+
+  Future<void> _sendIdleGoodbye() async {
+    _idleGoodbyeTimer = null;
+    final session = _session;
+    if (session == null ||
+        _state != LiveConversationState.active ||
+        !_awaitingIdleResponse ||
+        _endPending) {
+      return;
+    }
+    if (_modelSpeaking ||
+        (_audioIO?.playbackRemaining ?? Duration.zero) >
+            const Duration(milliseconds: 120)) {
+      _scheduleIdleGoodbyeGrace();
+      return;
+    }
+
+    _awaitingIdleResponse = false;
+    _idleCheckInInFlight = false;
+    _stopIdleCheckIn();
+    // Arm ending BEFORE requesting the goodbye, but do NOT start the drain
+    // loop yet. _onServerResponse starts it only after the goodbye turn's
+    // turnComplete, so stopPlayback can never cut the farewell mid-sentence.
+    _endPending = true;
+    _endTurnCompleteSeen = false;
+    _endFallbackTimer?.cancel();
+    _endFallbackTimer = Timer(_idleGoodbyeFallback, _onEndFallbackTimeout);
+    notifyListeners();
+
+    try {
+      await session.send(
+        input: Content.text(
+          '[SYSTEM EVENT: The user did not respond after your check-in. Say one '
+          'brief, warm goodbye, such as "I’ll be here when you’re ready. Take '
+          'care," then end the conversation. Do not ask another question.]',
+        ),
+        turnComplete: true,
+      );
+      debugPrint('LiveConversationService: sent idle goodbye request.');
+    } catch (e) {
+      debugPrint('LiveConversationService: idle goodbye send failed: $e');
+      _fireEndIfPending();
+    }
+  }
+
+  void _stopIdleCheckIn() {
+    _idleCheckInTimer?.cancel();
+    _idleCheckInTimer = null;
+    _idleGoodbyeTimer?.cancel();
+    _idleGoodbyeTimer = null;
+    _idleCheckInInFlight = false;
+    _awaitingIdleResponse = false;
+  }
+
   void _stopMicWatchdog() {
     _micWatchdog?.cancel();
     _micWatchdog = null;
@@ -1059,16 +1245,36 @@ class LiveConversationService extends ChangeNotifier {
       if (message is LiveServerContent) {
         // Model asked to interrupt (user barged in) — stop current playback.
         if (message.interrupted == true) {
-          // Logged because a spurious interrupt is the signature of failed echo
-          // cancellation: the pal's own voice reaches the mic, the server's VAD
-          // reads it as the user speaking, and the reply is cut mid-sentence.
-          // An interrupt arriving while the pal is mid-reply and the user is
-          // silent means AEC is not doing its job.
+          // Server VAD said the user is talking over the pal. Trust that only
+          // when there is independent evidence the user actually spoke: either
+          // a transcribed user turn arrived very recently, or user text is
+          // already in progress this turn. Otherwise the "interrupt" is almost
+          // certainly the pal's own loudspeaker output leaking into the mic,
+          // and honouring it would cut the pal off mid-sentence.
+          final sinceUserSpeech =
+              DateTime.now().difference(_lastConfirmedUserSpeechAt);
+          final userIsActuallyTalking = _userTurnBuf.isNotEmpty ||
+              sinceUserSpeech <= const Duration(milliseconds: 1500);
+          final aecVerified = _hasHardwareAec;
           debugPrint('LiveConversationService: server sent INTERRUPTED '
-              '(palSpeaking=$_modelSpeaking) — stopping playback.');
+              '(palSpeaking=$_modelSpeaking, aecVerified=$aecVerified, '
+              'userIsActuallyTalking=$userIsActuallyTalking, '
+              'sinceUserSpeechMs=${sinceUserSpeech.inMilliseconds}).');
+          if (!userIsActuallyTalking) {
+            // Do NOT stop playback. Preserve the current pal reply; the mic
+            // stays open (or reopens after audio drains) so a real interrupt
+            // that follows will still be honoured on the next signal.
+            if (!aecVerified) _scheduleMicResume();
+            return;
+          }
           _setModelSpeaking(false);
-          await audio.stopPlayback();
-          unawaited(audio.resumeCapture());
+          _armIdleCheckIn(newSilencePeriod: true);
+          if (aecVerified) {
+            await audio.stopPlayback();
+            unawaited(audio.resumeCapture());
+          } else {
+            _scheduleMicResume();
+          }
           return;
         }
         // Turn finished: re-open the mic so the user can speak again. This is
@@ -1090,6 +1296,7 @@ class LiveConversationService extends ChangeNotifier {
         final inT = message.inputTranscription?.text;
         if (inT != null && inT.trim().isNotEmpty) {
           _appendTranscript(LiveSpeaker.user, inT);
+          _armIdleCheckIn(newSilencePeriod: true);
           // The user just said something and the pal hasn't started replying
           // yet — play a soft "thinking" cue once so the pause feels alive.
           if (!_modelSpeaking && !_thinkingCuePlayed) {
@@ -1113,6 +1320,9 @@ class LiveConversationService extends ChangeNotifier {
           if (_endPending) {
             _endTurnCompleteSeen = true;
             _scheduleEndAfterGoodbye();
+          } else if (_awaitingIdleResponse) {
+            _idleCheckInInFlight = false;
+            _scheduleIdleGoodbyeGrace();
           }
         }
         // As soon as the model produces ANY turn content it has taken the floor:
@@ -1121,6 +1331,9 @@ class LiveConversationService extends ChangeNotifier {
         final hasModelContent =
             (message.modelTurn?.parts.isNotEmpty ?? false) ||
                 (outT != null && outT.trim().isNotEmpty);
+        if (hasModelContent && _idleCheckInInFlight) {
+          _idleCheckInInFlight = false;
+        }
         if (hasModelContent && !_modelSpeaking) {
           _setModelSpeaking(true);
           _thinkingCuePlayed = false; // reset for the next user turn
@@ -1204,6 +1417,7 @@ class LiveConversationService extends ChangeNotifier {
     // Setting closing first makes the receive loop exit cleanly.
     _setState(LiveConversationState.closing);
     _stopMicWatchdog();
+    _stopIdleCheckIn();
     _endFallbackTimer?.cancel();
     _endFallbackTimer = null;
     _flushTranscriptBuffers();
@@ -1224,6 +1438,7 @@ class LiveConversationService extends ChangeNotifier {
     // hard to diagnose.
     debugPrint('LiveConversationService: FAILED — $message');
     _stopMicWatchdog();
+    _stopIdleCheckIn();
     _lastError = message;
     _setState(LiveConversationState.error);
   }
@@ -1236,6 +1451,7 @@ class LiveConversationService extends ChangeNotifier {
   @override
   void dispose() {
     _stopMicWatchdog();
+    _stopIdleCheckIn();
     _session?.close();
     _audioIO?.dispose();
     super.dispose();
