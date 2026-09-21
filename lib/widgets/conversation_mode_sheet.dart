@@ -450,6 +450,7 @@ class _ConversationModeSheetState extends State<ConversationModeSheet> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
+              _ReconnectingHint(visible: service.isStalled),
               _CaptionBox(
                 text: state == LiveConversationState.active &&
                         service.currentReply.isNotEmpty
@@ -650,6 +651,63 @@ class _CaptionBoxState extends State<_CaptionBox> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A subtle "Reconnecting…" pill shown when the live session appears stalled on
+/// the network (the pal was mid-reply but audio stopped arriving). Animates in
+/// and out so it doesn't jar the layout; collapses to zero height when hidden.
+class _ReconnectingHint extends StatelessWidget {
+  const _ReconnectingHint({required this.visible});
+
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.tertiary;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 220),
+        opacity: visible ? 1 : 0,
+        child: visible
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Reconnecting… check your connection',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : const SizedBox(width: double.infinity),
       ),
     );
   }

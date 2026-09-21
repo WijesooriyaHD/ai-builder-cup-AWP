@@ -131,6 +131,13 @@ final class LiveAudioEngine: NSObject {
       mode: .voiceChat,
       options: [.defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP])
     try session.setActive(true, options: .notifyOthersOnDeactivation)
+    // `.voiceChat` mode is optimized for a phone-call earpiece route: even
+    // with `.defaultToSpeaker` set, iOS often routes playback to the tiny
+    // earpiece receiver instead of the loudspeaker on physical devices ("can't
+    // hear the pal"). Explicitly forcing the speaker port fixes this. We also
+    // observe route changes and re-force it below.
+    try? session.overrideOutputAudioPort(.speaker)
+    observeRouteChanges()
 
     let input = engine.inputNode
     // Turn on the acoustic echo canceller on the mic input. This is the crux:
@@ -174,6 +181,13 @@ final class LiveAudioEngine: NSObject {
     micPaused = false
     scheduledPlaybackFrames = 0
     playbackStartHostTime = 0
+
+    // One-shot log: which port is the pal's audio actually going to? If this
+    // says `builtInReceiver`, the earpiece override didn't stick and the user
+    // will hear nothing from the loudspeaker.
+    let outputs = session.currentRoute.outputs.map { "\($0.portType.rawValue)" }
+      .joined(separator: ",")
+    NSLog("[LiveAudioEngine] started — output route: [\(outputs)]")
   }
 
   private func stop() {
@@ -188,8 +202,34 @@ final class LiveAudioEngine: NSObject {
     micEventSink = nil
     scheduledPlaybackFrames = 0
     playbackStartHostTime = 0
+    NotificationCenter.default.removeObserver(self,
+      name: AVAudioSession.routeChangeNotification, object: nil)
     try? AVAudioSession.sharedInstance().setActive(
       false, options: .notifyOthersOnDeactivation)
+  }
+
+  // MARK: - Route override
+
+  private func observeRouteChanges() {
+    NotificationCenter.default.removeObserver(self,
+      name: AVAudioSession.routeChangeNotification, object: nil)
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleRouteChange(_:)),
+      name: AVAudioSession.routeChangeNotification,
+      object: nil)
+  }
+
+  @objc private func handleRouteChange(_ note: Notification) {
+    guard isRunning else { return }
+    let session = AVAudioSession.sharedInstance()
+    let outputs = session.currentRoute.outputs.map { $0.portType }
+    // If we ended up on the tiny earpiece receiver (built-in receiver), force
+    // the loudspeaker so the pal is audible. Leave Bluetooth/headphones alone.
+    if outputs.contains(.builtInReceiver) {
+      try? session.overrideOutputAudioPort(.speaker)
+      NSLog("[LiveAudioEngine] Route on receiver → forcing .speaker")
+    }
   }
 
   // MARK: - Mic capture → 16 kHz PCM16 → Dart

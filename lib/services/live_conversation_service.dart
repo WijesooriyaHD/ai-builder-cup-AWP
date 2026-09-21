@@ -178,6 +178,31 @@ class LiveConversationService extends ChangeNotifier {
   static const Duration _micGateMaxHold = Duration(seconds: 4);
   Timer? _micWatchdog;
 
+  // Stall detection: while the model is mid-turn (speaking) but no audio has
+  // arrived for [_stallThreshold] with playback already drained, the session
+  // is likely stuck on the network (slow/stalled socket, weak connection). We
+  // surface this to the UI as "reconnecting" instead of hanging silently. The
+  // flag clears the instant new audio arrives, a turn completes, or the turn
+  // is torn down. Kept shorter than [_micGateMaxHold] so the user sees the hint
+  // slightly before the watchdog force-resumes the mic.
+  static const Duration _stallThreshold = Duration(seconds: 2);
+  bool _stalled = false;
+
+  /// Whether the live conversation appears stalled on the network: the pal was
+  /// mid-reply but no audio has arrived for a couple of seconds. The UI can use
+  /// this to show a subtle "Reconnecting…" / "Check your connection" hint.
+  /// Only meaningful while [state] is [LiveConversationState.active].
+  bool get isStalled => _stalled && _state == LiveConversationState.active;
+
+  void _setStalled(bool value) {
+    if (_stalled == value) return;
+    _stalled = value;
+    if (kDebugMode) {
+      debugPrint('LiveConversationService: stalled=$value');
+    }
+    notifyListeners();
+  }
+
   String _lastTranscript = '';
 
   /// The latest transcription of the model's spoken reply (from the server's
@@ -457,6 +482,7 @@ class LiveConversationService extends ChangeNotifier {
 
     _setState(LiveConversationState.connecting);
     _lastError = null;
+    _stalled = false;
     _modelSpeaking = false;
     _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
     _lastTranscript = '';
@@ -620,8 +646,14 @@ class LiveConversationService extends ChangeNotifier {
   void _startMicWatchdog() {
     _micWatchdog?.cancel();
     _micWatchdog = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_state != LiveConversationState.active) return;
-      if (!_modelSpeaking) return;
+      if (_state != LiveConversationState.active) {
+        _setStalled(false);
+        return;
+      }
+      if (!_modelSpeaking) {
+        _setStalled(false);
+        return;
+      }
       // Don't fire while audio is still audibly playing: on a long reply the
       // model can pause >_micGateMaxHold between received chunks while earlier
       // audio is still buffered in the player. Re-opening the mic then would
@@ -629,8 +661,15 @@ class LiveConversationService extends ChangeNotifier {
       // releases playback mid-sentence. Only treat the turn as stalled once the
       // buffered audio has drained too.
       final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
-      if (remaining > const Duration(milliseconds: 250)) return;
+      if (remaining > const Duration(milliseconds: 250)) {
+        // Still audibly playing buffered audio — not stalled.
+        _setStalled(false);
+        return;
+      }
       final sinceAudio = DateTime.now().difference(_lastModelAudioAt);
+      // The pal was replying but the audio stream has gone quiet with nothing
+      // left to play — surface a network hint before the hard mic recovery.
+      _setStalled(sinceAudio >= _stallThreshold);
       if (sinceAudio >= _micGateMaxHold) {
         if (kDebugMode) {
           debugPrint('LiveConversationService: mic watchdog fired after '
@@ -648,6 +687,7 @@ class LiveConversationService extends ChangeNotifier {
     _micWatchdog = null;
     _resumeTimer?.cancel();
     _resumeTimer = null;
+    _setStalled(false);
   }
 
   /// Drives the receive stream turn-by-turn until the session ends.
@@ -678,6 +718,9 @@ class LiveConversationService extends ChangeNotifier {
   Future<void> _onServerResponse(LiveServerResponse response) async {
     final audio = _audioIO;
     if (audio == null) return;
+    // Any message from the server means the socket is alive again — clear any
+    // "reconnecting" hint we were showing.
+    _setStalled(false);
     final message = response.message;
     try {
       if (message is LiveServerContent) {
