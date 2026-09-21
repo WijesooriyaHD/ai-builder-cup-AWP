@@ -45,25 +45,49 @@ class NativeAecAudioIO implements LiveAudioIO {
 
   @override
   Stream<Uint8List> startCapture() {
-    // Start the native engine, then surface the mic event stream. The engine
-    // emits 16 kHz mono PCM16 chunks (echo-cancelled).
+    // Surface the mic event stream FIRST, then start the native engine. The
+    // engine emits 16 kHz mono PCM16 chunks (echo-cancelled).
+    //
+    // Order matters: the native side drops tap buffers while its event sink is
+    // unregistered, so subscribing before `start` guarantees the very first
+    // audio (the user's opening words) isn't thrown away.
     _micController?.close();
     final controller = StreamController<Uint8List>();
     _micController = controller;
 
-    // Kick off native start (fire-and-forget; errors surface via the stream).
-    _method.invokeMethod<bool>('start').catchError((e) {
-      debugPrint('NativeAecAudioIO: start failed: $e');
-      return false;
-    });
-
+    var eventsSeen = 0;
     _micSub?.cancel();
     _micSub = _micEvents.receiveBroadcastStream().listen(
       (data) {
-        if (data is Uint8List) controller.add(data);
+        if (data is Uint8List) {
+          eventsSeen++;
+          if (eventsSeen == 1) {
+            debugPrint('NativeAecAudioIO: FIRST mic chunk received from native '
+                '(${data.length} bytes) — capture is live.');
+          }
+          controller.add(data);
+        }
       },
       onError: (e) => debugPrint('NativeAecAudioIO: mic stream error: $e'),
     );
+
+    // Kick off native start and log the returned native audio diagnostics
+    // (NSLog does not reach `flutter run`, so this is how we see them).
+    _method.invokeMethod<dynamic>('start').then((diag) {
+      debugPrint('NativeAecAudioIO: native start OK — $diag');
+      // Re-check shortly after: if something else grabs the audio session
+      // (e.g. audio_service finishing its init and forcing .playback), the
+      // category/converter state here will show it.
+      Future.delayed(const Duration(seconds: 2), () async {
+        try {
+          final later = await _method.invokeMethod<dynamic>('diagnostics');
+          debugPrint('NativeAecAudioIO: native state +2s — $later');
+        } catch (_) {}
+      });
+    }).catchError((e) {
+      debugPrint('NativeAecAudioIO: native start FAILED: $e');
+      return null;
+    });
 
     return controller.stream;
   }
@@ -92,6 +116,12 @@ class NativeAecAudioIO implements LiveAudioIO {
       debugPrint('NativeAecAudioIO: playChunk failed: $e');
     }
   }
+
+  /// This pipeline runs one AVAudioEngine with Voice-Processing I/O, so iOS
+  /// cancels the pal's voice out of the mic in hardware. That lets the service
+  /// run full duplex (natural barge-in, no swallowed user speech).
+  @override
+  bool get hasHardwareAec => true;
 
   @override
   Future<void> playThinkingCue() async {

@@ -17,6 +17,12 @@ import 'live_conversation_service.dart';
 /// Sample rates are fixed to match the Live API spec exactly:
 /// input 16 kHz LE PCM16, output 24 kHz LE PCM16.
 class RecordPcmAudioIO implements LiveAudioIO {
+  /// Two separate engines (`record` + `flutter_pcm_sound`) mean iOS cannot
+  /// cancel the loudspeaker out of the mic, so the service must keep running
+  /// half-duplex (gate the mic while the pal speaks, drop echoed transcript).
+  @override
+  bool get hasHardwareAec => false;
+
   static const int _inputSampleRate = 16000; // Live API input requirement
   static const int _outputSampleRate = 24000; // Live API output format
 

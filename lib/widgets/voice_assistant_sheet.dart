@@ -81,6 +81,10 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
     final appState = Provider.of<AppState>(context, listen: false);
     // Live pal only when the setting is on AND the feature is available.
     _isLivePal = appState.liveChatPal && LiveConversationService.isAvailable;
+    debugPrint('VoiceAssistantSheet: pal selection — '
+        'liveChatPal=${appState.liveChatPal}, '
+        'featureAvailable=${LiveConversationService.isAvailable} '
+        '=> ${_isLivePal ? "LIVE pal" : "DEFAULT pal"}');
 
     if (_isLivePal) {
       // Release the tap-to-speak mic/TTS before the Live pipeline captures, so
@@ -88,6 +92,11 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
       // makes the model's audio echo badly).
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _voiceService.shutdownForHandoff();
+        // iOS releases the tap-to-speak recognizer/TTS audio session
+        // asynchronously. Give it a beat before the native engine claims
+        // .playAndRecord, otherwise the first session can come up with a dead
+        // input node (the pal then hears nothing).
+        await Future<void>.delayed(const Duration(milliseconds: 300));
         if (mounted) await startLivePalSession();
       });
       return;

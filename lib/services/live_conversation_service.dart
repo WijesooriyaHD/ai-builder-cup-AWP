@@ -79,6 +79,20 @@ abstract class LiveAudioIO {
   /// nothing is buffered/playing.
   Duration get playbackRemaining => Duration.zero;
 
+  /// Whether this pipeline performs real acoustic echo cancellation, so the
+  /// model's own voice is removed from the mic signal in hardware.
+  ///
+  /// This changes the conversation model fundamentally:
+  ///  - false (two separate engines): the mic WILL pick up the loudspeaker, so
+  ///    the service must run half-duplex — gate the mic while the model speaks
+  ///    and drop echoed text from the transcript.
+  ///  - true (unified AVAudioEngine + Voice-Processing I/O): the pal's voice
+  ///    never reaches the mic channel, so the service can run FULL duplex.
+  ///    Applying the half-duplex workarounds here is actively harmful: they
+  ///    swallow the user's speech while the pal is talking and discard their
+  ///    real words as "echo", which also breaks barge-in.
+  bool get hasHardwareAec => false;
+
   /// Releases audio resources.
   Future<void> dispose();
 }
@@ -308,7 +322,16 @@ class LiveConversationService extends ChangeNotifier {
   ///     window of the pal's last audio — a genuine barge-in would come via the
   ///     server `interrupted` path, not as clean input mid-playback.
   ///  2. Content: the words overlap what the pal recently said.
+  /// Whether the audio pipeline cancels the pal's voice out of the mic in
+  /// hardware. When true the half-duplex workarounds are skipped entirely.
+  bool get _hasHardwareAec => _audioIO?.hasHardwareAec ?? false;
+
   bool _looksLikeModelEcho(String userText) {
+    // Hardware AEC means the pal's voice never reaches the mic, so anything
+    // transcribed as the user really IS the user. Applying the heuristic here
+    // would throw away genuine speech (it was discarding real questions asked
+    // while the pal was mid-sentence).
+    if (_hasHardwareAec) return false;
     final sinceModelAudio =
         DateTime.now().difference(_lastModelAudioAt).inMilliseconds;
     final playing = (_audioIO?.playbackRemaining ?? Duration.zero) >
@@ -639,8 +662,10 @@ class LiveConversationService extends ChangeNotifier {
     _thinkingCuePlayed = false;
     _recentModelSpeech.clear();
 
+    debugPrint('LiveConversationService: start() — requesting mic permission…');
     try {
       final granted = await audio.requestPermission();
+      debugPrint('LiveConversationService: mic permission granted=$granted');
       if (!granted) {
         _fail('Microphone permission is needed for Conversation Mode.');
         return;
@@ -685,7 +710,9 @@ class LiveConversationService extends ChangeNotifier {
             systemInstruction != null ? Content.system(systemInstruction) : null,
       );
 
+      debugPrint('LiveConversationService: connecting to "$resolvedModel"…');
       _session = await liveModel.connect();
+      debugPrint('LiveConversationService: connected — session active.');
       _setState(LiveConversationState.active);
       _startMicWatchdog();
 
@@ -708,9 +735,22 @@ class LiveConversationService extends ChangeNotifier {
   }
 
   /// Pumps captured mic PCM chunks to the model as realtime audio input.
+  ///
+  /// Send failures are handled PER CHUNK. This matters: the send can fail
+  /// transiently right after `connect()` returns (the socket may still be
+  /// completing its setup when the first mic buffer arrives). Previously one
+  /// such failure escaped the `await for` and killed the pump for good — the
+  /// session stayed `active` and the UI still said "Listening…", but no further
+  /// audio ever reached the model, so the pal was connected and permanently
+  /// deaf. Dropping a chunk is fine; dropping the whole conversation is not.
   Future<void> _pumpMic(Stream<Uint8List> micStream) async {
     final session = _session;
     if (session == null) return;
+    var chunksSent = 0;
+    var consecutiveFailures = 0;
+    // Only give up if sending fails persistently (a genuinely dead socket),
+    // not on the first hiccup.
+    const maxConsecutiveFailures = 40;
     try {
       await for (final data in micStream) {
         if (_state != LiveConversationState.active || _session == null) break;
@@ -726,19 +766,57 @@ class LiveConversationService extends ChangeNotifier {
         //    signal; playback lags receive, so a fixed time tail isn't enough).
         // 3. a short fixed tail after the last received chunk as a final safety
         //    net for the moment right after playback drains.
-        final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
-        final sinceAudio =
-            DateTime.now().difference(_lastModelAudioAt).inMilliseconds;
-        if (_modelSpeaking ||
-            remaining > const Duration(milliseconds: 200) ||
-            sinceAudio < 800) {
-          continue;
+        // With hardware AEC the pal's voice is already removed from the mic, so
+        // run FULL duplex: keep streaming while the model speaks. This is what
+        // makes barge-in work and — critically — stops the user's own words
+        // being swallowed whenever the pal happens to be talking.
+        if (!_hasHardwareAec) {
+          final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
+          final sinceAudio =
+              DateTime.now().difference(_lastModelAudioAt).inMilliseconds;
+          if (_modelSpeaking ||
+              remaining > const Duration(milliseconds: 200) ||
+              sinceAudio < 800) {
+            continue;
+          }
         }
-        await session
-            .sendAudioRealtime(InlineDataPart('audio/pcm;rate=16000', data));
+        try {
+          await session
+              .sendAudioRealtime(InlineDataPart('audio/pcm;rate=16000', data));
+          consecutiveFailures = 0;
+          chunksSent++;
+          if (chunksSent == 1 && kDebugMode) {
+            debugPrint('LiveConversationService: first mic chunk sent to the '
+                'model — upstream audio is flowing.');
+          }
+        } catch (e) {
+          // Skip THIS chunk and keep pumping; see the doc comment above.
+          consecutiveFailures++;
+          if (kDebugMode) {
+            debugPrint('LiveConversationService: mic send failed '
+                '(#$consecutiveFailures, sent=$chunksSent): $e');
+          }
+          if (consecutiveFailures >= maxConsecutiveFailures) {
+            if (kDebugMode) {
+              debugPrint('LiveConversationService: giving up on the mic pump '
+                  'after $consecutiveFailures consecutive send failures.');
+            }
+            if (_state == LiveConversationState.active) {
+              _fail('Lost the audio connection. Please try again.');
+            }
+            break;
+          }
+        }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('LiveConversationService: mic pump error: $e');
+      // The mic STREAM itself failed (not a send) — that's terminal.
+      if (kDebugMode) {
+        debugPrint('LiveConversationService: mic stream error '
+            '(sent=$chunksSent): $e');
+      }
+      if (_state == LiveConversationState.active) {
+        _fail('Lost the microphone. Please try again.');
+      }
     }
   }
 
@@ -843,10 +921,18 @@ class LiveConversationService extends ChangeNotifier {
       // receive() is a long-lived stream for the whole session in firebase_ai
       // 4.0.0 (it does NOT end per turn), so turn boundaries must be detected
       // from the `turnComplete` message field, handled in _onServerResponse.
+      var responses = 0;
       await for (final response in session.receive()) {
         if (_state != LiveConversationState.active || _session == null) break;
+        responses++;
+        if (responses == 1) {
+          debugPrint('LiveConversationService: FIRST server response received '
+              '— the model is talking back.');
+        }
         await _onServerResponse(response);
       }
+      debugPrint('LiveConversationService: receive stream ended '
+          '(responses=$responses).');
     } catch (e) {
       // The error (incl. any WebSocket closeReason) is surfaced to the UI.
       if (kDebugMode) {
@@ -930,7 +1016,12 @@ class LiveConversationService extends ChangeNotifier {
           _modelSpeaking = true;
           _thinkingCuePlayed = false; // reset for the next user turn
           _lastModelAudioAt = DateTime.now();
-          unawaited(audio.pauseCapture());
+          // Only physically pause the mic when we have NO hardware AEC. With
+          // AEC, muting the mic while the pal talks would make barge-in
+          // impossible and drop anything the user says over it.
+          if (!_hasHardwareAec) {
+            unawaited(audio.pauseCapture());
+          }
         } else if (hasModelContent) {
           _lastModelAudioAt = DateTime.now();
         }
@@ -1020,6 +1111,9 @@ class LiveConversationService extends ChangeNotifier {
   }
 
   void _fail(String message) {
+    // Always log: a silent _fail() is why "the pal just doesn't respond" was so
+    // hard to diagnose.
+    debugPrint('LiveConversationService: FAILED — $message');
     _stopMicWatchdog();
     _lastError = message;
     _setState(LiveConversationState.error);

@@ -47,11 +47,19 @@ final class LiveAudioEngine: NSObject {
   private var micTargetFormat: AVAudioFormat!
 
   private var micConverter: AVAudioConverter?
+  // The source format the cached [micConverter] was built for. The mic
+  // converter is created LAZILY from the first real tap buffer (see
+  // `converter(for:)`) because the input node's format is not reliable until
+  // audio is actually flowing — see the note in `start()`.
+  private var micSourceFormat: AVAudioFormat?
   private var pcm16ToPlayerConverter: AVAudioConverter?
 
   private var micEventSink: FlutterEventSink?
   private var isRunning = false
   private var micPaused = false
+  /// Counts mic chunks pushed to Dart; logged once so a silent session is easy
+  /// to diagnose (0 = the model is receiving no audio at all).
+  private var micBuffersSent = 0
 
   // Playback progress tracking (so Dart's turn/echo logic can tell when audio
   // is still playing). We count frames scheduled vs. a start time.
@@ -80,11 +88,16 @@ final class LiveAudioEngine: NSObject {
     case "start":
       do {
         try start()
-        result(true)
+        // Return diagnostics so the Dart side can log them. NSLog does NOT
+        // reach `flutter run` output, so surfacing state through the channel is
+        // the only way to see native audio state while debugging.
+        result(diagnostics())
       } catch {
         result(FlutterError(code: "start_failed",
                             message: error.localizedDescription, details: nil))
       }
+    case "diagnostics":
+      result(diagnostics())
     case "stop":
       stop()
       result(nil)
@@ -107,6 +120,113 @@ final class LiveAudioEngine: NSObject {
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+
+  // MARK: - Engine start / tap
+
+  /// Installs the mic tap (idempotent — removes any existing tap first).
+  private func installMicTap() {
+    let input = engine.inputNode
+    input.removeTap(onBus: 0)
+    input.installTap(onBus: 0, bufferSize: 2048, format: nil) {
+      [weak self] buffer, _ in
+      self?.onMicBuffer(buffer)
+    }
+  }
+
+  /// Starts the engine and VERIFIES it is actually running.
+  ///
+  /// `AVAudioEngine.start()` can succeed while leaving `isRunning == false`
+  /// when the I/O unit has just been reconfigured (enabling voice processing,
+  /// overriding the output port, or a route change all do this). That was the
+  /// real cause of "the pal connects but never hears anything": the engine was
+  /// stopped, so the mic tap never fired and zero audio reached the model.
+  private func startEngineVerified(session: AVAudioSession) throws {
+    var lastError: Error?
+    for attempt in 1...3 {
+      do {
+        if !session.isOtherAudioPlaying {
+          try? session.setActive(true, options: .notifyOthersOnDeactivation)
+        }
+        engine.prepare()
+        try engine.start()
+      } catch {
+        lastError = error
+        NSLog("[LiveAudioEngine] engine.start() threw on attempt \(attempt): \(error)")
+      }
+      if engine.isRunning {
+        NSLog("[LiveAudioEngine] engine running (attempt \(attempt))")
+        return
+      }
+      NSLog("[LiveAudioEngine] engine NOT running after attempt \(attempt) — "
+        + "resetting and retrying")
+      // Reset the graph and give the I/O unit a moment to settle before retry.
+      engine.stop()
+      engine.reset()
+      Thread.sleep(forTimeInterval: 0.12)
+    }
+    throw lastError ?? NSError(
+      domain: "LiveAudioEngine", code: -1,
+      userInfo: [NSLocalizedDescriptionKey:
+        "AVAudioEngine would not start (isRunning stayed false)."])
+  }
+
+  /// Rebuilds the engine when iOS reports a configuration change (route change,
+  /// voice-processing toggle, media services reset). The engine is stopped by
+  /// such changes, so without this the mic silently dies mid-session.
+  private func observeConfigurationChanges() {
+    NotificationCenter.default.removeObserver(
+      self, name: .AVAudioEngineConfigurationChange, object: engine)
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleConfigurationChange(_:)),
+      name: .AVAudioEngineConfigurationChange,
+      object: engine)
+  }
+
+  @objc private func handleConfigurationChange(_ note: Notification) {
+    guard isRunning else { return }
+    NSLog("[LiveAudioEngine] configuration change — engineRunning="
+      + "\(engine.isRunning); rebuilding graph")
+    // The converter's source format may have changed with the new route.
+    micConverter = nil
+    micSourceFormat = nil
+    let session = AVAudioSession.sharedInstance()
+    do {
+      try startEngineVerified(session: session)
+      installMicTap()
+      if !playerNode.isPlaying { playerNode.play() }
+      NSLog("[LiveAudioEngine] graph rebuilt after configuration change")
+    } catch {
+      NSLog("[LiveAudioEngine] failed to rebuild after configuration change: \(error)")
+    }
+  }
+
+  // MARK: - Diagnostics
+
+  /// A snapshot of the native audio state, surfaced to Dart for logging.
+  private func diagnostics() -> [String: Any] {
+    let session = AVAudioSession.sharedInstance()
+    let inFmt = engine.inputNode.outputFormat(forBus: 0)
+    return [
+      "isRunning": isRunning,
+      "engineRunning": engine.isRunning,
+      "micPaused": micPaused,
+      "hasEventSink": micEventSink != nil,
+      "micBuffersSent": micBuffersSent,
+      "inputSampleRate": inFmt.sampleRate,
+      "inputChannels": Int(inFmt.channelCount),
+      "converterReady": micConverter != nil,
+      // The category is the crux: if something else (e.g. audio_service) has
+      // taken the session to .playback, recording is silently dead.
+      "category": session.category.rawValue,
+      "mode": session.mode.rawValue,
+      "inputAvailable": session.isInputAvailable,
+      "recordPermission": session.recordPermission.rawValue,
+      "sessionSampleRate": session.sampleRate,
+      "inputs": session.currentRoute.inputs.map { $0.portType.rawValue },
+      "outputs": session.currentRoute.outputs.map { $0.portType.rawValue },
+    ]
   }
 
   // MARK: - Permission
@@ -140,14 +260,21 @@ final class LiveAudioEngine: NSObject {
     observeRouteChanges()
 
     let input = engine.inputNode
-    // Turn on the acoustic echo canceller on the mic input. This is the crux:
-    // it uses the engine's output (the pal's voice) as the reference and
-    // removes it from the captured mic signal.
+    // Turn on the acoustic echo canceller. This is the crux: it uses the
+    // engine's output (the pal's voice) as the reference and removes it from
+    // the captured mic signal.
+    //
+    // Enable it on the OUTPUT node too: voice processing is a paired I/O unit,
+    // and enabling only one side can leave the engine unable to start.
     if #available(iOS 13.0, *) {
       try input.setVoiceProcessingEnabled(true)
+      try? engine.outputNode.setVoiceProcessingEnabled(true)
     }
 
-    let hwFormat = input.outputFormat(forBus: 0)
+    // Enabling voice processing (and the speaker override above) reconfigures
+    // the I/O unit, which STOPS the engine. Watch for that and rebuild, or the
+    // engine silently ends up not running and the mic tap never fires.
+    observeConfigurationChanges()
 
     // Player runs at 24 kHz mono float (our pal-audio native rate); the engine
     // converts to the hardware format on the way to the speaker.
@@ -160,22 +287,36 @@ final class LiveAudioEngine: NSObject {
       commonFormat: .pcmFormatFloat32, sampleRate: micSampleRate,
       channels: 1, interleaved: false)!
 
-    micConverter = AVAudioConverter(from: hwFormat, to: micTargetFormat)
+    // IMPORTANT (first-session bug): do NOT build the mic converter from
+    // `input.outputFormat(forBus: 0)` here. On the FIRST start of the app's
+    // lifetime the input hardware has not been configured yet — especially
+    // right after `setVoiceProcessingEnabled(true)`, which reconfigures the
+    // node — so that call can return an invalid 0 Hz format. `AVAudioConverter`
+    // then returns nil, every tap buffer is dropped for want of a converter,
+    // and the model receives total silence and never replies. (Stopping and
+    // restarting "fixed" it only because the engine was warm the second time.)
+    //
+    // Instead we install the tap with a nil format (the node supplies its own
+    // real format at callback time) and build the converter lazily from the
+    // first buffer that actually arrives — that format is always valid.
+    micConverter = nil
+    micSourceFormat = nil
 
     engine.attach(playerNode)
     // Connect player → main mixer at the player's format; the engine handles
     // conversion to the hardware output format.
     engine.connect(playerNode, to: engine.mainMixerNode, format: playerFormat)
 
-    // Tap the mic. Buffers arrive in the hardware format; we convert to 16 kHz
-    // mono, pack to PCM16, and emit to Dart.
-    input.installTap(onBus: 0, bufferSize: 2048, format: hwFormat) {
-      [weak self] buffer, _ in
-      self?.onMicBuffer(buffer)
-    }
+    // Start the engine BEFORE installing the tap. `engine.start()` can return
+    // without throwing while the engine is not actually running (the I/O unit
+    // was reconfigured by the voice-processing/route changes above), and a tap
+    // installed on a stopped engine never fires. Verify and retry.
+    try startEngineVerified(session: session)
 
-    engine.prepare()
-    try engine.start()
+    // Now that the engine is confirmed running, tap the mic. format: nil uses
+    // the bus's current (valid) format.
+    installMicTap()
+
     playerNode.play()
     isRunning = true
     micPaused = false
@@ -187,7 +328,11 @@ final class LiveAudioEngine: NSObject {
     // will hear nothing from the loudspeaker.
     let outputs = session.currentRoute.outputs.map { "\($0.portType.rawValue)" }
       .joined(separator: ",")
-    NSLog("[LiveAudioEngine] started — output route: [\(outputs)]")
+    let inFmt = input.outputFormat(forBus: 0)
+    NSLog("[LiveAudioEngine] started — output route: [\(outputs)], "
+      + "input node format: \(inFmt.sampleRate)Hz ch\(inFmt.channelCount) "
+      + "(0Hz here is OK — the mic converter is built from the first real buffer)")
+    micBuffersSent = 0
   }
 
   private func stop() {
@@ -200,10 +345,16 @@ final class LiveAudioEngine: NSObject {
     }
     isRunning = false
     micEventSink = nil
+    // Drop the cached converter so the next session rebuilds it from that
+    // session's real input format (the route may differ).
+    micConverter = nil
+    micSourceFormat = nil
     scheduledPlaybackFrames = 0
     playbackStartHostTime = 0
     NotificationCenter.default.removeObserver(self,
       name: AVAudioSession.routeChangeNotification, object: nil)
+    NotificationCenter.default.removeObserver(self,
+      name: .AVAudioEngineConfigurationChange, object: engine)
     try? AVAudioSession.sharedInstance().setActive(
       false, options: .notifyOthersOnDeactivation)
   }
@@ -234,9 +385,39 @@ final class LiveAudioEngine: NSObject {
 
   // MARK: - Mic capture → 16 kHz PCM16 → Dart
 
+  /// Returns a converter from [sourceFormat] to the 16 kHz mono mic target,
+  /// building (and caching) it on first use.
+  ///
+  /// Built lazily from real tap buffers because the input node's advertised
+  /// format is unreliable before audio flows (see the note in `start()`).
+  /// Rebuilds automatically if the hardware format changes mid-session (e.g. a
+  /// route change to/from Bluetooth).
+  private func converter(for sourceFormat: AVAudioFormat) -> AVAudioConverter? {
+    if let cached = micConverter, let cachedSource = micSourceFormat,
+       cachedSource == sourceFormat {
+      return cached
+    }
+    guard sourceFormat.sampleRate > 0, sourceFormat.channelCount > 0,
+          let target = micTargetFormat else {
+      NSLog("[LiveAudioEngine] mic buffer has invalid format "
+        + "(\(sourceFormat.sampleRate)Hz ch\(sourceFormat.channelCount)) — skipping")
+      return nil
+    }
+    guard let built = AVAudioConverter(from: sourceFormat, to: target) else {
+      NSLog("[LiveAudioEngine] could not build mic converter from "
+        + "\(sourceFormat.sampleRate)Hz ch\(sourceFormat.channelCount)")
+      return nil
+    }
+    micSourceFormat = sourceFormat
+    micConverter = built
+    NSLog("[LiveAudioEngine] mic converter ready: "
+      + "\(sourceFormat.sampleRate)Hz ch\(sourceFormat.channelCount) -> 16000Hz mono")
+    return built
+  }
+
   private func onMicBuffer(_ buffer: AVAudioPCMBuffer) {
-    guard !micPaused, let sink = micEventSink, let converter = micConverter
-    else { return }
+    guard !micPaused, let sink = micEventSink else { return }
+    guard let converter = converter(for: buffer.format) else { return }
 
     let ratio = micSampleRate / buffer.format.sampleRate
     let outCapacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio + 64)
@@ -268,6 +449,10 @@ final class LiveAudioEngine: NSObject {
     }
     DispatchQueue.main.async {
       sink(FlutterStandardTypedData(bytes: pcm))
+      self.micBuffersSent += 1
+      if self.micBuffersSent == 1 {
+        NSLog("[LiveAudioEngine] first mic chunk sent upstream — capture is live")
+      }
     }
   }
 

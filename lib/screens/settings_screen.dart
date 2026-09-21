@@ -13,6 +13,7 @@ import '../providers/check_in_state.dart';
 import '../providers/personalization_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../services/auth_service.dart';
+import '../services/live_conversation_service.dart';
 import '../services/voice_command_service.dart';
 import '../data/ai_voices.dart';
 import '../screens/customer_center_screen.dart';
@@ -865,6 +866,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildLiveChatPalToggle(BuildContext context, AppState appState) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final enabled = appState.liveChatPal;
+    // The Live pal ships behind FeatureFlags.liveConversationMode. If this
+    // build doesn't include it, the toggle would silently do nothing — so hide
+    // it entirely rather than offering a switch that can't take effect.
+    if (!LiveConversationService.isAvailable) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
