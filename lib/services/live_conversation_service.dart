@@ -179,6 +179,27 @@ class LiveConversationService extends ChangeNotifier {
   // model's turnComplete. Two separate audio engines (record + flutter_pcm_sound)
   // mean iOS hardware AEC can't cancel the echo, so we gate instead.
   bool _modelSpeaking = false;
+
+  /// Whether the pal currently has the floor — either the model is streaming a
+  /// reply or its audio is still coming out of the speaker.
+  ///
+  /// Lets the UI say "Speaking…" instead of a misleading "Listening…" while the
+  /// pal is mid-reply. Playback is included because it lags the stream: the
+  /// model can be done sending while the user is still hearing the sentence.
+  bool get isPalSpeaking {
+    if (_state != LiveConversationState.active) return false;
+    if (_modelSpeaking) return true;
+    final remaining = _audioIO?.playbackRemaining ?? Duration.zero;
+    return remaining > const Duration(milliseconds: 50);
+  }
+
+  /// Assigns [_modelSpeaking], notifying listeners when it actually changes so
+  /// the UI's status label flips promptly.
+  void _setModelSpeaking(bool value) {
+    if (_modelSpeaking == value) return;
+    _modelSpeaking = value;
+    notifyListeners();
+  }
   // Ensures the soft "thinking" cue plays at most once per user turn.
   bool _thinkingCuePlayed = false;
   // Timestamp of the model's most recent audio, used to add a short tail before
@@ -899,7 +920,7 @@ class LiveConversationService extends ChangeNotifier {
               '${sinceAudio.inMilliseconds}ms (playback drained) — '
               'force-resuming mic.');
         }
-        _modelSpeaking = false;
+        _setModelSpeaking(false);
         unawaited(_audioIO?.resumeCapture() ?? Future.value());
       }
     });
@@ -957,7 +978,7 @@ class LiveConversationService extends ChangeNotifier {
       if (message is LiveServerContent) {
         // Model asked to interrupt (user barged in) — stop current playback.
         if (message.interrupted == true) {
-          _modelSpeaking = false;
+          _setModelSpeaking(false);
           await audio.stopPlayback();
           unawaited(audio.resumeCapture());
           return;
@@ -967,7 +988,7 @@ class LiveConversationService extends ChangeNotifier {
         // not end per turn). Without handling this the mic stays gated after the
         // first reply and the model appears to "stop replying".
         if (message.turnComplete == true) {
-          _modelSpeaking = false;
+          _setModelSpeaking(false);
           _lastModelAudioAt = DateTime.now();
           // Resume the mic after a short tail so the speaker's trailing audio
           // finishes playing before the mic re-opens (prevents a final echo).
@@ -1013,7 +1034,7 @@ class LiveConversationService extends ChangeNotifier {
             (message.modelTurn?.parts.isNotEmpty ?? false) ||
                 (outT != null && outT.trim().isNotEmpty);
         if (hasModelContent && !_modelSpeaking) {
-          _modelSpeaking = true;
+          _setModelSpeaking(true);
           _thinkingCuePlayed = false; // reset for the next user turn
           _lastModelAudioAt = DateTime.now();
           // Only physically pause the mic when we have NO hardware AEC. With
@@ -1030,7 +1051,7 @@ class LiveConversationService extends ChangeNotifier {
           for (final part in parts) {
             if (part is InlineDataPart &&
                 part.mimeType.startsWith('audio/pcm')) {
-              _modelSpeaking = true;
+              _setModelSpeaking(true);
               _lastModelAudioAt = DateTime.now();
               await audio.playChunk(part.bytes);
             }
@@ -1083,7 +1104,7 @@ class LiveConversationService extends ChangeNotifier {
   /// honor in [_onServerResponse].
   Future<void> interrupt() async {
     // User is taking over: stop playback and re-open the mic immediately.
-    _modelSpeaking = false;
+    _setModelSpeaking(false);
     _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
     await _audioIO?.stopPlayback();
     await _audioIO?.resumeCapture();

@@ -885,7 +885,10 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _LiveStatusLabel(state: state),
+                          _LiveStatusLabel(
+                            state: state,
+                            isPalSpeaking: service.isPalSpeaking,
+                          ),
                           const SizedBox(height: 10),
                           _LiveReconnectingHint(visible: service.isStalled),
                           Flexible(
@@ -893,7 +896,10 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                               reverse: true,
                               child: _LiveCaptions(
                                 text: service.currentReply,
-                                placeholder: _liveCaptionPlaceholder(state),
+                                placeholder: _liveCaptionPlaceholder(
+                                  state,
+                                  isPalSpeaking: service.isPalSpeaking,
+                                ),
                                 isDark: isDark,
                               ),
                             ),
@@ -1001,14 +1007,22 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
     );
   }
 
-  String _liveCaptionPlaceholder(LiveConversationState state) {
+  String _liveCaptionPlaceholder(
+    LiveConversationState state, {
+    required bool isPalSpeaking,
+  }) {
     switch (state) {
       case LiveConversationState.connecting:
         return 'Connecting…';
       case LiveConversationState.closing:
         return 'Wrapping up…';
       case LiveConversationState.active:
-        return 'Listening… just start talking.';
+        // Only shown until the first words arrive; once the pal replies the
+        // real captions take over.
+        return isPalSpeaking
+            ? 'Your pal is speaking…'
+            : 'Listening… just start talking. You can talk over your pal '
+                'any time.';
       default:
         return '';
     }
@@ -1462,41 +1476,76 @@ class _ConversationCardState extends State<_ConversationCard> {
 
 /// The Live pal's state caption ("Connecting…", "Listening…", "Wrapping up…").
 class _LiveStatusLabel extends StatelessWidget {
-  const _LiveStatusLabel({required this.state});
+  const _LiveStatusLabel({
+    required this.state,
+    required this.isPalSpeaking,
+  });
 
   final LiveConversationState state;
+
+  /// True while the pal has the floor, so the label can say "Speaking…" rather
+  /// than a misleading "Listening…". The conversation is full duplex, so the mic
+  /// really is still open — but what the user cares about is whose turn it is.
+  final bool isPalSpeaking;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final String label;
+    final IconData? icon;
     switch (state) {
       case LiveConversationState.connecting:
         label = 'Connecting…';
+        icon = null;
         break;
       case LiveConversationState.active:
-        label = 'Listening…';
+        if (isPalSpeaking) {
+          label = 'Your pal is speaking…';
+          icon = Icons.graphic_eq_rounded;
+        } else {
+          label = 'Listening…';
+          icon = Icons.mic_rounded;
+        }
         break;
       case LiveConversationState.closing:
         label = 'Wrapping up…';
+        icon = null;
         break;
       case LiveConversationState.error:
         label = 'Something went wrong';
+        icon = null;
         break;
       case LiveConversationState.idle:
         label = 'Ready';
+        icon = null;
         break;
     }
+
+    // While the pal talks, tint the label with the accent so the turn change is
+    // noticeable at a glance; stay muted while listening.
+    final color = isPalSpeaking && state == LiveConversationState.active
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface.withOpacity(0.5);
+
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
-      child: Text(
-        label,
+      child: Row(
         key: ValueKey(label),
-        style: GoogleFonts.dmSans(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: theme.colorScheme.onSurface.withOpacity(0.5),
-        ),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: GoogleFonts.dmSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
