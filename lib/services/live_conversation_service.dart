@@ -520,7 +520,7 @@ class LiveConversationService extends ChangeNotifier {
       // mid sign-off, so a long goodbye is never truncated.
       _endFallbackTimer?.cancel();
       _endFallbackTimer =
-          Timer(const Duration(seconds: 6), _onEndFallbackTimeout);
+          Timer(const Duration(seconds: 20), _onEndFallbackTimeout);
     }
   }
 
@@ -551,16 +551,17 @@ class LiveConversationService extends ChangeNotifier {
 
     // Player is considered drained below this (avoids chasing the last few ms).
     const drainThreshold = Duration(milliseconds: 120);
-    // Small settle after drain so the final syllable isn't clipped by the
-    // abrupt stopPlayback() inside stop().
-    const tailSettle = Duration(milliseconds: 400);
-    // If the turn is NOT yet complete we also want a brief network-quiet gap,
-    // so we don't end between two chunks of an in-progress sentence.
-    const quietGap = Duration(milliseconds: 700);
+    // Extra settle after drain so the final syllable and hardware render tail
+    // are fully audible before stopPlayback() inside stop() clears buffers.
+    const tailSettle = Duration(milliseconds: 900);
+    // If the turn is NOT yet complete we require a substantial network-quiet
+    // gap. Natural speech pauses between sentences can approach 1s, so shorter
+    // gaps risk truncating a goodbye between phrases.
+    const quietGap = Duration(seconds: 3);
     // Only bail when nothing is progressing: no new audio AND the buffer isn't
     // draining. Give a slow network/model ample time between PCM chunks;
     // ending a living turn is worse than waiting briefly for a clean goodbye.
-    const noProgressTimeout = Duration(seconds: 8);
+    const noProgressTimeout = Duration(seconds: 15);
     // Absolute backstop purely to prevent a leaked poll loop. Deliberately
     // generous so it can never truncate a legitimately long sign-off.
     const absoluteCeiling = Duration(minutes: 2);
@@ -666,7 +667,7 @@ class LiveConversationService extends ChangeNotifier {
     // playback comes through. Defers to the drain loop if the pal IS speaking.
     _endFallbackTimer?.cancel();
     _endFallbackTimer =
-        Timer(const Duration(seconds: 6), _onEndFallbackTimeout);
+        Timer(const Duration(seconds: 20), _onEndFallbackTimeout);
     // Start the drain wait right away. It tolerates the pal still streaming
     // (it requires a network-quiet gap until turnComplete arrives), so this is
     // safe whether or not the pal is mid-sentence.

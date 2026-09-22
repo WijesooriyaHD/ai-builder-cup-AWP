@@ -894,16 +894,13 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                           const SizedBox(height: 10),
                           _LiveReconnectingHint(visible: service.isStalled),
                           Flexible(
-                            child: SingleChildScrollView(
-                              reverse: true,
-                              child: _LiveCaptions(
-                                text: service.currentReply,
-                                placeholder: _liveCaptionPlaceholder(
-                                  state,
-                                  isPalSpeaking: service.isPalSpeaking,
-                                ),
-                                isDark: isDark,
+                            child: _LiveCaptions(
+                              text: service.currentReply,
+                              placeholder: _liveCaptionPlaceholder(
+                                state,
+                                isPalSpeaking: service.isPalSpeaking,
                               ),
+                              isDark: isDark,
                             ),
                           ),
                         ],
@@ -1617,7 +1614,7 @@ class _LiveReconnectingHint extends StatelessWidget {
 
 /// Live captions of the pal's current reply — the text widget that replaces the
 /// orb while a conversation is running.
-class _LiveCaptions extends StatelessWidget {
+class _LiveCaptions extends StatefulWidget {
   const _LiveCaptions({
     required this.text,
     required this.placeholder,
@@ -1629,22 +1626,67 @@ class _LiveCaptions extends StatelessWidget {
   final bool isDark;
 
   @override
+  State<_LiveCaptions> createState() => _LiveCaptionsState();
+}
+
+class _LiveCaptionsState extends State<_LiveCaptions> {
+  final ScrollController _scrollController = ScrollController();
+  String _lastText = '';
+
+  @override
+  void didUpdateWidget(covariant _LiveCaptions oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newText = widget.text.trim();
+    if (newText == _lastText) return;
+    _lastText = newText;
+    // Keep the latest text visible: after every update, scroll to the bottom
+    // so the current caption is always on screen (new reply starts there, and
+    // as the pal keeps speaking, the view follows the newest words).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(max);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasText = text.trim().isNotEmpty;
-    final shown = hasText ? text.trim() : placeholder;
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      child: Text(
-        shown,
-        key: ValueKey(shown),
-        textAlign: TextAlign.center,
-        style: GoogleFonts.dmSans(
-          fontSize: hasText ? 18 : 15,
-          height: 1.5,
-          fontWeight: hasText ? FontWeight.w500 : FontWeight.normal,
-          color: theme.colorScheme.onSurface
-              .withOpacity(hasText ? 0.88 : 0.45),
+    final trimmed = widget.text.trim();
+    final hasText = trimmed.isNotEmpty;
+    final shown = hasText ? trimmed : widget.placeholder;
+    final style = GoogleFonts.dmSans(
+      fontSize: hasText ? 18 : 15,
+      height: 1.5,
+      fontWeight: hasText ? FontWeight.w500 : FontWeight.normal,
+      color:
+          theme.colorScheme.onSurface.withOpacity(hasText ? 0.88 : 0.45),
+    );
+    // Scrollable from the top so the beginning of the response is always the
+    // first thing the user sees. Fills the parent's constraints; overflow is
+    // handled by the scroll view rather than clipping the text.
+    return Scrollbar(
+      controller: _scrollController,
+      thumbVisibility: hasText,
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: Text(
+            shown,
+            key: ValueKey(hasText ? 'reply' : 'placeholder'),
+            textAlign: TextAlign.center,
+            style: style,
+          ),
         ),
       ),
     );
