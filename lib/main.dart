@@ -35,6 +35,7 @@ import 'features/habit_builder/presentation/challenge_state.dart';
 import 'screens/auth_wrapper.dart';
 import 'widgets/snow_overlay.dart';
 import 'widgets/audio_floating_player.dart';
+import 'widgets/pal_wake_word_coordinator.dart';
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -203,11 +204,13 @@ class AiWellnessPalApp extends StatelessWidget {
                   textScaler: TextScaler.linear(appState.textScaleFactor),
                 ),
                 child: SnowOverlay(
-                  child: Stack(
-                    children: [
-                      child!,
-                      const AudioFloatingPlayer(),
-                    ],
+                  child: PalWakeWordCoordinator(
+                    child: Stack(
+                      children: [
+                        child!,
+                        const AudioFloatingPlayer(),
+                      ],
+                    ),
                   ),
                 ),
               );

@@ -100,6 +100,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String _aiVoice = 'default';
   bool _forceEnglishVoice = false;
   bool _liveChatPal = false;
+  bool _alwaysListenForPal = false;
   String _livePalVoice = kDefaultLivePalVoice;
   List<String> _preferredMethods = const [];
   
@@ -137,6 +138,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// voice conversation). When false (the default) it opens the standard
   /// tap-to-speak pal.
   bool get liveChatPal => _liveChatPal;
+
+  /// When true, the app listens in the foreground for a "Hey Pal" / "Pal" wake
+  /// phrase and, on match, opens the Live chat pal automatically. Off by
+  /// default. iOS does not permit third-party apps to keep a wake-word
+  /// listener running while backgrounded, so this only takes effect while the
+  /// app is on screen.
+  bool get alwaysListenForPal => _alwaysListenForPal;
 
   /// The selected Gemini prebuilt voice for the Live chat pal (see
   /// [kLivePalVoices]). Applied when a Live session is created, so a change
@@ -436,6 +444,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Switches the mic button between the Live chat pal (true) and the default
   /// tap-to-speak pal (false, the default).
+  /// Enables/disables the foreground wake-word listener. Persisted alongside
+  /// the other Live pal preferences.
+  void setAlwaysListenForPal(bool value) {
+    if (_alwaysListenForPal == value) return;
+    _alwaysListenForPal = value;
+    _saveSettings();
+    notifyListeners();
+  }
+
   void setLiveChatPal(bool value) {
     if (_liveChatPal == value) return;
     _liveChatPal = value;
@@ -471,6 +488,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       aiVoice: _aiVoice,
       forceEnglishVoice: _forceEnglishVoice,
       liveChatPal: _liveChatPal,
+      alwaysListenForPal: _alwaysListenForPal,
       livePalVoice: _livePalVoice,
       preferredMethods: _preferredMethods,
       // Don't push settings to the cloud until the authoritative cloud values
@@ -1516,6 +1534,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _aiVoice = settings['aiVoice'] as String? ?? 'default';
     _forceEnglishVoice = settings['forceEnglishVoice'] as bool? ?? false;
     _liveChatPal = settings['liveChatPal'] as bool? ?? false;
+    _alwaysListenForPal =
+        settings['alwaysListenForPal'] as bool? ?? false;
     _livePalVoice =
         settings['livePalVoice'] as String? ?? kDefaultLivePalVoice;
     final methods = settings['preferredMethods'];

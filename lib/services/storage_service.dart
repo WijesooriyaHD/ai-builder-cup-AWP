@@ -53,6 +53,10 @@ class StorageService {
   static const String _liveChatPalKey = 'aiwellnesspal_live_chat_pal';
   /// The selected Gemini prebuilt voice for the Live chat pal.
   static const String _livePalVoiceKey = 'aiwellnesspal_live_pal_voice';
+  /// When true, the wake-word listener runs in the foreground so saying
+  /// "Hey Pal" or "Pal" opens the Live pal automatically. Off by default.
+  static const String _alwaysListenForPalKey =
+      'aiwellnesspal_always_listen_for_pal';
   static const String _preferredMethodsKey = 'aiwellnesspal_preferred_methods';
   static const String _periodDataKey = 'aiwellnesspal_period_data';
   static const String _weightDataKey = 'aiwellnesspal_weight_data';
@@ -302,6 +306,7 @@ class StorageService {
     String? aiVoice,
     bool? forceEnglishVoice,
     bool? liveChatPal,
+    bool? alwaysListenForPal,
     String? livePalVoice,
     List<String>? preferredMethods,
     bool syncToCloud = true,
@@ -323,6 +328,9 @@ class StorageService {
     }
     if (liveChatPal != null) {
       await prefs.setBool(_liveChatPalKey, liveChatPal);
+    }
+    if (alwaysListenForPal != null) {
+      await prefs.setBool(_alwaysListenForPalKey, alwaysListenForPal);
     }
     if (livePalVoice != null) {
       await prefs.setString(_livePalVoiceKey, livePalVoice);
@@ -364,6 +372,9 @@ class StorageService {
           data['force_english_voice'] = forceEnglishVoice;
         }
         if (liveChatPal != null) data['live_chat_pal'] = liveChatPal;
+        if (alwaysListenForPal != null) {
+          data['always_listen_for_pal'] = alwaysListenForPal;
+        }
         if (livePalVoice != null) data['live_pal_voice'] = livePalVoice;
         if (preferredMethods != null) data['preferred_methods'] = preferredMethods;
 
@@ -433,6 +444,8 @@ class StorageService {
       'forceEnglishVoice': prefs.getBool(_forceEnglishVoiceKey) ?? false,
       // Default OFF: the mic FAB opens the default tap-to-speak pal.
       'liveChatPal': prefs.getBool(_liveChatPalKey) ?? false,
+      'alwaysListenForPal':
+          prefs.getBool(_alwaysListenForPalKey) ?? false,
       'livePalVoice':
           prefs.getString(_livePalVoiceKey) ?? kDefaultLivePalVoice,
       'preferredMethods': prefs.getStringList(_preferredMethodsKey) ?? <String>[],
@@ -449,6 +462,8 @@ class StorageService {
           cloudProfile['force_english_voice'] ?? settings['forceEnglishVoice'];
       settings['liveChatPal'] =
           cloudProfile['live_chat_pal'] ?? settings['liveChatPal'];
+      settings['alwaysListenForPal'] = cloudProfile['always_listen_for_pal'] ??
+          settings['alwaysListenForPal'];
       settings['livePalVoice'] =
           cloudProfile['live_pal_voice'] ?? settings['livePalVoice'];
       settings['isWinterMode'] =

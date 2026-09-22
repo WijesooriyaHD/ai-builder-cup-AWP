@@ -856,6 +856,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (LiveConversationService.isAvailable && appState.liveChatPal) ...[
           const SizedBox(height: 12), // Reduced from 18
           _buildLivePalVoiceSelector(context, appState),
+          const SizedBox(height: 12),
+          _buildAlwaysListenForPalToggle(context, appState),
         ],
         const SizedBox(height: 16),
         Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
@@ -996,6 +998,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// "Always listen for 'Pal'" — a foreground wake-word toggle. When on, the
+  /// app listens for "Hey Pal" or "Pal" while it is on screen and opens the
+  /// Live pal automatically. iOS does not permit third-party apps to keep the
+  /// mic on while backgrounded, so this only takes effect in the foreground.
+  Widget _buildAlwaysListenForPalToggle(
+      BuildContext context, AppState appState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final enabled = appState.alwaysListenForPal;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Always listen for "Pal"',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+            Switch.adaptive(
+              value: enabled,
+              onChanged: (value) => appState.setAlwaysListenForPal(value),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, right: 48),
+          child: Text(
+            enabled
+                ? 'Say "Hey Pal" or "Pal" and I\'ll open the live conversation. '
+                    'Only works while the app is on screen.'
+                : 'Turn on to open the live pal hands-free — just say "Hey Pal" '
+                    'or "Pal" while the app is on screen.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                  height: 1.4,
+                ),
+          ),
+        ),
+      ],
     );
   }
 
