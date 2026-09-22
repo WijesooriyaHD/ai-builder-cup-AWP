@@ -194,11 +194,57 @@ class LiveConversationService extends ChangeNotifier {
   }
 
   /// Assigns [_modelSpeaking], notifying listeners when it actually changes so
-  /// the UI's status label flips promptly.
+  /// the UI's status label flips promptly. When the flag flips to false, arm a
+  /// short polling loop so listeners re-evaluate [isPalSpeaking] as buffered
+  /// audio drains — otherwise the label lags reality (says "Speaking" after
+  /// silence, or "Listening" while audio is still audibly playing).
   void _setModelSpeaking(bool value) {
     if (_modelSpeaking == value) return;
     _modelSpeaking = value;
+    if (value) {
+      _cancelSpeakingRefresh();
+    } else {
+      _startSpeakingRefresh();
+    }
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Speaking-label refresh
+  //
+  // `isPalSpeaking` derives from `_modelSpeaking` OR queued playback. Playback
+  // duration changes without any notify, so after a turnComplete we periodically
+  // rebuild until the queue is truly empty. The loop stops itself as soon as
+  // both signals settle, so it never rebuilds unnecessarily.
+  // ---------------------------------------------------------------------------
+  Timer? _speakingRefreshTimer;
+  bool _lastPublishedIsPalSpeaking = false;
+
+  void _startSpeakingRefresh() {
+    _speakingRefreshTimer?.cancel();
+    _speakingRefreshTimer =
+        Timer.periodic(const Duration(milliseconds: 150), (timer) {
+      if (_state != LiveConversationState.active) {
+        _cancelSpeakingRefresh();
+        return;
+      }
+      final playing = (_audioIO?.playbackRemaining ?? Duration.zero) >
+          const Duration(milliseconds: 50);
+      final speakingNow = _modelSpeaking || playing;
+      if (speakingNow != _lastPublishedIsPalSpeaking) {
+        _lastPublishedIsPalSpeaking = speakingNow;
+        notifyListeners();
+      }
+      // Everything is settled → no more polling until the next reply.
+      if (!_modelSpeaking && !playing) {
+        _cancelSpeakingRefresh();
+      }
+    });
+  }
+
+  void _cancelSpeakingRefresh() {
+    _speakingRefreshTimer?.cancel();
+    _speakingRefreshTimer = null;
   }
   // Ensures the soft "thinking" cue plays at most once per user turn.
   bool _thinkingCuePlayed = false;
@@ -1355,6 +1401,9 @@ class LiveConversationService extends ChangeNotifier {
               _setModelSpeaking(true);
               _lastModelAudioAt = DateTime.now();
               await audio.playChunk(part.bytes);
+              // Ensure UI keeps updating as this chunk drains, even if the
+              // next chunk arrives after a short server gap.
+              _startSpeakingRefresh();
             }
           }
         }
@@ -1418,6 +1467,8 @@ class LiveConversationService extends ChangeNotifier {
     _setState(LiveConversationState.closing);
     _stopMicWatchdog();
     _stopIdleCheckIn();
+    _cancelSpeakingRefresh();
+    _lastPublishedIsPalSpeaking = false;
     _endFallbackTimer?.cancel();
     _endFallbackTimer = null;
     _flushTranscriptBuffers();
@@ -1439,6 +1490,8 @@ class LiveConversationService extends ChangeNotifier {
     debugPrint('LiveConversationService: FAILED — $message');
     _stopMicWatchdog();
     _stopIdleCheckIn();
+    _cancelSpeakingRefresh();
+    _lastPublishedIsPalSpeaking = false;
     _lastError = message;
     _setState(LiveConversationState.error);
   }
@@ -1452,6 +1505,7 @@ class LiveConversationService extends ChangeNotifier {
   void dispose() {
     _stopMicWatchdog();
     _stopIdleCheckIn();
+    _cancelSpeakingRefresh();
     _session?.close();
     _audioIO?.dispose();
     super.dispose();
