@@ -7,6 +7,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/meal_planner_models.dart';
 
+/// Outcome of persisting a plan, so the UI can distinguish "safely saved to
+/// your account" from "saved on this device only".
+enum PlanSaveResult {
+  /// Written to Firestore (and cached locally).
+  synced,
+
+  /// Cached locally but there is no signed-in account to sync to.
+  localOnly,
+
+  /// Cached locally, but the Firestore write failed (offline / error).
+  cloudFailed,
+}
+
 /// Persists meal plans to Firestore under `users/{userId}/mealPlans/{planId}`,
 /// with the user profile and favorites on the user doc plus a local cache of
 /// the active plan for instant/offline loads.
@@ -98,20 +111,54 @@ class MealPlanRepository {
     return null;
   }
 
-  Future<void> savePlan(MealPlan plan, {bool setActive = true}) async {
+  /// Persists [plan] to the local cache (always) and to Firestore at
+  /// `users/{uid}/mealPlans/{planId}`.
+  ///
+  /// Returns the cloud persistence outcome so the caller can tell the user
+  /// whether their plan is safely saved to the account (vs only cached on this
+  /// device). The local cache write always happens first, so the plan is never
+  /// lost even if the network write fails.
+  Future<PlanSaveResult> savePlan(MealPlan plan, {bool setActive = true}) async {
     if (setActive) await _cacheActivePlan(plan);
+
+    final uid = _uid;
     final col = _plansCol;
-    if (col != null) {
-      try {
-        await col.doc(plan.id).set(plan.toMap());
-      } catch (e) {
-        debugPrint('❌ MealPlanRepository.savePlan: $e');
-      }
+    if (uid == null || col == null) {
+      // Not signed in — cached locally, but there's no account to sync to.
+      return PlanSaveResult.localOnly;
+    }
+
+    try {
+      // Await the write so we actually know it committed (Firestore's offline
+      // persistence resolves this when connectivity returns). Merge so an
+      // in-place update never drops fields written by another path.
+      await col.doc(plan.id).set(plan.toMap(), SetOptions(merge: true));
+      return PlanSaveResult.synced;
+    } catch (e) {
+      debugPrint('❌ MealPlanRepository.savePlan (uid=$uid, plan=${plan.id}): $e');
+      return PlanSaveResult.cloudFailed;
+    }
+  }
+
+  /// Reads a plan straight back from Firestore by id, bypassing the local
+  /// cache. Used to VERIFY a write round-tripped correctly. Returns null when
+  /// signed out, the doc is missing, or the read fails.
+  Future<MealPlan?> fetchPlanFromCloud(String planId) async {
+    final col = _plansCol;
+    if (col == null) return null;
+    try {
+      final doc = await col.doc(planId).get();
+      if (!doc.exists || doc.data() == null) return null;
+      return MealPlan.fromMap(doc.id, doc.data()!);
+    } catch (e) {
+      debugPrint('❌ MealPlanRepository.fetchPlanFromCloud($planId): $e');
+      return null;
     }
   }
 
   /// Persists an in-place update (meal swap, grocery toggle) to the active plan.
-  Future<void> updatePlan(MealPlan plan) => savePlan(plan, setActive: true);
+  Future<PlanSaveResult> updatePlan(MealPlan plan) =>
+      savePlan(plan, setActive: true);
 
   Future<List<MealPlan>> loadSavedPlans({int limit = 20}) async {
     final col = _plansCol;

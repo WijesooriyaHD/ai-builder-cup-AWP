@@ -332,73 +332,166 @@ class GroceryListCard extends StatelessWidget {
   }
 }
 
-/// Displays a compact 7-day schedule overview.
+/// Displays the full multi-day schedule overview for a weekly (7-day) or
+/// monthly (30-day) plan.
+///
+/// Previously this hard-capped at 7 rows and was always titled "Weekly
+/// overview", so a 30-day monthly plan showed only its first week. It now
+/// renders every day the plan contains, titles itself from [MealPlan.planType],
+/// and — for long (monthly) plans — groups days into weeks with running weekly
+/// calorie subtotals so the month stays scannable. The list is capped in HEIGHT
+/// and scrolls internally, so 30 rows never blow out the page layout.
 class WeeklyPlanOverviewCard extends StatelessWidget {
   final MealPlan plan;
   final ValueChanged<int>? onTapDay;
 
   const WeeklyPlanOverviewCard({super.key, required this.plan, this.onTapDay});
 
-  static const _dayLabels = ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5',
-    'Day 6', 'Day 7'];
+  bool get _isMonthly => plan.planType == PlanType.monthly;
+
+  String get _title => _isMonthly ? 'Monthly overview' : 'Weekly overview';
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final days = plan.days.take(7).toList();
+    final days = plan.days;
+    if (days.isEmpty) return const SizedBox.shrink();
+
     return NutritionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Weekly overview',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(_title,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ),
+              // Total-days chip, so the user can see the whole span at a glance
+              // (e.g. "30 days" for a monthly plan).
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: kMealPlanAccent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('${days.length} days',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold, color: kMealPlanAccent)),
+              ),
+            ],
+          ),
           const SizedBox(height: 12),
-          ...List.generate(days.length, (i) {
-            final d = days[i];
-            return InkWell(
-              onTap: onTapDay == null ? null : () => onTapDay!(i),
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      decoration: BoxDecoration(
-                        color: kMealPlanAccent.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          i < _dayLabels.length ? _dayLabels[i] : 'Day ${i + 1}',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: kMealPlanAccent),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        '${d.breakfast.name} · ${d.lunch.name} · ${d.dinner.name}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text('${d.totalCalories}',
-                        style: theme.textTheme.bodySmall?.copyWith(
+          // Cap the height so a 30-day monthly plan scrolls within the card
+          // instead of producing an enormous column. A weekly plan (7 rows)
+          // sits comfortably under this cap and won't scroll.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 420),
+            child: SingleChildScrollView(
+              child: _isMonthly
+                  ? _buildGroupedByWeek(theme, days)
+                  : _buildDayList(theme, days, startIndex: 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A flat list of day rows for [days], where row i maps to absolute day
+  /// index `startIndex + i` (so tapping opens the correct day in a grouped
+  /// monthly view).
+  Widget _buildDayList(ThemeData theme, List<DayPlan> days,
+      {required int startIndex}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List.generate(days.length, (i) {
+        final absoluteIndex = startIndex + i;
+        return _buildDayRow(theme, days[i], absoluteIndex);
+      }),
+    );
+  }
+
+  /// Groups a monthly plan into weeks (Week 1..5) with a per-week calorie
+  /// subtotal header, so 30 days are easy to navigate.
+  Widget _buildGroupedByWeek(ThemeData theme, List<DayPlan> days) {
+    const perWeek = 7;
+    final weekCount = (days.length / perWeek).ceil();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List.generate(weekCount, (w) {
+        final start = w * perWeek;
+        final end = (start + perWeek).clamp(0, days.length);
+        final weekDays = days.sublist(start, end);
+        final weekCalories =
+            weekDays.fold<int>(0, (s, d) => s + d.totalCalories);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.only(top: w == 0 ? 0 : 12, bottom: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text('Week ${w + 1}',
+                        style: theme.textTheme.labelLarge?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.onSurfaceVariant)),
-                  ],
+                            color: kMealPlanAccent)),
+                  ),
+                  Text('$weekCalories kcal',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            _buildDayList(theme, weekDays, startIndex: start),
+          ],
+        );
+      }),
+    );
+  }
+
+  Widget _buildDayRow(ThemeData theme, DayPlan d, int index) {
+    return InkWell(
+      onTap: onTapDay == null ? null : () => onTapDay!(index),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: kMealPlanAccent.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: Text(
+                  'Day ${index + 1}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold, color: kMealPlanAccent),
                 ),
               ),
-            );
-          }),
-        ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '${d.breakfast.name} · ${d.lunch.name} · ${d.dinner.name}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text('${d.totalCalories}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
       ),
     );
   }

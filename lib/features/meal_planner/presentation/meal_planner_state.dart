@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../../nutrition/domain/nutrition_models.dart' show MealTypeInfo;
@@ -31,6 +30,7 @@ class MealPlannerState extends ChangeNotifier {
   bool _isGenerating = false;
   bool _isBuildingGrocery = false;
   String? _error;
+  PlanSaveResult? _lastSaveResult;
 
   UserProfile? get profile => _profile;
   MealPlan? get activePlan => _activePlan;
@@ -39,6 +39,15 @@ class MealPlannerState extends ChangeNotifier {
   bool get isGenerating => _isGenerating;
   bool get isBuildingGrocery => _isBuildingGrocery;
   String? get error => _error;
+
+  /// The outcome of the most recent plan persistence, so the UI can reassure
+  /// the user their plan is saved to their account (or warn it's device-only).
+  PlanSaveResult? get lastSaveResult => _lastSaveResult;
+
+  /// True when the active plan is confirmed saved to the user's Firebase
+  /// account (not just cached on-device).
+  bool get isActivePlanSyncedToCloud =>
+      _lastSaveResult == PlanSaveResult.synced;
 
   bool get hasProfile => _profile != null && _profile!.isComplete;
 
@@ -151,7 +160,13 @@ class MealPlannerState extends ChangeNotifier {
       _activePlan = plan;
       // ignore: unawaited_futures
       syncMealPlannerWidget();
-      await _repo.savePlan(plan);
+      // Persist to local cache + Firebase and remember the outcome so the UI
+      // can confirm the plan is saved to the user's account.
+      _lastSaveResult = await _repo.savePlan(plan);
+      if (_lastSaveResult == PlanSaveResult.cloudFailed) {
+        debugPrint('⚠️ MealPlannerState.generate: plan cached locally but the '
+            'Firebase sync failed; will remain device-only until re-saved.');
+      }
       _trackChosenMeals(plan);
       return true;
     } on MealPlannerException catch (e) {
