@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../../../providers/app_state.dart';
 import '../../../utils/pro_modal_utils.dart';
 import '../../../widgets/ai_wellness_loader.dart';
+import '../../../widgets/add_to_home_wrapper.dart';
+import '../../../services/home_tool_cards_service.dart';
 import '../../nutrition/domain/nutrition_models.dart';
 import '../../nutrition/presentation/nutrition_state.dart';
 import '../domain/meal_planner_models.dart';
@@ -138,10 +140,13 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
           _buildEmptyState(context)
         else ...[
           if (state.todayPlan != null) ...[
-            TodaysMealPlanCard(
-              day: state.todayPlan!,
-              onTapMeal: (m) => _showMealDetail(context, state, m),
-              onSwapMeal: (m) => _showSwapSheet(context, state, m),
+            AddToHomeWrapper(
+              toolCardId: HomeToolCard.mealPlanner,
+              child: TodaysMealPlanCard(
+                day: state.todayPlan!,
+                onTapMeal: (m) => _showMealDetail(context, state, m),
+                onSwapMeal: (m) => _showSwapSheet(context, state, m),
+              ),
             ),
             const SizedBox(height: 16),
             DailyNutritionSummaryCard(

@@ -22,6 +22,7 @@ import 'services/native_aec_audio_io.dart';
 import 'services/record_pcm_audio_io.dart';
 import 'services/app_navigation_service.dart';
 import 'services/conversation_store.dart';
+import 'services/home_tool_cards_service.dart';
 import 'services/prefs_brand_migration.dart';
 import 'features/nutrition/presentation/nutrition_state.dart';
 import 'features/meal_planner/presentation/meal_planner_state.dart';
@@ -188,6 +189,9 @@ class AiWellnessPalApp extends StatelessWidget {
         // Recent Gemini Live "Talk" conversations (max 3), shown as cards on
         // the Wellness Assistant page and persisted to Firestore.
         ChangeNotifierProvider(create: (_) => ConversationStore()..load()),
+        // Which wellness-tool summary cards the user has added to Home. Loaded
+        // up front so the Home screen can render them immediately.
+        ChangeNotifierProvider(create: (_) => HomeToolCardsService()..load()),
       ],
       child: Consumer<AppState>(
         builder: (context, appState, child) {

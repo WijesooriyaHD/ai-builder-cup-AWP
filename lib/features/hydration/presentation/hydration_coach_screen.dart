@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
 import '../../../utils/pro_modal_utils.dart';
+import '../../../widgets/add_to_home_wrapper.dart';
+import '../../../services/home_tool_cards_service.dart';
 import '../../meal_planner/presentation/meal_planner_state.dart';
 import '../../nutrition/presentation/widgets/nutrition_cards.dart'
     show NutritionCard;
@@ -68,11 +70,14 @@ class _HydrationCoachScreenState extends State<HydrationCoachScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
                     children: [
                       _buildWeatherSection(context, state),
-                      HydrationProgressCard(
-                        goalMl: state.goalMl,
-                        consumedMl: state.consumedMl,
-                        isManualGoal: state.isManualTarget,
-                        onEditGoal: () => _showEditTarget(context, state),
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.hydration,
+                        child: HydrationProgressCard(
+                          goalMl: state.goalMl,
+                          consumedMl: state.consumedMl,
+                          isManualGoal: state.isManualTarget,
+                          onEditGoal: () => _showEditTarget(context, state),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _buildQuickAdd(context, state),

@@ -12,7 +12,12 @@ const Color kCalorieAccent = Color(0xFFF5A623);
 /// Large circular budget dashboard: ring + Budget/Consumed/Burned/Remaining.
 class CalorieBudgetCard extends StatelessWidget {
   final CalorieSummary summary;
-  const CalorieBudgetCard({super.key, required this.summary});
+
+  /// Optional title header rendered inside the card (used on the Home screen so
+  /// the card matches the other Home cards' icon + title formatting).
+  final Widget? titleHeader;
+
+  const CalorieBudgetCard({super.key, required this.summary, this.titleHeader});
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +28,10 @@ class CalorieBudgetCard extends StatelessWidget {
     return NutritionCard(
       child: Column(
         children: [
+          if (titleHeader != null) ...[
+            Align(alignment: Alignment.centerLeft, child: titleHeader!),
+            const SizedBox(height: 16),
+          ],
           SizedBox(
             width: 210,
             height: 210,

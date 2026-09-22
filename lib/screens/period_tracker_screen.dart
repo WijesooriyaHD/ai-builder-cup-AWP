@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../models/period_data.dart';
 import '../providers/app_state.dart';
+import '../services/home_tool_cards_service.dart';
+import '../widgets/add_to_home_wrapper.dart';
 
 /// A full-featured period tracker: cycle ring, next-period prediction, a
 /// markable month calendar, cycle/period-length settings, and phase insights.
@@ -52,7 +54,10 @@ class _PeriodTrackerScreenState extends State<PeriodTrackerScreen> {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
             children: [
-              _buildCycleRing(context, data),
+              AddToHomeWrapper(
+                toolCardId: HomeToolCard.periodTracker,
+                child: _buildCycleRing(context, data),
+              ),
               const SizedBox(height: 24),
               _buildPredictionRow(context, data),
               const SizedBox(height: 16),

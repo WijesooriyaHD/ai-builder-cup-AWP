@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:aiwellnesspal/utils/wellnesspal_snackbar.dart';
@@ -36,6 +37,12 @@ import '../utils/pro_modal_utils.dart';
 import 'check_in_screen.dart';
 import 'explore_tab_screen.dart';
 import 'achievements_screen.dart';
+import '../services/home_tool_cards_service.dart';
+import '../widgets/home_tool_card_views.dart';
+import '../features/nutrition/presentation/nutrition_state.dart';
+import '../features/meal_planner/presentation/meal_planner_state.dart';
+import '../features/hydration/presentation/hydration_state.dart';
+import '../features/calorie_budget/presentation/calorie_budget_state.dart';
 
 /// The Wellness Command Center — the primary home screen of AI Wellness Pal.
 ///
@@ -120,7 +127,31 @@ class _HomeScreenState extends State<HomeScreen>
     _loadTodaysPlan();
     _checkAndPromptCheckIn();
     _tabController = TabController(length: 2, vsync: this);
+    // Load the states behind any enabled Home tool cards so they show real
+    // data even if the user hasn't opened those tool screens this session.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadEnabledToolData());
+  }
 
+  /// Loads the provider state behind each enabled wellness-tool Home card, so
+  /// the embedded cards show live data on first Home render. Each state's
+  /// load() is idempotent/safe to call; we only load what's actually shown.
+  Future<void> _loadEnabledToolData() async {
+    if (!mounted) return;
+    final tools = context.read<HomeToolCardsService>();
+    // Period & Body Weight read from AppState (already loaded app-wide), so
+    // only the feature-module states need an explicit load here.
+    if (tools.isEnabled(HomeToolCard.nutrition)) {
+      unawaited(context.read<NutritionState>().load());
+    }
+    if (tools.isEnabled(HomeToolCard.mealPlanner)) {
+      unawaited(context.read<MealPlannerState>().load());
+    }
+    if (tools.isEnabled(HomeToolCard.hydration)) {
+      unawaited(context.read<HydrationState>().load());
+    }
+    if (tools.isEnabled(HomeToolCard.calorieBudget)) {
+      unawaited(context.read<CalorieBudgetState>().load());
+    }
   }
 
   /// Loads the saved Home card order. Any missing ids (e.g. a card added in a
@@ -150,7 +181,13 @@ class _HomeScreenState extends State<HomeScreen>
   /// drops unknown ids and appends any missing ones in their default position.
   /// Guarantees the result is exactly the current cards, in a valid order.
   List<String> _reconcileOrder(List<String> saved) {
-    final valid = saved.where(_defaultCardOrder.contains).toList();
+    // Keep default cards and any recognized wellness-tool cards; drop unknowns.
+    final valid = saved
+        .where((id) =>
+            _defaultCardOrder.contains(id) || HomeToolCard.isToolCard(id))
+        .toList();
+    // Ensure every default card is present (forward-compat). Tool cards are
+    // added via the enabled-set, so we don't force-append them here.
     for (final id in _defaultCardOrder) {
       if (!valid.contains(id)) valid.add(id);
     }
@@ -203,13 +240,16 @@ class _HomeScreenState extends State<HomeScreen>
     return true;
   }
 
-  /// Moves [cardId] to the very top of the Home cards and persists.
+  /// Moves [cardId] to the very top of the Home cards and persists. Operates on
+  /// the effective order so tool cards (which may not yet be in [_cardOrder])
+  /// pin correctly; the resulting full order is saved.
   Future<void> _pinCardToTop(String cardId) async {
-    if (_cardOrder.isEmpty || _cardOrder.first == cardId) return;
+    final effective = _effectiveOrder();
+    if (effective.isEmpty || effective.first == cardId) return;
     setState(() {
       _cardOrder = [
         cardId,
-        ..._cardOrder.where((id) => id != cardId),
+        ...effective.where((id) => id != cardId),
       ];
     });
     await _saveCardOrder();
@@ -219,8 +259,9 @@ class _HomeScreenState extends State<HomeScreen>
   void _enterRearrangeMode() {
     setState(() {
       // Only VISIBLE cards are draggable, so the re-arrange list matches
-      // exactly what's on screen (no phantom AI Insight tile when it's hidden).
-      _draftCardOrder = _visibleCardOrder(_cardOrder);
+      // exactly what's on screen (no phantom cards). Includes enabled tool
+      // cards via _effectiveOrder().
+      _draftCardOrder = _visibleCardOrder(_effectiveOrder());
       _isRearranging = true;
     });
   }
@@ -232,8 +273,11 @@ class _HomeScreenState extends State<HomeScreen>
   /// order so the full [_cardOrder] stays complete and their position is
   /// preserved for when they become visible again.
   Future<void> _saveRearrange() async {
+    // Preserve any currently-hidden cards (e.g. AI Insight when not applicable)
+    // by re-appending them after the dragged, visible order.
+    final effective = _effectiveOrder();
     final hidden =
-        _cardOrder.where((id) => !_draftCardOrder.contains(id)).toList();
+        effective.where((id) => !_draftCardOrder.contains(id)).toList();
     setState(() {
       _cardOrder = [..._draftCardOrder, ...hidden];
       _isRearranging = false;
@@ -282,6 +326,10 @@ class _HomeScreenState extends State<HomeScreen>
           },
         );
       default:
+        // Wellness-tool cards the user added from a tool screen.
+        if (HomeToolCard.isToolCard(id)) {
+          return buildHomeToolCard(context, id) ?? const SizedBox.shrink();
+        }
         return const SizedBox.shrink();
     }
   }
@@ -350,6 +398,7 @@ class _HomeScreenState extends State<HomeScreen>
       case _cardAiInsight:
         return 'AI Wellness Insight';
       default:
+        if (HomeToolCard.isToolCard(id)) return HomeToolCard.titleFor(id);
         return 'Card';
     }
   }
@@ -360,12 +409,38 @@ class _HomeScreenState extends State<HomeScreen>
   /// SINGLE source of truth for visibility, used by BOTH the normal render and
   /// the re-arrange list, so a hidden card never appears in only one of them.
   bool _isCardVisible(String cardId) {
+    if (HomeToolCard.isToolCard(cardId)) {
+      // A tool card is visible only while the user keeps it enabled on Home.
+      return context.read<HomeToolCardsService>().isEnabled(cardId);
+    }
     if (cardId != _cardAiInsight) return true;
     final isPro = Provider.of<AppState>(context, listen: false).isPro;
     return isPro && _aiInsightsEnabled;
   }
 
-  /// The given [order] filtered to visible cards, preserving order.
+  /// The full ordered id list = the saved default-card order, then any enabled
+  /// wellness-tool cards the user added (in the order stored in [_cardOrder] if
+  /// present, else appended). This is what pin/re-arrange operate on.
+  List<String> _effectiveOrder() {
+    final enabled = context.read<HomeToolCardsService>().enabled.toSet();
+    // Start from the saved order (which may already contain tool ids from a
+    // previous pin/re-arrange), keeping only still-enabled tool ids.
+    final result = <String>[];
+    for (final id in _cardOrder) {
+      if (HomeToolCard.isToolCard(id)) {
+        if (enabled.contains(id)) result.add(id);
+      } else {
+        result.add(id);
+      }
+    }
+    // Append any newly-enabled tool cards not yet in the saved order.
+    for (final id in enabled) {
+      if (!result.contains(id)) result.add(id);
+    }
+    return result;
+  }
+
+  /// The effective order filtered to visible cards, preserving order.
   List<String> _visibleCardOrder(List<String> order) =>
       order.where(_isCardVisible).toList();
 
@@ -378,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen>
     CheckInState checkInState,
   ) {
     final widgets = <Widget>[];
-    for (final id in _visibleCardOrder(_cardOrder)) {
+    for (final id in _visibleCardOrder(_effectiveOrder())) {
       widgets.add(
         GestureDetector(
           // translucent (NOT opaque): several cards have their OWN inner
@@ -460,10 +535,46 @@ class _HomeScreenState extends State<HomeScreen>
                 _enterRearrangeMode();
               },
             ),
+            // Wellness-tool cards were added from their tool screen, so they can
+            // be taken back off Home from here too. Default Home cards are not
+            // removable, so this option only shows for tool cards.
+            if (HomeToolCard.isToolCard(cardId)) ...[
+              Divider(
+                height: 1,
+                indent: 16,
+                endIndent: 16,
+                color: theme.colorScheme.onSurface.withOpacity(0.08),
+              ),
+              ListTile(
+                leading: Icon(Icons.remove_circle_outline_rounded,
+                    color: theme.colorScheme.error),
+                title: Text(
+                  'Remove from Home',
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _removeToolCardFromHome(cardId);
+                },
+              ),
+            ],
             const SizedBox(height: 4),
           ],
         ),
       ),
+    );
+  }
+
+  /// Removes a wellness-tool card from Home. The card stays available to re-add
+  /// from its tool screen. Mirrors the "Add to Home" affordance on the tools.
+  Future<void> _removeToolCardFromHome(String cardId) async {
+    final tools = context.read<HomeToolCardsService>();
+    await tools.remove(cardId);
+    if (!mounted) return;
+    WellnessPalSnackBar.show(
+      context,
+      message: '${HomeToolCard.titleFor(cardId)} removed from Home',
+      icon: Icons.home_outlined,
     );
   }
 
@@ -933,6 +1044,9 @@ class _HomeScreenState extends State<HomeScreen>
               // Home tab
               Consumer2<WellnessPlanState, CheckInState>(
                 builder: (context, planState, checkInState, child) {
+                  // Watch the tool-cards service so the Home layout updates the
+                  // moment the user adds/removes a wellness-tool card.
+                  context.watch<HomeToolCardsService>();
                   // Show loading state while plan is generating
                   if (planState.isGenerating) {
                     return const WellnessLoadingState();

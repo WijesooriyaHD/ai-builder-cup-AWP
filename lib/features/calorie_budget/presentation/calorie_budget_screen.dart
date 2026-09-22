@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../widgets/add_to_home_wrapper.dart';
+import '../../../services/home_tool_cards_service.dart';
 import '../../meal_planner/presentation/meal_planner_state.dart';
 import '../../nutrition/presentation/nutrition_state.dart';
 import '../data/calorie_budget_repository.dart';
@@ -93,7 +95,10 @@ class _CalorieBudgetScreenState extends State<CalorieBudgetScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
                     children: [
-                      CalorieBudgetCard(summary: state.summary),
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.calorieBudget,
+                        child: CalorieBudgetCard(summary: state.summary),
+                      ),
                       const SizedBox(height: 16),
                       AiInsightCard(
                         prediction: state.prediction,

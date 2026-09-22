@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../widgets/ai_wellness_loader.dart';
+import '../../../widgets/add_to_home_wrapper.dart';
+import '../../../services/home_tool_cards_service.dart';
 import '../domain/nutrition_analysis_service.dart';
 import '../domain/nutrition_models.dart';
 import 'barcode_scanner_screen.dart';
@@ -65,8 +67,11 @@ class _NutritionCoachScreenState extends State<NutritionCoachScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
               children: [
-                DailyProgressCard(
-                    totals: state.todaysTotals, goals: state.goals),
+                AddToHomeWrapper(
+                  toolCardId: HomeToolCard.nutrition,
+                  child: DailyProgressCard(
+                      totals: state.todaysTotals, goals: state.goals),
+                ),
                 const SizedBox(height: 16),
                 _buildCoachCard(context, state),
                 const SizedBox(height: 16),

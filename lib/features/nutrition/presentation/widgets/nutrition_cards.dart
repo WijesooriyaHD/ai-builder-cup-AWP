@@ -328,10 +328,16 @@ class DailyProgressCard extends StatelessWidget {
   final DailyTotals totals;
   final NutritionGoals goals;
 
+  /// Optional replacement title header rendered inside the card. When provided
+  /// (e.g. on the Home screen), it replaces the card's default "Today's
+  /// progress" title so the styling matches the other Home cards.
+  final Widget? titleHeader;
+
   const DailyProgressCard({
     super.key,
     required this.totals,
     required this.goals,
+    this.titleHeader,
   });
 
   @override
@@ -346,9 +352,10 @@ class DailyProgressCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Today's progress",
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          titleHeader ??
+              Text("Today's progress",
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,

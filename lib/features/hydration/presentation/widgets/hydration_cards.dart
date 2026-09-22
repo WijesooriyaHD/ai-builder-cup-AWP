@@ -23,12 +23,17 @@ class HydrationProgressCard extends StatefulWidget {
   /// Tapped to edit the daily target. When null, the goal is not editable.
   final VoidCallback? onEditGoal;
 
+  /// Optional title header rendered inside the card (used on the Home screen so
+  /// the card matches the other Home cards' icon + title formatting).
+  final Widget? titleHeader;
+
   const HydrationProgressCard({
     super.key,
     required this.goalMl,
     required this.consumedMl,
     this.isManualGoal = false,
     this.onEditGoal,
+    this.titleHeader,
   });
 
   @override
@@ -65,6 +70,11 @@ class _HydrationProgressCardState extends State<HydrationProgressCard>
     return NutritionCard(
       child: Column(
         children: [
+          if (widget.titleHeader != null) ...[
+            Align(
+                alignment: Alignment.centerLeft, child: widget.titleHeader!),
+            const SizedBox(height: 16),
+          ],
           SizedBox(
             width: 200,
             height: 200,

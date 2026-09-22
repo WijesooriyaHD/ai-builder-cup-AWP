@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../models/weight_data.dart';
 import '../providers/app_state.dart';
+import '../services/home_tool_cards_service.dart';
+import '../widgets/add_to_home_wrapper.dart';
 
 /// Body weight tracker: log measurements, view the trend over time on a chart,
 /// see net change and BMI, switch units, and manage history.
@@ -49,7 +51,10 @@ class WeightTrackerScreen extends StatelessWidget {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
             children: [
-              _buildSummary(context, data),
+              AddToHomeWrapper(
+                toolCardId: HomeToolCard.bodyWeight,
+                child: _buildSummary(context, data),
+              ),
               const SizedBox(height: 20),
               _buildChartCard(context, data),
               const SizedBox(height: 20),
