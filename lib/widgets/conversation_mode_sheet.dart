@@ -108,10 +108,11 @@ const String kWellnessPalAppKnowledge =
       'Premium users also get a personalized set of AI-picked studio '
       'activities chosen from their recent wellness journey, refreshed daily. '
       'Each activity can be marked complete, and completions count toward the '
-      'user\'s progress. The Home screen also shows a "Recommended" studio '
-      'badge that opens the category matching today\'s focus. Suggest the '
-      'Studio when the user wants something concrete and guided to do right '
-      'now — especially for stress, tension, low focus, or recovery.\n'
+      'user\'s progress. The Wellness Studio is opened from the "More" tab '
+      '(the Wellness Studio card sits at the top of "More", just above the '
+      'Life Toolkit). Suggest the Studio when the user wants something '
+      'concrete and guided to do right now — especially for stress, tension, '
+      'low focus, or recovery.\n'
       '\n'
       'WELLNESS READS: a library of short wellness articles (roughly 3-5 '
       'minute reads) in the "More" tab, filterable by category — Mindfulness, '
@@ -124,7 +125,8 @@ const String kWellnessPalAppKnowledge =
       'Evening Yoga Wind-Down". Most reads end with a quick one-question '
       'survey so the user can reflect. Suggest a specific relevant read by '
       'title when the user wants to understand a topic rather than do an '
-      'activity. The "More" tab also holds the Life Toolkit entry point.\n';
+      'activity. The "More" tab also holds the Wellness Studio card (at the '
+      'top) and the Life Toolkit entry point.\n';
 
 /// The Live-only half of the persona: proactive guiding plus the tool-calling
 /// and end-of-conversation rules that only apply to a streaming Live session.

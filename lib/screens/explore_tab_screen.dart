@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/blog_post.dart';
 import 'blog_reader_screen.dart';
 import 'life_toolkit_screen.dart';
+import 'wellness_studio_screen.dart';
 
 
 class ExploreTabScreen extends StatefulWidget {
@@ -57,6 +58,28 @@ class _ExploreTabScreenState extends State<ExploreTabScreen> {
             ),
           ),
           const SizedBox(height: 24),
+
+          // Wellness Studio — moved here from the Home screen. Sits just before
+          // the Life Toolkit card.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _buildMiniCard(
+              context,
+              title: "Wellness Studio",
+              subtitle: "Guided sessions, breathing, and mindfulness",
+              icon: Icons.self_improvement_rounded,
+              color: const Color(0xFF7C6FF0),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const WellnessStudioScreen()),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 16),
 
           // Great Things Section
           Padding(

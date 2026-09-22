@@ -35,7 +35,6 @@ import '../widgets/wellness_loading_state.dart';
 import '../utils/pro_modal_utils.dart';
 import 'check_in_screen.dart';
 import 'explore_tab_screen.dart';
-import 'wellness_studio_screen.dart';
 import 'achievements_screen.dart';
 
 /// The Wellness Command Center — the primary home screen of AI Wellness Pal.
@@ -47,7 +46,8 @@ import 'achievements_screen.dart';
 /// 4. Recovery Status summary
 /// 5. Daily Plan card with interactive action checkboxes
 /// 6. AI Wellness Insight card (Premium)
-/// 7. Recommended Wellness Studio session badge
+///
+/// (Wellness Studio was moved to the "More" tab — see ExploreTabScreen.)
 ///
 /// Requirements: 4.1, 4.2, 4.3, 4.4, 4.7
 class HomeScreen extends StatefulWidget {
@@ -67,6 +67,47 @@ class _HomeScreenState extends State<HomeScreen>
   /// SharedPreferences key for AI insights toggle.
   /// This key is written by the Settings screen (task 16.1).
   static const String _aiInsightsDisabledKey = 'wellness_ai_insights_disabled';
+
+  // ---------------------------------------------------------------------------
+  // Home card ordering (long-press: pin-to-top / re-arrange)
+  // ---------------------------------------------------------------------------
+
+  /// Stable identifiers for the reorderable Home cards. The greeting, studio
+  /// recommendation, and pinned reflections are intentionally NOT reorderable,
+  /// so they are not part of this set.
+  static const String _cardWellnessFocus = 'wellness_focus';
+  static const String _cardEnergyScore = 'energy_score';
+  static const String _cardRecoveryStatus = 'recovery_status';
+  static const String _cardAvailableTime = 'available_time';
+  static const String _cardDailyPlan = 'daily_plan';
+  static const String _cardAiInsight = 'ai_insight';
+
+  /// The default (shipping) order of the reorderable cards.
+  static const List<String> _defaultCardOrder = [
+    _cardWellnessFocus,
+    _cardEnergyScore,
+    _cardRecoveryStatus,
+    _cardAvailableTime,
+    _cardDailyPlan,
+    _cardAiInsight,
+  ];
+
+  /// SharedPreferences key storing the user's saved card order (comma-joined
+  /// card ids). Persisted so the layout survives app/phone restarts.
+  static const String _cardOrderKey = 'wellness_home_card_order';
+
+  /// The current card order shown on Home. Starts as the default and is
+  /// replaced by the persisted order (if any) in [_loadCardOrder].
+  List<String> _cardOrder = List<String>.from(_defaultCardOrder);
+
+  /// While true, the Home cards enter drag-and-drop re-arrange mode and a Save
+  /// bar is shown. Set from the long-press menu; cleared on Save/cancel.
+  bool _isRearranging = false;
+
+  /// A working copy of the order edited during re-arrange mode. Committed to
+  /// [_cardOrder] (and persisted) only when the user taps Save.
+  List<String> _draftCardOrder = [];
+
   late TabController _tabController;
 
   @override
@@ -75,10 +116,491 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addObserver(this);
     _loadUserProfile();
     _loadAiInsightsPreference();
+    _loadCardOrder();
     _loadTodaysPlan();
     _checkAndPromptCheckIn();
     _tabController = TabController(length: 2, vsync: this);
 
+  }
+
+  /// Loads the saved Home card order. Any missing ids (e.g. a card added in a
+  /// later app version) are appended in their default position, and unknown
+  /// ids are dropped, so the list is always exactly the current card set.
+  Future<void> _loadCardOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_cardOrderKey);
+      if (raw == null || raw.isEmpty) return;
+      final valid = _reconcileOrder(raw);
+      if (mounted) {
+        setState(() => _cardOrder = valid);
+      } else {
+        _cardOrder = valid;
+      }
+    } catch (e) {
+      debugPrint('HomeScreen: failed to load card order: $e');
+    }
+  }
+
+  /// Firestore field on the user doc mirroring [_cardOrder], so the Home layout
+  /// follows the user across devices (not just this device's local cache).
+  static const String _cardOrderField = 'home_card_order';
+
+  /// Normalizes an arbitrary saved id list against the current card set:
+  /// drops unknown ids and appends any missing ones in their default position.
+  /// Guarantees the result is exactly the current cards, in a valid order.
+  List<String> _reconcileOrder(List<String> saved) {
+    final valid = saved.where(_defaultCardOrder.contains).toList();
+    for (final id in _defaultCardOrder) {
+      if (!valid.contains(id)) valid.add(id);
+    }
+    return valid;
+  }
+
+  /// Persists [_cardOrder] so the arrangement survives a restart. Writes to the
+  /// local cache (instant, offline-safe) AND mirrors to the user's Firestore
+  /// profile doc so the layout syncs across devices.
+  Future<void> _saveCardOrder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_cardOrderKey, _cardOrder);
+    } catch (e) {
+      debugPrint('HomeScreen: failed to save card order locally: $e');
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({_cardOrderField: _cardOrder}, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('HomeScreen: failed to mirror card order to Firestore: $e');
+      }
+    }
+  }
+
+  /// Applies a card order fetched from Firestore (e.g. set on another device).
+  /// Reconciled and only applied when it actually differs, to avoid needless
+  /// rebuilds. Never overrides an in-progress re-arrange edit.
+  void _applyCloudCardOrder(List<dynamic>? raw) {
+    if (raw == null || _isRearranging || !mounted) return;
+    final reconciled = _reconcileOrder(raw.map((e) => e.toString()).toList());
+    if (_listEquals(reconciled, _cardOrder)) return;
+    setState(() => _cardOrder = reconciled);
+    // Keep the local cache in step with the cloud so a later offline launch
+    // shows the same order.
+    SharedPreferences.getInstance()
+        .then((p) => p.setStringList(_cardOrderKey, reconciled))
+        .catchError((_) => false);
+  }
+
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// Moves [cardId] to the very top of the Home cards and persists.
+  Future<void> _pinCardToTop(String cardId) async {
+    if (_cardOrder.isEmpty || _cardOrder.first == cardId) return;
+    setState(() {
+      _cardOrder = [
+        cardId,
+        ..._cardOrder.where((id) => id != cardId),
+      ];
+    });
+    await _saveCardOrder();
+  }
+
+  /// Enters drag-and-drop re-arrange mode with a fresh working copy.
+  void _enterRearrangeMode() {
+    setState(() {
+      // Only VISIBLE cards are draggable, so the re-arrange list matches
+      // exactly what's on screen (no phantom AI Insight tile when it's hidden).
+      _draftCardOrder = _visibleCardOrder(_cardOrder);
+      _isRearranging = true;
+    });
+  }
+
+  /// Commits the dragged order and leaves re-arrange mode, persisting.
+  ///
+  /// The draft contains only the visible cards. Any hidden cards (e.g. AI
+  /// Insight for a non-Pro user) are re-appended in their previous relative
+  /// order so the full [_cardOrder] stays complete and their position is
+  /// preserved for when they become visible again.
+  Future<void> _saveRearrange() async {
+    final hidden =
+        _cardOrder.where((id) => !_draftCardOrder.contains(id)).toList();
+    setState(() {
+      _cardOrder = [..._draftCardOrder, ...hidden];
+      _isRearranging = false;
+    });
+    await _saveCardOrder();
+  }
+
+  /// Discards drag edits and leaves re-arrange mode.
+  void _cancelRearrange() {
+    setState(() => _isRearranging = false);
+  }
+
+  /// Builds the widget for a single reorderable card by its stable id.
+  Widget _buildCardById(
+    String id,
+    WellnessPlanState planState,
+    CheckInState checkInState,
+  ) {
+    switch (id) {
+      case _cardWellnessFocus:
+        return _buildWellnessFocusSection(context, planState);
+      case _cardEnergyScore:
+        return _buildEnergyScoreSection(context, checkInState);
+      case _cardRecoveryStatus:
+        return _buildRecoveryStatusSection(context, checkInState);
+      case _cardAvailableTime:
+        return _buildAvailableTimeSection(context, checkInState);
+      case _cardDailyPlan:
+        return _buildDailyPlanSection(context, planState);
+      case _cardAiInsight:
+        return Consumer<AppState>(
+          builder: (context, appState, _) {
+            final insight = planState.todaysPlan?.aiInsight;
+            final hasInsight = insight != null && insight.trim().isNotEmpty;
+            // When there's live insight text, show the real card. When there
+            // isn't (but the feature applies), show a compact placeholder so
+            // the card is still visible AND long-pressable for pin/re-arrange.
+            if (hasInsight) {
+              return AIWellnessInsightCard(
+                aiInsight: insight,
+                isPro: appState.isPro,
+                insightsEnabled: _aiInsightsEnabled,
+              );
+            }
+            return _buildAiInsightPlaceholder(context);
+          },
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  /// A lightweight placeholder shown for the AI Insight card when there is no
+  /// insight text yet. Keeps the card present (and therefore long-pressable for
+  /// pin/re-arrange) instead of collapsing to nothing.
+  Widget _buildAiInsightPlaceholder(BuildContext context) {
+    final theme = Theme.of(context);
+    return FrostedContainer(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.auto_awesome_rounded,
+                  color: theme.colorScheme.primary, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AI Wellness Insight',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Your personalized insight will appear here after your '
+                    'check-in.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.55),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A human-readable label for the long-press menu header.
+  String _cardTitle(String id) {
+    switch (id) {
+      case _cardWellnessFocus:
+        return "Today's Wellness Focus";
+      case _cardEnergyScore:
+        return 'Energy Score';
+      case _cardRecoveryStatus:
+        return 'Recovery Status';
+      case _cardAvailableTime:
+        return 'Available Time';
+      case _cardDailyPlan:
+        return 'Daily Plan';
+      case _cardAiInsight:
+        return 'AI Wellness Insight';
+      default:
+        return 'Card';
+    }
+  }
+
+  /// Whether [cardId] should currently be shown on Home. Only the AI Insight
+  /// card is conditional — it applies to Pro users with insights enabled (and
+  /// renders a placeholder when there's no insight text yet). This is the
+  /// SINGLE source of truth for visibility, used by BOTH the normal render and
+  /// the re-arrange list, so a hidden card never appears in only one of them.
+  bool _isCardVisible(String cardId) {
+    if (cardId != _cardAiInsight) return true;
+    final isPro = Provider.of<AppState>(context, listen: false).isPro;
+    return isPro && _aiInsightsEnabled;
+  }
+
+  /// The given [order] filtered to visible cards, preserving order.
+  List<String> _visibleCardOrder(List<String> order) =>
+      order.where(_isCardVisible).toList();
+
+  /// Normal-mode card list: each card is long-pressable to open the
+  /// pin-to-top / re-arrange menu. Uses [_visibleCardOrder] so it matches the
+  /// re-arrange list exactly.
+  List<Widget> _buildOrderedCards(
+    BuildContext context,
+    WellnessPlanState planState,
+    CheckInState checkInState,
+  ) {
+    final widgets = <Widget>[];
+    for (final id in _visibleCardOrder(_cardOrder)) {
+      widgets.add(
+        GestureDetector(
+          // translucent (NOT opaque): several cards have their OWN inner
+          // GestureDetector with onTap (energy/recovery/available-time edit,
+          // studio navigate). An opaque wrapper would win the hit-test and the
+          // inner tap detector — and, in the arena, could starve this
+          // long-press. translucent lets both this long-press recognizer and
+          // any inner tap recognizer enter the arena; a long hold wins here
+          // while a quick tap still reaches the inner card. The AI Insight card
+          // has no inner tap, so its long-press was only ever failing because
+          // the wrapper wasn't reliably in the arena — this fixes that too.
+          behavior: HitTestBehavior.translucent,
+          onLongPress: () => _showCardOptions(context, id),
+          child: _buildCardById(id, planState, checkInState),
+        ),
+      );
+      widgets.add(const SizedBox(height: 16));
+    }
+    // Drop the trailing spacer so it doesn't double with the section below.
+    if (widgets.isNotEmpty) widgets.removeLast();
+    return widgets;
+  }
+
+  /// The long-press action sheet: Pin to top / Re-arrange.
+  void _showCardOptions(BuildContext context, String cardId) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? theme.cardColor : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _cardTitle(cardId),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.vertical_align_top_rounded,
+                  color: theme.colorScheme.primary),
+              title: const Text('Pin to top'),
+              enabled: _cardOrder.first != cardId,
+              onTap: () {
+                Navigator.pop(ctx);
+                _pinCardToTop(cardId);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.swap_vert_rounded,
+                  color: theme.colorScheme.primary),
+              title: const Text('Re-arrange'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _enterRearrangeMode();
+              },
+            ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Re-arrange mode: a drag-and-drop list of card previews plus a Save/Cancel
+  /// bar. Uses the draft order so edits are only committed on Save.
+  Widget _buildRearrangeList(
+    BuildContext context,
+    WellnessPlanState planState,
+    CheckInState checkInState,
+  ) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Header + Save / Cancel controls.
+        Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: theme.colorScheme.primary.withOpacity(0.25)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.drag_indicator_rounded,
+                  size: 20, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Drag the cards to re-arrange, then Save.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary),
+                ),
+              ),
+              TextButton(
+                onPressed: _cancelRearrange,
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 4),
+              FilledButton(
+                onPressed: _saveRearrange,
+                style: FilledButton.styleFrom(
+                  backgroundColor: theme.colorScheme.primary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                ),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+        // The drag-and-drop list. shrinkWrap + non-scrollable physics so it
+        // nests inside the outer SingleChildScrollView.
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: _draftCardOrder.length,
+          onReorder: (oldIndex, newIndex) {
+            setState(() {
+              if (newIndex > oldIndex) newIndex -= 1;
+              final id = _draftCardOrder.removeAt(oldIndex);
+              _draftCardOrder.insert(newIndex, id);
+            });
+          },
+          itemBuilder: (context, index) {
+            final id = _draftCardOrder[index];
+            return _buildRearrangeTile(context, id, index, theme);
+          },
+        ),
+      ],
+    );
+  }
+
+  /// A single row in re-arrange mode: the card's name with a drag handle. We
+  /// intentionally show a lightweight tile rather than the full card, so a long
+  /// month/plan card doesn't make dragging unwieldy.
+  Widget _buildRearrangeTile(
+      BuildContext context, String id, int index, ThemeData theme) {
+    return Container(
+      key: ValueKey(id),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.brightness == Brightness.dark
+              ? Colors.white.withOpacity(0.08)
+              : Colors.grey.shade200,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '${index + 1}',
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              _cardTitle(id),
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ReorderableDragStartListener(
+            index: index,
+            child: Icon(Icons.drag_handle_rounded,
+                color: theme.colorScheme.onSurface.withOpacity(0.4)),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Listens for voice-pal requests to switch the Home/More sub-tab (e.g.
@@ -242,6 +764,9 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {
           _displayName = data['display_name'] as String?;
         });
+        // Mirror-in the cross-device Home card order (if the cloud has one).
+        // We already have the doc, so this adds no extra read.
+        _applyCloudCardOrder(data[_cardOrderField] as List<dynamic>?);
       }
     } catch (e) {
       debugPrint('HomeScreen: Failed to load user profile: $e');
@@ -421,49 +946,24 @@ class _HomeScreenState extends State<HomeScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. Personalized Greeting
+                          // 1. Personalized Greeting (fixed — not reorderable)
                           _buildGreetingSection(context),
                           const SizedBox(height: 24),
 
-                          // 2. Today's Wellness Focus
-                          _buildWellnessFocusSection(context, planState),
+                          // Reorderable cards. In normal mode each card is
+                          // long-pressable (pin-to-top / re-arrange). In
+                          // re-arrange mode they become drag-and-drop with a
+                          // Save bar.
+                          if (_isRearranging)
+                            _buildRearrangeList(context, planState, checkInState)
+                          else
+                            ..._buildOrderedCards(
+                                context, planState, checkInState),
+
                           const SizedBox(height: 16),
 
-                          // 3. Energy Score Summary
-                          _buildEnergyScoreSection(context, checkInState),
-                          const SizedBox(height: 16),
-
-                          // 4. Recovery Status Summary
-                          _buildRecoveryStatusSection(context, checkInState),
-                          const SizedBox(height: 16),
-
-                          // 4b. Available Time Summary
-                          _buildAvailableTimeSection(context, checkInState),
-                          const SizedBox(height: 16),
-
-                          // 5. Daily Plan Card Area
-                          _buildDailyPlanSection(context, planState),
-                          const SizedBox(height: 16),
-
-                          // 6. AI Wellness Insight Card (Premium only, below Daily Plan)
-                          Consumer<AppState>(
-                            builder: (context, appState, _) {
-                              return AIWellnessInsightCard(
-                                aiInsight: planState.todaysPlan?.aiInsight,
-                                isPro: appState.isPro,
-                                insightsEnabled: _aiInsightsEnabled,
-                              );
-                            },
-                          ),
-                          // Only add spacing if the insight card is visible
-                          if (planState.todaysPlan?.aiInsight != null &&
-                              planState.todaysPlan!.aiInsight!.trim().isNotEmpty)
-                            const SizedBox(height: 16),
-
-                          // 7. Recommended Wellness Studio Session Badge
-                          _buildStudioRecommendationBadge(context, planState),
-
-                          // 8. Reflections pinned to Home ("Add to Home")
+                          // Reflections pinned to Home ("Add to Home") (fixed).
+                          // (Wellness Studio now lives in the "More" tab.)
                           _buildPinnedJournalSection(context),
 
                           const SizedBox(height: 80),
@@ -1361,105 +1861,9 @@ class _HomeScreenState extends State<HomeScreen>
         .fadeIn(delay: 400.ms, duration: 400.ms);
   }
 
-  // ---------------------------------------------------------------------------
-  // Section 6: Recommended Wellness Studio Session Badge
-  // ---------------------------------------------------------------------------
-
-  Widget _buildStudioRecommendationBadge(
-      BuildContext context, WellnessPlanState planState) {
-    final theme = Theme.of(context);
-    final focus = planState.todaysPlan?.todaysFocus;
-
-    // Suggest a studio category based on today's focus.
-    // `suggestion` is the friendly label shown on the card; `studioCategory`
-    // is the exact Wellness Studio tab name to open on tap.
-    final String suggestion;
-    final String studioCategory;
-    final IconData suggestionIcon;
-
-    if (focus != null && focus.toLowerCase().contains('breath')) {
-      suggestion = 'Breathing Exercise';
-      studioCategory = 'Breathing Exercises';
-      suggestionIcon = Icons.air_rounded;
-    } else if (focus != null && focus.toLowerCase().contains('recover')) {
-      suggestion = 'Recovery Challenge';
-      studioCategory = 'Recovery Challenges';
-      suggestionIcon = Icons.healing_rounded;
-    } else if (focus != null && focus.toLowerCase().contains('mindful')) {
-      suggestion = 'Mindfulness Session';
-      studioCategory = 'Mindfulness Sessions';
-      suggestionIcon = Icons.self_improvement_rounded;
-    } else if (focus != null && focus.toLowerCase().contains('stress')) {
-      suggestion = 'Stress Recovery Activity';
-      studioCategory = 'Stress Recovery Activities';
-      suggestionIcon = Icons.spa_rounded;
-    } else {
-      suggestion = 'Mindfulness Session';
-      studioCategory = 'Mindfulness Sessions';
-      suggestionIcon = Icons.self_improvement_rounded;
-    }
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                WellnessStudioScreen(initialCategory: studioCategory),
-          ),
-        );
-      },
-      behavior: HitTestBehavior.opaque,
-      child: FrostedContainer(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.tertiary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  suggestionIcon,
-                  color: theme.colorScheme.tertiary,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Recommended for You',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.6),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      suggestion,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).animate().fadeIn(delay: 500.ms, duration: 400.ms);
-  }
+  // Wellness Studio now lives in the "More" tab (see ExploreTabScreen), just
+  // before the Life Toolkit card. The old Home "Recommended for You" studio
+  // badge was removed as part of that move.
 }
 
 
