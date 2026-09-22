@@ -123,6 +123,16 @@ final class LiveAudioEngine: NSObject {
       result(nil)
     case "playbackRemainingMs":
       result(playbackRemainingMs())
+    case "playSystemCue":
+      // Fires the iOS-supplied recording chirps (or another built-in system
+      // sound id) so the Live pal has audible start/end feedback regardless of
+      // engine state. These play at the current session's output route, so
+      // they follow the same loudspeaker override the Live pipeline uses.
+      if let args = call.arguments as? [String: Any],
+         let id = args["id"] as? Int {
+        AudioServicesPlaySystemSound(SystemSoundID(id))
+      }
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }

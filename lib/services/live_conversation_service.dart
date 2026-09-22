@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/feature_flags.dart';
 import 'ai_models.dart';
+import 'pal_feedback_sounds.dart';
 
 /// Lifecycle of a real-time Gemini Live conversation.
 enum LiveConversationState {
@@ -1132,6 +1133,7 @@ class LiveConversationService extends ChangeNotifier {
     _idleCheckInSent = true; // At most once until the user speaks again.
     _idleCheckInInFlight = true;
     _awaitingIdleResponse = true;
+    unawaited(PalFeedbackSounds.idleCheckIn());
     notifyListeners();
     try {
       // Firebase AI Logic exposes no server-originated Live turn trigger. This
@@ -1498,7 +1500,22 @@ class LiveConversationService extends ChangeNotifier {
   }
 
   void _setState(LiveConversationState next) {
+    final previous = _state;
     _state = next;
+    // Auditory + haptic cues on meaningful transitions, so the conversation
+    // feels responsive even before the pal speaks its opening word.
+    if (next != previous) {
+      if (next == LiveConversationState.active &&
+          previous != LiveConversationState.active) {
+        unawaited(PalFeedbackSounds.conversationStart());
+      } else if (next == LiveConversationState.idle &&
+          (previous == LiveConversationState.active ||
+              previous == LiveConversationState.closing)) {
+        unawaited(PalFeedbackSounds.conversationEnd());
+      } else if (next == LiveConversationState.error) {
+        unawaited(PalFeedbackSounds.error());
+      }
+    }
     notifyListeners();
   }
 
