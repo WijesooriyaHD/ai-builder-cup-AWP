@@ -273,14 +273,16 @@ mixin LivePalSessionMixin<T extends StatefulWidget> on State<T> {
 
     if (!mounted) return;
     onLiveSessionEnded();
-    if (popHostOnSessionEnd) {
-      navigator.pop();
-    }
+
     if (navRequest != null) {
+      // A navigation request always means we're leaving the sheet AND any
+      // pushed inner page. applyLiveNav pops the root navigator back to the tab
+      // scaffold (clearing the sheet + any pushed page in one shot), then
+      // switches tabs or pushes the destination. So we must NOT pop the host
+      // separately here — that's what applyLiveNav's popUntil already does.
       applyLiveNav(navRequest, nav, rootNavigator);
-      // A navigation request always means we're leaving; close the host even if
-      // it would normally stay open.
-      if (!popHostOnSessionEnd && navigator.canPop()) navigator.pop();
+    } else if (popHostOnSessionEnd) {
+      navigator.pop();
     }
   }
 
@@ -308,35 +310,55 @@ mixin LivePalSessionMixin<T extends StatefulWidget> on State<T> {
     NavigatorState rootNavigator,
   ) {
     final dest = request.destination;
-    // Bottom tabs.
+    // Bottom tabs. A tab switch only changes what MainWrapper shows — it does
+    // NOT dismiss any full-screen route pushed ON TOP of MainWrapper (e.g. the
+    // Hydration Coach page). If we just switch tabs while such a page is up,
+    // the user keeps seeing that page and the pal appears to "do nothing".
+    // So for every tab destination we first pop back to the tab scaffold.
     switch (dest) {
       case LiveNavDestination.home:
       case LiveNavDestination.checkIn:
+        _popToTabScaffold(rootNavigator);
         nav.goToTab(AppTab.home);
         return;
       case LiveNavDestination.intentions:
+        _popToTabScaffold(rootNavigator);
         nav.goToTab(AppTab.intentions);
         return;
       case LiveNavDestination.habitBuilder:
+        _popToTabScaffold(rootNavigator);
         nav.goToTab(AppTab.habitBuilder);
         return;
       case LiveNavDestination.reflection:
+        _popToTabScaffold(rootNavigator);
         nav.goToTab(AppTab.reflection);
         return;
       case LiveNavDestination.wellnessReads:
         // Wellness Reads lives on the Home screen's "More" sub-tab.
+        _popToTabScaffold(rootNavigator);
         nav.goToHomeSubTab(1);
         return;
       default:
         break;
     }
-    // Pushed full-screen routes.
+    // Pushed full-screen routes. Pop any existing pushed page back to the tab
+    // scaffold FIRST, so navigating (say) Hydration → Nutrition replaces the
+    // current inner page instead of stacking a second one behind the sheet.
     final screen = screenForLiveDestination(dest);
     if (screen != null) {
+      _popToTabScaffold(rootNavigator);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         rootNavigator.push(MaterialPageRoute(builder: (_) => screen));
       });
     }
+  }
+
+  /// Pops every full-screen route pushed on top of the tab scaffold
+  /// ([MainWrapper], which is always the first route on the root navigator),
+  /// so a subsequent tab switch or push is actually visible to the user.
+  /// Safe when nothing is pushed — `popUntil` simply stops at the first route.
+  void _popToTabScaffold(NavigatorState rootNavigator) {
+    rootNavigator.popUntil((route) => route.isFirst);
   }
 
   /// Maps a pushed-screen destination to its widget (tabs return null).
