@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -47,6 +48,15 @@ String buildLivePalContextMemory(BuildContext context) {
   final b = StringBuffer('WHAT YOU KNOW ABOUT THIS USER RIGHT NOW '
       '(use it naturally; do not read it back verbatim):\n');
 
+  // Prefer the first name for a warm, human feel — the pal should sprinkle it
+  // in the way a friend would rather than every sentence.
+  final firstName = _resolveUserFirstName();
+  if (firstName != null) {
+    b.writeln('- The user\'s first name is $firstName. Address them by name '
+        'in greetings, encouragement, and moments of care — but do not use '
+        'it in every sentence, and avoid sounding scripted.');
+  }
+
   b.writeln('- Membership: ${appState.isPro ? 'Premium' : 'Free'}.');
 
   if (appState.preferredMethods.isNotEmpty) {
@@ -87,6 +97,32 @@ String buildLivePalContextMemory(BuildContext context) {
   }
 
   return b.toString().trim();
+}
+
+/// Resolves a friendly first name for the current user, or null when nothing
+/// usable is available. Prefers Firebase Auth's `displayName` (which the app
+/// keeps in sync when the user edits their profile), and falls back to the
+/// capitalised local part of the email so the pal at least has something warmer
+/// than "there" to say. Kept synchronous so `buildLivePalContextMemory` never
+/// waits on I/O — the value the Live session needs is already in memory.
+String? _resolveUserFirstName() {
+  final user = FirebaseAuth.instance.currentUser;
+  final display = user?.displayName?.trim();
+  if (display != null && display.isNotEmpty) {
+    // First whitespace-separated token: "Viraj Patel" → "Viraj". Also handles
+    // single-word display names cleanly.
+    return display.split(RegExp(r'\s+')).first;
+  }
+  final email = user?.email;
+  if (email != null && email.contains('@')) {
+    // Strip out address separators so "first.last" reads as "First" rather
+    // than "First.last" or "First_last".
+    final prefix = email.split('@').first.split(RegExp(r'[._\-+]')).first;
+    if (prefix.isNotEmpty) {
+      return prefix[0].toUpperCase() + prefix.substring(1);
+    }
+  }
+  return null;
 }
 
 /// Shared orchestration for hosting a Gemini Live "pal" conversation inside a
