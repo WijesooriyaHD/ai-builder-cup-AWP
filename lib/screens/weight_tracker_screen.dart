@@ -56,9 +56,15 @@ class WeightTrackerScreen extends StatelessWidget {
                 child: _buildSummary(context, data),
               ),
               const SizedBox(height: 20),
-              _buildChartCard(context, data),
+              AddToHomeWrapper(
+                toolCardId: HomeToolCard.bodyWeightChart,
+                child: _buildChartCard(context, data),
+              ),
               const SizedBox(height: 20),
-              _buildBmiCard(context, appState, data),
+              AddToHomeWrapper(
+                toolCardId: HomeToolCard.bodyWeightBmi,
+                child: _buildBmiCard(context, appState, data),
+              ),
               const SizedBox(height: 20),
               _buildHistory(context, appState, data),
             ],

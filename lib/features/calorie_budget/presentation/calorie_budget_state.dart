@@ -67,6 +67,32 @@ class CalorieBudgetState extends ChangeNotifier {
 
   int get remaining => summary.remaining;
 
+  /// The last up-to-7 days as trend points (oldest → newest), ensuring today
+  /// is represented from the live totals. Shared by the tool screen's weekly
+  /// progress card and the Home embedding of it.
+  List<CalorieTrendPoint> get trendPoints {
+    final recentDays = _recent.reversed.take(7).toList();
+    final points = recentDays
+        .map((d) => CalorieTrendPoint(
+              date: DateTime.tryParse(d.date) ?? DateTime.now(),
+              consumed: d.consumed,
+              burned: d.burned,
+              budget: d.dailyBudget,
+            ))
+        .toList();
+    final todayKey = CalorieBudgetRepository.dateKey(DateTime.now());
+    if (!recentDays.any((d) => d.date == todayKey)) {
+      points.add(CalorieTrendPoint(
+        date: DateTime.now(),
+        consumed: consumed,
+        burned: burned,
+        budget: dailyBudget,
+      ));
+    }
+    if (points.length > 7) return points.sublist(points.length - 7);
+    return points;
+  }
+
   /// Mirrors the calorie budget into the shared app group so the home-screen
   /// "Calorie Budget" widget can show a kcal-remaining ring on its data face.
   Future<void> syncCalorieWidget() async {

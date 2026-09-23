@@ -106,10 +106,14 @@ class DailyNutritionSummaryCard extends StatelessWidget {
   final DayPlan day;
   final int calorieTarget;
 
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
   const DailyNutritionSummaryCard({
     super.key,
     required this.day,
     required this.calorieTarget,
+    this.titleHeader,
   });
 
   @override
@@ -123,9 +127,10 @@ class DailyNutritionSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Daily nutrition',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          titleHeader ??
+              Text('Daily nutrition',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -191,12 +196,16 @@ class GroceryListCard extends StatelessWidget {
   final VoidCallback? onGenerate;
   final bool isBuilding;
 
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
   const GroceryListCard({
     super.key,
     required this.list,
     this.onToggle,
     this.onGenerate,
     this.isBuilding = false,
+    this.titleHeader,
   });
 
   @override
@@ -208,13 +217,17 @@ class GroceryListCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.shopping_cart_rounded,
-                  color: kMealPlanAccent, size: 20),
-              const SizedBox(width: 8),
-              Text('Grocery list',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const Spacer(),
+              if (titleHeader != null)
+                Expanded(child: titleHeader!)
+              else ...[
+                const Icon(Icons.shopping_cart_rounded,
+                    color: kMealPlanAccent, size: 20),
+                const SizedBox(width: 8),
+                Text('Grocery list',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+              ],
               if (!list.isEmpty)
                 Text('${list.checkedCount}/${list.items.length}',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -345,7 +358,15 @@ class WeeklyPlanOverviewCard extends StatelessWidget {
   final MealPlan plan;
   final ValueChanged<int>? onTapDay;
 
-  const WeeklyPlanOverviewCard({super.key, required this.plan, this.onTapDay});
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
+  const WeeklyPlanOverviewCard({
+    super.key,
+    required this.plan,
+    this.onTapDay,
+    this.titleHeader,
+  });
 
   bool get _isMonthly => plan.planType == PlanType.monthly;
 
@@ -364,9 +385,10 @@ class WeeklyPlanOverviewCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(_title,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                child: titleHeader ??
+                    Text(_title,
+                        style: theme.textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold)),
               ),
               // Total-days chip, so the user can see the whole span at a glance
               // (e.g. "30 days" for a monthly plan).

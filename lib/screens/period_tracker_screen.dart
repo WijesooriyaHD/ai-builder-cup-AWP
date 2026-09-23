@@ -59,9 +59,15 @@ class _PeriodTrackerScreenState extends State<PeriodTrackerScreen> {
                 child: _buildCycleRing(context, data),
               ),
               const SizedBox(height: 24),
-              _buildPredictionRow(context, data),
+              AddToHomeWrapper(
+                toolCardId: HomeToolCard.periodPrediction,
+                child: _buildPredictionRow(context, data),
+              ),
               const SizedBox(height: 16),
-              _buildPhaseInsight(context, data),
+              AddToHomeWrapper(
+                toolCardId: HomeToolCard.periodPhase,
+                child: _buildPhaseInsight(context, data),
+              ),
               const SizedBox(height: 24),
               _buildLogButton(context, appState, data),
               const SizedBox(height: 28),

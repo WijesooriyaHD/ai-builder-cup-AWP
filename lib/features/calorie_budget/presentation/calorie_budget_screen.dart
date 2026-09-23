@@ -5,7 +5,6 @@ import '../../../widgets/add_to_home_wrapper.dart';
 import '../../../services/home_tool_cards_service.dart';
 import '../../meal_planner/presentation/meal_planner_state.dart';
 import '../../nutrition/presentation/nutrition_state.dart';
-import '../data/calorie_budget_repository.dart';
 import '../domain/calorie_budget_models.dart';
 import 'calorie_budget_state.dart';
 import 'widgets/calorie_budget_cards.dart';
@@ -100,54 +99,42 @@ class _CalorieBudgetScreenState extends State<CalorieBudgetScreen> {
                         child: CalorieBudgetCard(summary: state.summary),
                       ),
                       const SizedBox(height: 16),
-                      AiInsightCard(
-                        prediction: state.prediction,
-                        insights: state.insights,
-                        isAnalyzing: state.isAnalyzing,
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.calorieInsight,
+                        child: AiInsightCard(
+                          prediction: state.prediction,
+                          insights: state.insights,
+                          isAnalyzing: state.isAnalyzing,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      GoalStreakCard(
-                        currentStreak: state.currentStreak,
-                        bestStreak: state.bestStreak,
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.calorieStreak,
+                        child: GoalStreakCard(
+                          currentStreak: state.currentStreak,
+                          bestStreak: state.bestStreak,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      DailyTimelineCard(
-                        events: state.timeline,
-                        onTapEvent: (e) => _onTapTimelineEvent(context, state, e),
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.calorieTimeline,
+                        child: DailyTimelineCard(
+                          events: state.timeline,
+                          onTapEvent: (e) =>
+                              _onTapTimelineEvent(context, state, e),
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      WeeklyProgressCard(points: _trendPoints(state)),
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.calorieWeekly,
+                        child: WeeklyProgressCard(points: state.trendPoints),
+                      ),
                     ],
                   ),
                 ),
         );
       },
     );
-  }
-
-  List<CalorieTrendPoint> _trendPoints(CalorieBudgetState state) {
-    // Build from recent Firestore days (oldest → newest), max 7, plus today.
-    final recent = state.recent.reversed.take(7).toList();
-    final points = recent
-        .map((d) => CalorieTrendPoint(
-              date: DateTime.tryParse(d.date) ?? DateTime.now(),
-              consumed: d.consumed,
-              burned: d.burned,
-              budget: d.dailyBudget,
-            ))
-        .toList();
-    // Ensure today is represented.
-    final todayKey = CalorieBudgetRepository.dateKey(DateTime.now());
-    if (!recent.any((d) => d.date == todayKey)) {
-      points.add(CalorieTrendPoint(
-        date: DateTime.now(),
-        consumed: state.consumed,
-        burned: state.burned,
-        budget: state.dailyBudget,
-      ));
-    }
-    if (points.length > 7) return points.sublist(points.length - 7);
-    return points;
   }
 
   // ---------------------------------------------------------------------------

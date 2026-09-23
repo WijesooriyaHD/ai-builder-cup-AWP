@@ -112,6 +112,30 @@ class HydrationState extends ChangeNotifier {
   int get completionPercentage =>
       goalMl <= 0 ? 0 : ((consumedMl / goalMl) * 100).round();
 
+  /// The last up-to-7 days as trend points (oldest → newest), ensuring today
+  /// is represented from the live totals. Shared by the tool screen's weekly
+  /// analytics card and the Home embedding of it.
+  List<HydrationTrendPoint> get trendPoints {
+    final recentDays = _recent.reversed.take(7).toList();
+    final points = recentDays
+        .map((d) => HydrationTrendPoint(
+              date: DateTime.tryParse(d.date) ?? DateTime.now(),
+              consumedMl: d.consumedMl,
+              goalMl: d.goalMl,
+            ))
+        .toList();
+    final todayKey = HydrationRepository.dateKey(DateTime.now());
+    if (!recentDays.any((d) => d.date == todayKey)) {
+      points.add(HydrationTrendPoint(
+        date: DateTime.now(),
+        consumedMl: consumedMl,
+        goalMl: goalMl,
+      ));
+    }
+    if (points.length > 7) return points.sublist(points.length - 7);
+    return points;
+  }
+
   /// Timeline entries, newest first.
   List<HydrationEntry> get timeline {
     final list = [..._entries]

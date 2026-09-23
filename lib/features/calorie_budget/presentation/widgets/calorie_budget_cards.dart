@@ -142,11 +142,15 @@ class AiInsightCard extends StatelessWidget {
   final List<String> insights;
   final bool isAnalyzing;
 
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
   const AiInsightCard({
     super.key,
     this.prediction,
     this.insights = const [],
     this.isAnalyzing = false,
+    this.titleHeader,
   });
 
   Color _riskColor(RiskLevel r) {
@@ -183,13 +187,17 @@ class AiInsightCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.insights_rounded,
-                  color: kCalorieAccent, size: 20),
-              const SizedBox(width: 8),
-              Text('AI prediction',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const Spacer(),
+              if (titleHeader != null)
+                Expanded(child: titleHeader!)
+              else ...[
+                const Icon(Icons.insights_rounded,
+                    color: kCalorieAccent, size: 20),
+                const SizedBox(width: 8),
+                Text('AI prediction',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+              ],
               if (isAnalyzing)
                 const SizedBox(
                     height: 16,
@@ -278,7 +286,16 @@ class AiInsightCard extends StatelessWidget {
 class DailyTimelineCard extends StatelessWidget {
   final List<CalorieEvent> events;
   final ValueChanged<CalorieEvent>? onTapEvent;
-  const DailyTimelineCard({super.key, required this.events, this.onTapEvent});
+
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
+  const DailyTimelineCard({
+    super.key,
+    required this.events,
+    this.onTapEvent,
+    this.titleHeader,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -289,10 +306,14 @@ class DailyTimelineCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Today’s timeline',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const Spacer(),
+              if (titleHeader != null)
+                Expanded(child: titleHeader!)
+              else ...[
+                Text('Today’s timeline',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+              ],
               if (events.isNotEmpty && onTapEvent != null)
                 Text('Tap to edit',
                     style: theme.textTheme.labelSmall
@@ -371,7 +392,11 @@ class DailyTimelineCard extends StatelessWidget {
 /// A compact 7-day consumed-vs-budget bar chart.
 class WeeklyProgressCard extends StatelessWidget {
   final List<CalorieTrendPoint> points; // oldest → newest, up to 7
-  const WeeklyProgressCard({super.key, required this.points});
+
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
+  const WeeklyProgressCard({super.key, required this.points, this.titleHeader});
 
   @override
   Widget build(BuildContext context) {
@@ -380,9 +405,10 @@ class WeeklyProgressCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Last 7 days',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          titleHeader ??
+              Text('Last 7 days',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           if (points.isEmpty)
             SizedBox(
@@ -446,45 +472,60 @@ class WeeklyProgressCard extends StatelessWidget {
 class GoalStreakCard extends StatelessWidget {
   final int currentStreak;
   final int bestStreak;
+
+  /// Optional title header rendered above the streak row (used on Home for
+  /// consistent styling with the other Home cards).
+  final Widget? titleHeader;
+
   const GoalStreakCard({
     super.key,
     required this.currentStreak,
     required this.bestStreak,
+    this.titleHeader,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final row = Row(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: kCalorieAccent.withOpacity(0.15),
+            shape: BoxShape.circle,
+          ),
+          child:
+              const Center(child: Text('🔥', style: TextStyle(fontSize: 26))),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$currentStreak-day streak',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              Text(
+                  currentStreak == 0
+                      ? 'Stay within budget today to start a streak.'
+                      : 'Best: $bestStreak days. Keep it going!',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (titleHeader == null) return NutritionCard(child: row);
     return NutritionCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: kCalorieAccent.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-                child: Text('🔥', style: TextStyle(fontSize: 26))),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('$currentStreak-day streak',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                Text(
-                    currentStreak == 0
-                        ? 'Stay within budget today to start a streak.'
-                        : 'Best: $bestStreak days. Keep it going!',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ],
-            ),
-          ),
+          titleHeader!,
+          const SizedBox(height: 16),
+          row,
         ],
       ),
     );

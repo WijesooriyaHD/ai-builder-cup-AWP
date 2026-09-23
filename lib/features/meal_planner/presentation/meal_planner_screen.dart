@@ -149,28 +149,40 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            DailyNutritionSummaryCard(
-              day: state.todayPlan!,
-              calorieTarget: plan.dailyCalories,
+            AddToHomeWrapper(
+              toolCardId: HomeToolCard.mealNutritionSummary,
+              child: DailyNutritionSummaryCard(
+                day: state.todayPlan!,
+                calorieTarget: plan.dailyCalories,
+              ),
             ),
             const SizedBox(height: 16),
           ],
           if (plan.aiInsights.isNotEmpty) ...[
-            _buildInsightsCard(context, plan.aiInsights),
-            const SizedBox(height: 16),
-          ],
-          if (plan.planType != PlanType.daily && plan.days.length > 1) ...[
-            WeeklyPlanOverviewCard(
-              plan: plan,
-              onTapDay: (i) => _showDayDetail(context, state, i),
+            AddToHomeWrapper(
+              toolCardId: HomeToolCard.mealInsights,
+              child: _buildInsightsCard(context, plan.aiInsights),
             ),
             const SizedBox(height: 16),
           ],
-          GroceryListCard(
-            list: plan.groceryList,
-            isBuilding: state.isBuildingGrocery,
-            onGenerate: () => state.buildGroceryList(),
-            onToggle: (name) => state.toggleGroceryItem(name),
+          if (plan.planType != PlanType.daily && plan.days.length > 1) ...[
+            AddToHomeWrapper(
+              toolCardId: HomeToolCard.mealWeeklyOverview,
+              child: WeeklyPlanOverviewCard(
+                plan: plan,
+                onTapDay: (i) => _showDayDetail(context, state, i),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          AddToHomeWrapper(
+            toolCardId: HomeToolCard.mealGrocery,
+            child: GroceryListCard(
+              list: plan.groceryList,
+              isBuilding: state.isBuildingGrocery,
+              onGenerate: () => state.buildGroceryList(),
+              onToggle: (name) => state.toggleGroceryItem(name),
+            ),
           ),
         ],
       ],

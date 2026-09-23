@@ -268,7 +268,11 @@ class _WaterRingPainter extends CustomPainter {
 /// 0–100 hydration score + AI explanation.
 class HydrationScoreCard extends StatelessWidget {
   final HydrationScore score;
-  const HydrationScoreCard({super.key, required this.score});
+
+  /// Optional title header rendered above the score row (used on Home).
+  final Widget? titleHeader;
+
+  const HydrationScoreCard({super.key, required this.score, this.titleHeader});
 
   Color get _color {
     if (score.score >= 85) return const Color(0xFF34A853);
@@ -280,46 +284,57 @@ class HydrationScoreCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return NutritionCard(
-      child: Row(
-        children: [
-          SizedBox(
-            width: 64,
-            height: 64,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 64,
-                  height: 64,
-                  child: CircularProgressIndicator(
-                    value: score.score / 100,
-                    strokeWidth: 6,
-                    backgroundColor: _color.withOpacity(0.15),
-                    valueColor: AlwaysStoppedAnimation(_color),
-                  ),
+    final row = Row(
+      children: [
+        SizedBox(
+          width: 64,
+          height: 64,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 64,
+                height: 64,
+                child: CircularProgressIndicator(
+                  value: score.score / 100,
+                  strokeWidth: 6,
+                  backgroundColor: _color.withOpacity(0.15),
+                  valueColor: AlwaysStoppedAnimation(_color),
                 ),
-                Text('${score.score}',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold, color: _color)),
-              ],
-            ),
+              ),
+              Text('${score.score}',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold, color: _color)),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (titleHeader == null) ...[
                 Text('Hydration score',
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 2),
-                Text(score.explanation,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(height: 1.35, color: _color)),
               ],
-            ),
+              Text(score.explanation,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(height: 1.35, color: _color)),
+            ],
           ),
+        ),
+      ],
+    );
+    if (titleHeader == null) return NutritionCard(child: row);
+    return NutritionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          titleHeader!,
+          const SizedBox(height: 16),
+          row,
         ],
       ),
     );
@@ -333,12 +348,16 @@ class SmartInsightsCard extends StatelessWidget {
   final List<Reminder> reminders;
   final bool isAnalyzing;
 
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
   const SmartInsightsCard({
     super.key,
     this.prediction,
     this.insights = const [],
     this.reminders = const [],
     this.isAnalyzing = false,
+    this.titleHeader,
   });
 
   @override
@@ -364,13 +383,17 @@ class SmartInsightsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.water_drop_rounded,
-                  color: kHydrationAccent, size: 20),
-              const SizedBox(width: 8),
-              Text('Smart insights',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const Spacer(),
+              if (titleHeader != null)
+                Expanded(child: titleHeader!)
+              else ...[
+                const Icon(Icons.water_drop_rounded,
+                    color: kHydrationAccent, size: 20),
+                const SizedBox(width: 8),
+                Text('Smart insights',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+              ],
               if (isAnalyzing)
                 const SizedBox(
                     height: 16,
@@ -440,10 +463,14 @@ class HydrationTimelineCard extends StatelessWidget {
   final List<HydrationEntry> entries;
   final ValueChanged<HydrationEntry>? onTapEntry;
 
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
   const HydrationTimelineCard({
     super.key,
     required this.entries,
     this.onTapEntry,
+    this.titleHeader,
   });
 
   @override
@@ -453,9 +480,10 @@ class HydrationTimelineCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Today’s timeline",
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          titleHeader ??
+              Text("Today’s timeline",
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           if (entries.isEmpty)
             Text('No water logged yet. Tap a quick-add below to start.',
@@ -522,7 +550,11 @@ class HydrationTimelineCard extends StatelessWidget {
 /// 7-day intake-vs-goal bars + consistency summary.
 class WeeklyAnalyticsCard extends StatelessWidget {
   final List<HydrationTrendPoint> points; // oldest → newest, up to 7
-  const WeeklyAnalyticsCard({super.key, required this.points});
+
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
+  const WeeklyAnalyticsCard({super.key, required this.points, this.titleHeader});
 
   @override
   Widget build(BuildContext context) {
@@ -540,10 +572,14 @@ class WeeklyAnalyticsCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Last 7 days',
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const Spacer(),
+              if (titleHeader != null)
+                Expanded(child: titleHeader!)
+              else ...[
+                Text('Last 7 days',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                const Spacer(),
+              ],
               if (points.isNotEmpty)
                 Text('Avg ${formatMl(avg)}',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -614,10 +650,15 @@ class WeeklyAnalyticsCard extends StatelessWidget {
 class HydrationStreakCard extends StatelessWidget {
   final int currentStreak;
   final int bestStreak;
+
+  /// Optional title header rendered above the streak row (used on Home).
+  final Widget? titleHeader;
+
   const HydrationStreakCard({
     super.key,
     required this.currentStreak,
     required this.bestStreak,
+    this.titleHeader,
   });
 
   String get _milestone {
@@ -630,36 +671,45 @@ class HydrationStreakCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final row = Row(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: kHydrationAccent.withOpacity(0.15),
+            shape: BoxShape.circle,
+          ),
+          child:
+              const Center(child: Text('💧', style: TextStyle(fontSize: 26))),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$currentStreak-day streak',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              Text(
+                  bestStreak > 0
+                      ? '$_milestone  ·  Best: $bestStreak'
+                      : _milestone,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (titleHeader == null) return NutritionCard(child: row);
     return NutritionCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: kHydrationAccent.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Center(
-                child: Text('💧', style: TextStyle(fontSize: 26))),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('$currentStreak-day streak',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                Text(
-                    bestStreak > 0
-                        ? '$_milestone  ·  Best: $bestStreak'
-                        : _milestone,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ],
-            ),
-          ),
+          titleHeader!,
+          const SizedBox(height: 16),
+          row,
         ],
       ),
     );

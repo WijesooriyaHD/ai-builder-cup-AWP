@@ -13,39 +13,138 @@ import 'package:shared_preferences/shared_preferences.dart';
 class HomeToolCard {
   const HomeToolCard._();
 
+  // Nutrition Coach
   static const String nutrition = 'tool_nutrition_progress';
+  static const String nutritionCoach = 'tool_nutrition_coach';
+  static const String nutritionRecentMeals = 'tool_nutrition_recent_meals';
+
+  // AI Meal Planner
   static const String mealPlanner = 'tool_meal_today';
+  static const String mealNutritionSummary = 'tool_meal_nutrition_summary';
+  static const String mealInsights = 'tool_meal_insights';
+  static const String mealWeeklyOverview = 'tool_meal_weekly_overview';
+  static const String mealGrocery = 'tool_meal_grocery';
+
+  // Calorie Budget
   static const String calorieBudget = 'tool_calorie_ring';
+  static const String calorieInsight = 'tool_calorie_insight';
+  static const String calorieStreak = 'tool_calorie_streak';
+  static const String calorieTimeline = 'tool_calorie_timeline';
+  static const String calorieWeekly = 'tool_calorie_weekly';
+
+  // Period Tracker
   static const String periodTracker = 'tool_period_ring';
+  static const String periodPrediction = 'tool_period_prediction';
+  static const String periodPhase = 'tool_period_phase';
+
+  // Hydration Coach
   static const String hydration = 'tool_hydration_ring';
+  static const String hydrationInsights = 'tool_hydration_insights';
+  static const String hydrationScore = 'tool_hydration_score';
+  static const String hydrationStreak = 'tool_hydration_streak';
+  static const String hydrationTimeline = 'tool_hydration_timeline';
+  static const String hydrationWeekly = 'tool_hydration_weekly';
+
+  // Body Weight
   static const String bodyWeight = 'tool_body_weight';
+  static const String bodyWeightChart = 'tool_body_weight_chart';
+  static const String bodyWeightBmi = 'tool_body_weight_bmi';
 
   /// All addable tool-card ids.
   static const List<String> all = [
+    // Nutrition
     nutrition,
+    nutritionCoach,
+    nutritionRecentMeals,
+    // Meal Planner
     mealPlanner,
+    mealNutritionSummary,
+    mealInsights,
+    mealWeeklyOverview,
+    mealGrocery,
+    // Calorie Budget
     calorieBudget,
+    calorieInsight,
+    calorieStreak,
+    calorieTimeline,
+    calorieWeekly,
+    // Period Tracker
     periodTracker,
+    periodPrediction,
+    periodPhase,
+    // Hydration
     hydration,
+    hydrationInsights,
+    hydrationScore,
+    hydrationStreak,
+    hydrationTimeline,
+    hydrationWeekly,
+    // Body Weight
     bodyWeight,
+    bodyWeightChart,
+    bodyWeightBmi,
   ];
 
   /// Human-readable title for a tool card id (used in menus and the Home
   /// re-arrange tiles).
   static String titleFor(String id) {
     switch (id) {
+      // Nutrition
       case nutrition:
         return "Today's Progress";
+      case nutritionCoach:
+        return 'Coach Insights';
+      case nutritionRecentMeals:
+        return 'Recent Meals';
+      // Meal Planner
       case mealPlanner:
         return "Today's Meals";
+      case mealNutritionSummary:
+        return "Today's Nutrition";
+      case mealInsights:
+        return 'Meal Plan Insights';
+      case mealWeeklyOverview:
+        return 'Weekly Meal Plan';
+      case mealGrocery:
+        return 'Grocery List';
+      // Calorie Budget
       case calorieBudget:
         return 'Calorie Budget';
+      case calorieInsight:
+        return 'Calorie Insights';
+      case calorieStreak:
+        return 'Calorie Streak';
+      case calorieTimeline:
+        return "Today's Timeline";
+      case calorieWeekly:
+        return 'Calorie · Last 7 Days';
+      // Period Tracker
       case periodTracker:
         return 'Period Tracker';
+      case periodPrediction:
+        return 'Cycle Predictions';
+      case periodPhase:
+        return 'Phase Insight';
+      // Hydration
       case hydration:
         return 'Hydration';
+      case hydrationInsights:
+        return 'Hydration Insights';
+      case hydrationScore:
+        return 'Hydration Score';
+      case hydrationStreak:
+        return 'Hydration Streak';
+      case hydrationTimeline:
+        return 'Hydration Timeline';
+      case hydrationWeekly:
+        return 'Hydration · Last 7 Days';
+      // Body Weight
       case bodyWeight:
         return 'Body Weight';
+      case bodyWeightChart:
+        return 'Weight Trend';
+      case bodyWeightBmi:
+        return 'BMI';
       default:
         return 'Wellness Card';
     }
@@ -57,18 +156,62 @@ class HomeToolCard {
   /// tool cards match the default Home cards' icon + title formatting).
   static IconData iconFor(String id) {
     switch (id) {
+      // Nutrition
       case nutrition:
         return Icons.restaurant_rounded;
+      case nutritionCoach:
+        return Icons.tips_and_updates_rounded;
+      case nutritionRecentMeals:
+        return Icons.history_rounded;
+      // Meal Planner
       case mealPlanner:
         return Icons.restaurant_menu_rounded;
+      case mealNutritionSummary:
+        return Icons.pie_chart_rounded;
+      case mealInsights:
+        return Icons.auto_awesome_rounded;
+      case mealWeeklyOverview:
+        return Icons.calendar_view_week_rounded;
+      case mealGrocery:
+        return Icons.shopping_cart_rounded;
+      // Calorie Budget
       case calorieBudget:
         return Icons.local_fire_department_rounded;
+      case calorieInsight:
+        return Icons.auto_awesome_rounded;
+      case calorieStreak:
+        return Icons.emoji_events_rounded;
+      case calorieTimeline:
+        return Icons.timeline_rounded;
+      case calorieWeekly:
+        return Icons.bar_chart_rounded;
+      // Period Tracker
       case periodTracker:
         return Icons.female_rounded;
+      case periodPrediction:
+        return Icons.event_rounded;
+      case periodPhase:
+        return Icons.spa_rounded;
+      // Hydration
       case hydration:
         return Icons.water_drop_rounded;
+      case hydrationInsights:
+        return Icons.auto_awesome_rounded;
+      case hydrationScore:
+        return Icons.speed_rounded;
+      case hydrationStreak:
+        return Icons.emoji_events_rounded;
+      case hydrationTimeline:
+        return Icons.timeline_rounded;
+      case hydrationWeekly:
+        return Icons.bar_chart_rounded;
+      // Body Weight
       case bodyWeight:
         return Icons.monitor_weight_rounded;
+      case bodyWeightChart:
+        return Icons.show_chart_rounded;
+      case bodyWeightBmi:
+        return Icons.straighten_rounded;
       default:
         return Icons.dashboard_customize_rounded;
     }

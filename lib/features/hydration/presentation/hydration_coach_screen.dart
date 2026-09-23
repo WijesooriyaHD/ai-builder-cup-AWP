@@ -11,7 +11,6 @@ import '../../nutrition/presentation/widgets/nutrition_cards.dart'
 import '../../weather/domain/weather_models.dart';
 import '../../weather/presentation/location_setup_screen.dart';
 import '../../weather/presentation/widgets/weather_card.dart';
-import '../data/hydration_repository.dart';
 import '../domain/hydration_models.dart';
 import 'hydration_state.dart';
 import 'widgets/hydration_cards.dart';
@@ -82,26 +81,41 @@ class _HydrationCoachScreenState extends State<HydrationCoachScreen> {
                       const SizedBox(height: 16),
                       _buildQuickAdd(context, state),
                       const SizedBox(height: 16),
-                      SmartInsightsCard(
-                        prediction: state.prediction,
-                        insights: state.insights,
-                        reminders: state.reminders,
-                        isAnalyzing: state.isAnalyzing,
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.hydrationInsights,
+                        child: SmartInsightsCard(
+                          prediction: state.prediction,
+                          insights: state.insights,
+                          reminders: state.reminders,
+                          isAnalyzing: state.isAnalyzing,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      HydrationScoreCard(score: state.score),
-                      const SizedBox(height: 16),
-                      HydrationStreakCard(
-                        currentStreak: state.currentStreak,
-                        bestStreak: state.bestStreak,
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.hydrationScore,
+                        child: HydrationScoreCard(score: state.score),
                       ),
                       const SizedBox(height: 16),
-                      HydrationTimelineCard(
-                        entries: state.timeline,
-                        onTapEntry: (e) => _confirmDelete(context, state, e),
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.hydrationStreak,
+                        child: HydrationStreakCard(
+                          currentStreak: state.currentStreak,
+                          bestStreak: state.bestStreak,
+                        ),
                       ),
                       const SizedBox(height: 16),
-                      WeeklyAnalyticsCard(points: _trendPoints(state)),
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.hydrationTimeline,
+                        child: HydrationTimelineCard(
+                          entries: state.timeline,
+                          onTapEntry: (e) => _confirmDelete(context, state, e),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      AddToHomeWrapper(
+                        toolCardId: HomeToolCard.hydrationWeekly,
+                        child: WeeklyAnalyticsCard(points: state.trendPoints),
+                      ),
                     ],
                   ),
                 ),
@@ -444,27 +458,6 @@ class _HydrationCoachScreenState extends State<HydrationCoachScreen> {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
-  List<HydrationTrendPoint> _trendPoints(HydrationState state) {
-    final recent = state.recent.reversed.take(7).toList();
-    final points = recent
-        .map((d) => HydrationTrendPoint(
-              date: DateTime.tryParse(d.date) ?? DateTime.now(),
-              consumedMl: d.consumedMl,
-              goalMl: d.goalMl,
-            ))
-        .toList();
-    final todayKey = HydrationRepository.dateKey(DateTime.now());
-    if (!recent.any((d) => d.date == todayKey)) {
-      points.add(HydrationTrendPoint(
-        date: DateTime.now(),
-        consumedMl: state.consumedMl,
-        goalMl: state.goalMl,
-      ));
-    }
-    if (points.length > 7) return points.sublist(points.length - 7);
-    return points;
-  }
-
   String _time(DateTime t) {
     final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
     final m = t.minute.toString().padLeft(2, '0');

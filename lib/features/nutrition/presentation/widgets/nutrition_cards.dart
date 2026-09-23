@@ -236,7 +236,11 @@ class RecentMealsCard extends StatelessWidget {
   final List<Meal> meals;
   final ValueChanged<Meal>? onTapMeal;
 
-  const RecentMealsCard({super.key, required this.meals, this.onTapMeal});
+  /// Optional replacement title header (used on Home for consistent styling).
+  final Widget? titleHeader;
+
+  const RecentMealsCard(
+      {super.key, required this.meals, this.onTapMeal, this.titleHeader});
 
   @override
   Widget build(BuildContext context) {
@@ -245,9 +249,10 @@ class RecentMealsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Recent meals',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          titleHeader ??
+              Text('Recent meals',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           if (meals.isEmpty)
             Text('No meals logged yet.',

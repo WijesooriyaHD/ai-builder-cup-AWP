@@ -73,12 +73,18 @@ class _NutritionCoachScreenState extends State<NutritionCoachScreen> {
                       totals: state.todaysTotals, goals: state.goals),
                 ),
                 const SizedBox(height: 16),
-                _buildCoachCard(context, state),
+                AddToHomeWrapper(
+                  toolCardId: HomeToolCard.nutritionCoach,
+                  child: _buildCoachCard(context, state),
+                ),
                 const SizedBox(height: 16),
                 if (state.recentMeals().isNotEmpty) ...[
-                  RecentMealsCard(
-                    meals: state.recentMeals(),
-                    onTapMeal: (m) => _showMealDetail(context, state, m),
+                  AddToHomeWrapper(
+                    toolCardId: HomeToolCard.nutritionRecentMeals,
+                    child: RecentMealsCard(
+                      meals: state.recentMeals(),
+                      onTapMeal: (m) => _showMealDetail(context, state, m),
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
