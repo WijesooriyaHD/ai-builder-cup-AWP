@@ -466,6 +466,11 @@ class _HomeScreenState extends State<HomeScreen>
           // has no inner tap, so its long-press was only ever failing because
           // the wrapper wasn't reliably in the arena — this fixes that too.
           behavior: HitTestBehavior.translucent,
+          // Short tap on an added wellness-tool card opens its Life Tool.
+          // Default Home cards return null here and keep their own behavior.
+          onTap: HomeToolCard.isToolCard(id)
+              ? () => _openToolForCard(id)
+              : null,
           onLongPress: () => _showCardOptions(context, id),
           child: _buildCardById(id, planState, checkInState),
         ),
@@ -475,6 +480,16 @@ class _HomeScreenState extends State<HomeScreen>
     // Drop the trailing spacer so it doesn't double with the section below.
     if (widgets.isNotEmpty) widgets.removeLast();
     return widgets;
+  }
+
+  /// Opens the Life Tool a Home tool-card belongs to (short tap). No-op for
+  /// cards without a tool screen.
+  void _openToolForCard(String cardId) {
+    final screen = screenForToolCard(cardId);
+    if (screen == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => screen),
+    );
   }
 
   /// The long-press action sheet: Pin to top / Re-arrange.

@@ -3,11 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../features/calorie_budget/presentation/calorie_budget_screen.dart';
 import '../features/calorie_budget/presentation/calorie_budget_state.dart';
 import '../features/calorie_budget/presentation/widgets/calorie_budget_cards.dart';
+import '../features/hydration/presentation/hydration_coach_screen.dart';
 import '../features/hydration/presentation/hydration_state.dart';
 import '../features/hydration/presentation/widgets/hydration_cards.dart';
 import '../features/meal_planner/domain/meal_planner_models.dart';
+import '../features/meal_planner/presentation/meal_planner_screen.dart';
 import '../features/meal_planner/presentation/meal_planner_state.dart';
 import '../features/meal_planner/presentation/widgets/meal_plan_cards.dart'
     show
@@ -16,11 +19,14 @@ import '../features/meal_planner/presentation/widgets/meal_plan_cards.dart'
         WeeklyPlanOverviewCard,
         kMealPlanAccent;
 import '../features/nutrition/domain/nutrition_models.dart' show MealTypeInfo;
+import '../features/nutrition/presentation/nutrition_coach_screen.dart';
 import '../features/nutrition/presentation/nutrition_state.dart';
 import '../features/nutrition/presentation/widgets/nutrition_cards.dart';
 import '../models/period_data.dart';
 import '../models/weight_data.dart';
 import '../providers/app_state.dart';
+import '../screens/period_tracker_screen.dart';
+import '../screens/weight_tracker_screen.dart';
 import '../services/home_tool_cards_service.dart';
 
 /// Builds the Home-embeddable view for a given tool-card id, watching the
@@ -243,6 +249,48 @@ Widget? buildHomeToolCard(BuildContext context, String toolCardId) {
   // Each card renders its own title header INSIDE its NutritionCard, so no
   // outer wrapper is needed here.
   return body;
+}
+
+/// The tool screen a Home tool-card belongs to, so a short tap on the card can
+/// open its originating Life Tool. Returns null for non-tool ids (default Home
+/// cards, which have no tool screen).
+Widget? screenForToolCard(String toolCardId) {
+  switch (toolCardId) {
+    case HomeToolCard.nutrition:
+    case HomeToolCard.nutritionCoach:
+    case HomeToolCard.nutritionRecentMeals:
+      return const NutritionCoachScreen();
+    case HomeToolCard.mealPlanner:
+    case HomeToolCard.mealNutritionSummary:
+    case HomeToolCard.mealInsights:
+    case HomeToolCard.mealWeeklyOverview:
+    case HomeToolCard.mealGrocery:
+      return const MealPlannerScreen();
+    case HomeToolCard.calorieBudget:
+    case HomeToolCard.calorieInsight:
+    case HomeToolCard.calorieStreak:
+    case HomeToolCard.calorieTimeline:
+    case HomeToolCard.calorieWeekly:
+      return const CalorieBudgetScreen();
+    case HomeToolCard.periodTracker:
+    case HomeToolCard.periodPrediction:
+    case HomeToolCard.periodPhase:
+      return const PeriodTrackerScreen();
+    case HomeToolCard.hydration:
+    case HomeToolCard.hydrationInsights:
+    case HomeToolCard.hydrationScore:
+    case HomeToolCard.hydrationStreak:
+    case HomeToolCard.hydrationTimeline:
+    case HomeToolCard.hydrationWeekly:
+      return const HydrationCoachScreen();
+    case HomeToolCard.bodyWeight:
+    case HomeToolCard.bodyWeightChart:
+    case HomeToolCard.bodyWeightBmi:
+    case HomeToolCard.bodyWeightHistory:
+      return const WeightTrackerScreen();
+    default:
+      return null;
+  }
 }
 
 /// A default-style in-card title header (icon + label) for tool cards on Home.
