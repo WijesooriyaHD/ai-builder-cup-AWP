@@ -60,6 +60,70 @@ import home_widget
               code: "audio_route_failed",
               message: error.localizedDescription, details: nil))
           }
+        } else if call.method == "bestEnhancedVoice" {
+          // Returns the BEST available English voice (by quality tier) so the
+          // reader narration can use it when "Higher-quality voice" is on. We
+          // query AVSpeechSynthesisVoice directly, where `.quality` (default /
+          // enhanced / premium) and a stable `.identifier` are available. Dart
+          // applies the returned identifier via setVoice.
+          //
+          // NOTE: we return the best voice EVEN IF it's only `default` quality,
+          // along with a `quality` label, so the narration always switches to a
+          // deliberately chosen voice and the UI can report exactly what the
+          // device offers (enhanced voices are a separate, optional download in
+          // Settings → Accessibility → Spoken Content → Voices).
+          let prefLang = (call.arguments as? [String: Any])?["language"]
+            as? String ?? "en"
+          let voices = AVSpeechSynthesisVoice.speechVoices().filter {
+            $0.language.lowercased().hasPrefix(prefLang.lowercased())
+          }
+          func rank(_ q: AVSpeechSynthesisVoiceQuality) -> Int {
+            if #available(iOS 16.0, *), q == .premium { return 3 }
+            if q == .enhanced { return 2 }
+            return 1 // default / compact
+          }
+          func qualityLabel(_ q: AVSpeechSynthesisVoiceQuality) -> String {
+            if #available(iOS 16.0, *), q == .premium { return "premium" }
+            if q == .enhanced { return "enhanced" }
+            return "default"
+          }
+          // Best = highest quality; prefer en-US among equals.
+          let best = voices.max { a, b in
+            let ra = rank(a.quality), rb = rank(b.quality)
+            if ra != rb { return ra < rb }
+            let aUS = a.language.lowercased() == "en-us" ? 1 : 0
+            let bUS = b.language.lowercased() == "en-us" ? 1 : 0
+            return aUS < bUS
+          }
+          if let v = best {
+            result([
+              "identifier": v.identifier,
+              "name": v.name,
+              "locale": v.language,
+              "quality": qualityLabel(v.quality),
+            ])
+          } else {
+            result(nil)
+          }
+        } else if call.method == "listVoices" {
+          // Diagnostic: the full installed English voice inventory with quality
+          // tiers, so we can see whether an enhanced voice is actually present.
+          let voices = AVSpeechSynthesisVoice.speechVoices().filter {
+            $0.language.lowercased().hasPrefix("en")
+          }
+          func qualityLabel(_ q: AVSpeechSynthesisVoiceQuality) -> String {
+            if #available(iOS 16.0, *), q == .premium { return "premium" }
+            if q == .enhanced { return "enhanced" }
+            return "default"
+          }
+          result(voices.map {
+            [
+              "name": $0.name,
+              "locale": $0.language,
+              "quality": qualityLabel($0.quality),
+              "identifier": $0.identifier,
+            ]
+          })
         } else {
           result(FlutterMethodNotImplemented)
         }

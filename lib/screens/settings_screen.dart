@@ -1100,6 +1100,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Shown when the user turns ON "Higher-quality voice for readings". The
+  /// enhanced/premium voice is an optional iOS download, so this guides them to
+  /// install one; tapping OK dismisses it.
+  void _showEnhancedVoiceInfoDialog(BuildContext context) {
+    final theme = Theme.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.record_voice_over_rounded,
+                color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Get the best voice')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'For the smoothest, most natural narration, download an '
+              'enhanced or premium voice on your iPhone:',
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Settings → Accessibility → Live Speech → Voices → English',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Then download a voice marked "Enhanced" or "Premium" '
+              '(for example, Allison (Enhanced)). Reopen this screen and '
+              'your readings will use it automatically.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The subtitle for the higher-quality-voice toggle. When on, it reports
+  /// whether an enhanced voice actually resolved — and, if not, points the
+  /// user to iOS's voice-download setting (the common reason it sounds the
+  /// same: enhanced voices aren't installed).
+  String _highQualityReadingSubtitle(AppState appState) {
+    if (!appState.highQualityReading) {
+      return 'Wellness Reads use the standard system voice. Turn this on for a '
+          'more natural, higher-quality read.';
+    }
+    final voice = appState.resolvedReadingVoiceName;
+    final quality = appState.resolvedReadingVoiceQuality;
+    if (voice != null && voice.isNotEmpty) {
+      if (quality == 'premium' || quality == 'enhanced') {
+        return 'Wellness Reads are narrated with the $quality "$voice" voice.';
+      }
+      // A voice resolved, but only standard quality is installed.
+      return 'Using "$voice" (standard quality). For a richer voice, download '
+          'an Enhanced or Premium voice in Settings → Accessibility → Spoken '
+          'Content → Voices, then reopen this screen.';
+    }
+    return 'No enhanced voice is installed, so the standard voice is used. '
+        'On iPhone, add one in Settings → Accessibility → Spoken Content → '
+        'Voices, then reopen this screen.';
+  }
+
   /// "Higher-quality voice" — when on, Wellness Reads narration uses the best
   /// available enhanced/neural system voice for a smoother, more natural read.
   Widget _buildHighQualityReadingToggle(
@@ -1123,18 +1212,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             Switch.adaptive(
               value: enabled,
-              onChanged: (value) => appState.setHighQualityReading(value),
+              onChanged: (value) {
+                appState.setHighQualityReading(value);
+                // On enabling, tell the user how to get the best voice — the
+                // enhanced/premium voice is an optional iOS download.
+                if (value) {
+                  _showEnhancedVoiceInfoDialog(context);
+                }
+              },
             ),
           ],
         ),
         Padding(
           padding: const EdgeInsets.only(top: 4, right: 48),
           child: Text(
-            enabled
-                ? 'Wellness Reads are narrated with the smoothest voice your '
-                    'device has installed.'
-                : 'Wellness Reads use the standard system voice. Turn this on '
-                    'for a more natural, higher-quality read.',
+            _highQualityReadingSubtitle(appState),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: isDark ? Colors.white54 : Colors.grey.shade600,
                   height: 1.4,

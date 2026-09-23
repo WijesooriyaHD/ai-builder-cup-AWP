@@ -141,6 +141,41 @@ class LivePalVoiceOption {
 /// All are free for now. Because the voice is fixed when the Live session is
 /// created, changing it takes effect on the NEXT conversation.
 const List<LivePalVoiceOption> kLivePalVoices = [
+  LivePalVoiceOption(    
+    id: 'Sadaltager',
+    name: 'Daniel',
+    description: 'Good if you want a coach / expert feel',
+    icon: Icons.emoji_events_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(    
+    id: 'Achird',
+    name: 'Michael',
+    description: 'Friendly, natural and approachable',
+    icon: Icons.emoji_events_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(    
+    id: 'Charon',
+    name: 'James',
+    description: 'Good for guided wellness sessions',
+    icon: Icons.emoji_events_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(    
+    id: 'Umbriel',
+    name: 'Alex',
+    description: 'Relaxed and easy-going',
+    icon: Icons.emoji_events_rounded,
+    isPremium: false,
+  ),
+  LivePalVoiceOption(
+    id: 'Puck',
+    name: 'Ethan',
+    description: 'Energetic motivator voice',
+    icon: Icons.record_voice_over_rounded,
+    isPremium: false,
+  ),
   LivePalVoiceOption(
     id: 'Aoede',
     name: 'Aoede',
@@ -150,39 +185,26 @@ const List<LivePalVoiceOption> kLivePalVoices = [
   ),
   LivePalVoiceOption(
     id: 'Achernar',
-    name: 'Achernar',
+    name: 'Grace',
     description: 'Soft and gentle',
     icon: Icons.nightlight_round,
     isPremium: false,
   ),
   LivePalVoiceOption(
     id: 'Callirrhoe',
-    name: 'Callirrhoe',
+    name: 'Sophia',
     description: 'Relaxed and natural',
     icon: Icons.water_drop_rounded,
     isPremium: false,
   ),
   LivePalVoiceOption(
     id: 'Leda',
-    name: 'Leda',
-    description: 'Energetic without sounding robotic',
+    name: 'Maya',
+    description: 'Energetic and uplifting',
     icon: Icons.bolt_rounded,
     isPremium: false,
   ),
-  LivePalVoiceOption(
-    id: 'Sadaltager',
-    name: 'Sadaltager',
-    description: 'Good if you want a coach / expert feel',
-    icon: Icons.emoji_events_rounded,
-    isPremium: false,
-  ),
-  LivePalVoiceOption(
-    id: 'Puck',
-    name: 'Puck',
-    description: 'Safest general-purpose voice',
-    icon: Icons.record_voice_over_rounded,
-    isPremium: false,
-  ),
+
 ];
 
 /// The default Live pal voice id.

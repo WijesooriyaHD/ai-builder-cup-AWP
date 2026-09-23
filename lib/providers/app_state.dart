@@ -1,6 +1,10 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
+
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:home_widget/home_widget.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -693,38 +697,122 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// This is intentionally the single seam for narration voice quality: a
   /// future cloud neural-TTS engine can branch here (or replace playback)
   /// behind the same toggle without touching the chunk/playback logic.
+  static const MethodChannel _audioNativeChannel =
+      MethodChannel('aiwellnesspal/audio');
+
+  /// The voice actually resolved for narration (for UI feedback), or null when
+  /// the standard voice is in use / none was found.
+  String? _resolvedReadingVoiceName;
+  String? get resolvedReadingVoiceName => _resolvedReadingVoiceName;
+
+  /// The quality tier of the resolved reading voice ('premium' / 'enhanced' /
+  /// 'default'), or null. Lets the UI tell the user whether they're actually
+  /// getting an enhanced voice or only the standard one (enhanced voices are an
+  /// optional iOS download).
+  String? _resolvedReadingVoiceQuality;
+  String? get resolvedReadingVoiceQuality => _resolvedReadingVoiceQuality;
+
   Future<void> _applyReadingVoice() async {
     try {
       if (!_highQualityReading) {
         // Standard voice + the app's default calm article pace.
-        await _flutterTts.setSpeechRate(0.45);
-        // Best-effort reset to the system default voice for the locale.
+        _resolvedReadingVoiceName = null;
+        _resolvedReadingVoiceQuality = null;
+        // Reset to the platform default voice. clearVoice() is the reliable
+        // reset (an empty-name setVoice does NOT clear a previously pinned
+        // voice on iOS, so the enhanced voice would otherwise stick after
+        // toggling off).
         try {
-          await _flutterTts.setVoice({'name': '', 'locale': 'en-US'});
-        } catch (_) {/* not all platforms accept an empty voice */}
+          await _flutterTts.clearVoice();
+        } catch (_) {
+          // clearVoice is iOS/Android/macOS only; ignore where unsupported.
+        }
+        await _flutterTts.setLanguage('en-US');
+        await _flutterTts.setSpeechRate(0.45);
+        notifyListeners();
         return;
       }
 
       final best = await _findBestEnhancedVoice();
       if (best != null) {
-        await _flutterTts.setVoice(best);
+        // setVoice only accepts {name, locale, identifier} — strip the quality
+        // key we carry for reporting.
+        final applied = <String, String>{
+          'name': best['name'] ?? '',
+          'locale': best['locale'] ?? 'en-US',
+          if (best['identifier'] != null) 'identifier': best['identifier']!,
+        };
+        await _flutterTts.setVoice(applied);
+        _resolvedReadingVoiceName = best['name'];
+        _resolvedReadingVoiceQuality = best['quality'];
+        debugPrint('AppState: reading voice → ${best['name']} '
+            '(${best['quality'] ?? 'unknown'}, ${best['locale']})');
+      } else {
+        _resolvedReadingVoiceName = null;
+        _resolvedReadingVoiceQuality = null;
       }
       // A slightly slower pace suits the richer voice.
       await _flutterTts.setSpeechRate(0.44);
+      notifyListeners();
     } catch (e) {
       debugPrint('AppState._applyReadingVoice failed: $e');
     }
   }
 
   /// Finds the highest-quality installed English voice, or null if none stand
-  /// out (in which case the caller keeps the current voice). Returns the raw
-  /// {name, locale} map flutter_tts expects for setVoice.
+  /// out (in which case the caller keeps the current voice).
+  ///
+  /// On iOS this asks the native `aiwellnesspal/audio` channel, because
+  /// flutter_tts's `getVoices` only exposes {name, locale} — NOT the quality
+  /// tier — so a name-based scan can't tell an enhanced/premium voice from a
+  /// compact one. The native side queries `AVSpeechSynthesisVoice` where
+  /// `.quality` and a stable `.identifier` are available, and we apply that
+  /// identifier via setVoice. Other platforms fall back to a name-keyword scan
+  /// over getVoices.
   Future<Map<String, String>?> _findBestEnhancedVoice() async {
+    // iOS: authoritative quality lookup via AVSpeechSynthesisVoice.
+    if (Platform.isIOS) {
+      try {
+        // Log the full installed inventory once so we can see what qualities
+        // the device actually offers.
+        if (kDebugMode) {
+          final list = await _audioNativeChannel
+              .invokeMethod<List<dynamic>>('listVoices');
+          debugPrint('AppState: installed EN voices → $list');
+        }
+        final res = await _audioNativeChannel.invokeMethod<Map<dynamic, dynamic>>(
+          'bestEnhancedVoice',
+          {'language': 'en'},
+        );
+        if (res != null) {
+          final id = res['identifier']?.toString();
+          final name = res['name']?.toString();
+          final locale = res['locale']?.toString() ?? 'en-US';
+          final quality = res['quality']?.toString();
+          if (id != null && name != null) {
+            // flutter_tts on iOS accepts an `identifier` key to pin the exact
+            // AVSpeechSynthesisVoice; include name/locale for portability and
+            // quality for UI reporting.
+            return {
+              'name': name,
+              'locale': locale,
+              'identifier': id,
+              if (quality != null) 'quality': quality,
+            };
+          }
+        }
+        return null;
+      } catch (e) {
+        debugPrint('AppState._findBestEnhancedVoice (iOS native) failed: $e');
+        // Fall through to the generic scan below.
+      }
+    }
+
+    // Non-iOS (or iOS fallback): scan getVoices by quality keywords in name.
     try {
       final raw = await _flutterTts.getVoices;
       if (raw is! List) return null;
 
-      // Normalise to a list of {name, locale} string maps.
       final voices = <Map<String, String>>[];
       for (final v in raw) {
         if (v is Map) {
@@ -737,15 +825,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
       if (voices.isEmpty) return null;
 
-      // English voices only.
       final english = voices
           .where((v) => v['locale']!.toLowerCase().startsWith('en'))
           .toList();
       if (english.isEmpty) return null;
 
-      // Score by quality keywords apparent in the voice name. Apple exposes
-      // "enhanced"/"premium" (and Siri) voices; Android exposes network /
-      // neural voices. Higher score = better.
       int score(String name) {
         final n = name.toLowerCase();
         var s = 0;
@@ -754,22 +838,18 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         if (n.contains('neural')) s += 4;
         if (n.contains('siri')) s += 3;
         if (n.contains('network')) s += 2;
-        // Prefer en-US as a mild tiebreaker for a neutral accent.
         return s;
       }
 
       english.sort((a, b) {
         final byScore = score(b['name']!).compareTo(score(a['name']!));
         if (byScore != 0) return byScore;
-        // en-US first among equals.
         final aUs = a['locale']!.toLowerCase() == 'en-us' ? 1 : 0;
         final bUs = b['locale']!.toLowerCase() == 'en-us' ? 1 : 0;
         return bUs.compareTo(aUs);
       });
 
       final best = english.first;
-      // Only override if the best voice actually looks higher-quality than a
-      // plain compact voice; otherwise keep whatever the system default is.
       return score(best['name']!) > 0 ? best : null;
     } catch (e) {
       debugPrint('AppState._findBestEnhancedVoice failed: $e');
