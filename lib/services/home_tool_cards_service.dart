@@ -49,6 +49,7 @@ class HomeToolCard {
   static const String bodyWeight = 'tool_body_weight';
   static const String bodyWeightChart = 'tool_body_weight_chart';
   static const String bodyWeightBmi = 'tool_body_weight_bmi';
+  static const String bodyWeightHistory = 'tool_body_weight_history';
 
   /// All addable tool-card ids.
   static const List<String> all = [
@@ -83,6 +84,7 @@ class HomeToolCard {
     bodyWeight,
     bodyWeightChart,
     bodyWeightBmi,
+    bodyWeightHistory,
   ];
 
   /// Human-readable title for a tool card id (used in menus and the Home
@@ -145,6 +147,8 @@ class HomeToolCard {
         return 'Weight Trend';
       case bodyWeightBmi:
         return 'BMI';
+      case bodyWeightHistory:
+        return 'Weight History';
       default:
         return 'Wellness Card';
     }
@@ -212,6 +216,8 @@ class HomeToolCard {
         return Icons.show_chart_rounded;
       case bodyWeightBmi:
         return Icons.straighten_rounded;
+      case bodyWeightHistory:
+        return Icons.history_rounded;
       default:
         return Icons.dashboard_customize_rounded;
     }

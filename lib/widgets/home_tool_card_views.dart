@@ -232,6 +232,10 @@ Widget? buildHomeToolCard(BuildContext context, String toolCardId) {
       final data = context.watch<AppState>().weightData;
       body = HomeBmiCard(data: data);
       break;
+    case HomeToolCard.bodyWeightHistory:
+      final data = context.watch<AppState>().weightData;
+      body = HomeWeightHistoryCard(data: data);
+      break;
 
     default:
       return null;
@@ -1172,6 +1176,133 @@ class HomeBmiCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Body Weight: history list — re-created from the tool screen's private
+// _buildHistory (read-only on Home: no swipe-to-delete). Caps the number of
+// rows so a long history doesn't blow out the Home layout.
+// ---------------------------------------------------------------------------
+
+class HomeWeightHistoryCard extends StatelessWidget {
+  const HomeWeightHistoryCard({super.key, required this.data});
+  final WeightData data;
+
+  /// Most-recent entries to show on Home.
+  static const int _maxRows = 8;
+
+  static const List<String> _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  String _formatDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    if (day == today) return 'Today';
+    if (day == today.subtract(const Duration(days: 1))) return 'Yesterday';
+    return '${_months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final unit = data.unit;
+    final all = data.sortedEntries.reversed.toList(); // newest first
+    final entries = all.take(_maxRows).toList();
+
+    return NutritionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          toolCardTitleHeader(context, HomeToolCard.bodyWeightHistory),
+          const SizedBox(height: 8),
+          if (entries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'No entries yet. Log your weight to start your history.',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            )
+          else ...[
+            ...List.generate(entries.length, (i) {
+              final e = entries[i];
+              // Difference vs the previous (older) entry in the full list.
+              final older = (i + 1) < all.length ? all[i + 1] : null;
+              final diffKg =
+                  older == null ? null : e.weightKg - older.weightKg;
+              return _row(context, e, diffKg, unit);
+            }),
+            if (all.length > entries.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '+ ${all.length - entries.length} more in Body Weight',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(
+      BuildContext context, WeightEntry e, double? diffKg, WeightUnit unit) {
+    final theme = Theme.of(context);
+    String? diffText;
+    Color diffColor = theme.colorScheme.onSurfaceVariant;
+    if (diffKg != null && diffKg.abs() > 0.05) {
+      final v = unit.fromKg(diffKg.abs()).toStringAsFixed(1);
+      diffText = diffKg > 0 ? '+$v' : '-$v';
+      diffColor =
+          diffKg > 0 ? const Color(0xFFEF7C4B) : const Color(0xFF34A853);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        children: [
+          Icon(Icons.monitor_weight_rounded,
+              size: 20, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_formatDate(e.date),
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                if (e.note != null && e.note!.isNotEmpty)
+                  Text(e.note!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          if (diffText != null) ...[
+            Text(diffText,
+                style: TextStyle(
+                    color: diffColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12)),
+            const SizedBox(width: 10),
+          ],
+          Text(
+            '${unit.fromKg(e.weightKg).toStringAsFixed(1)} ${unit.label}',
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
         ],
       ),
