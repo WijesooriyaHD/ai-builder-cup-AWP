@@ -57,6 +57,10 @@ class StorageService {
   /// "Hey Pal" or "Pal" opens the Live pal automatically. Off by default.
   static const String _alwaysListenForPalKey =
       'aiwellnesspal_always_listen_for_pal';
+  /// When true, Wellness Reads narration uses the best available enhanced /
+  /// neural system voice for a smoother read. Off by default.
+  static const String _highQualityReadingKey =
+      'aiwellnesspal_high_quality_reading';
   static const String _preferredMethodsKey = 'aiwellnesspal_preferred_methods';
   static const String _periodDataKey = 'aiwellnesspal_period_data';
   static const String _weightDataKey = 'aiwellnesspal_weight_data';
@@ -308,6 +312,7 @@ class StorageService {
     bool? liveChatPal,
     bool? alwaysListenForPal,
     String? livePalVoice,
+    bool? highQualityReading,
     List<String>? preferredMethods,
     bool syncToCloud = true,
   }) async {
@@ -334,6 +339,9 @@ class StorageService {
     }
     if (livePalVoice != null) {
       await prefs.setString(_livePalVoiceKey, livePalVoice);
+    }
+    if (highQualityReading != null) {
+      await prefs.setBool(_highQualityReadingKey, highQualityReading);
     }
     if (preferredMethods != null) {
       await prefs.setStringList(_preferredMethodsKey, preferredMethods);
@@ -376,6 +384,9 @@ class StorageService {
           data['always_listen_for_pal'] = alwaysListenForPal;
         }
         if (livePalVoice != null) data['live_pal_voice'] = livePalVoice;
+        if (highQualityReading != null) {
+          data['high_quality_reading'] = highQualityReading;
+        }
         if (preferredMethods != null) data['preferred_methods'] = preferredMethods;
 
         await _db
@@ -448,6 +459,9 @@ class StorageService {
           prefs.getBool(_alwaysListenForPalKey) ?? false,
       'livePalVoice':
           prefs.getString(_livePalVoiceKey) ?? kDefaultLivePalVoice,
+      // Default OFF: narration uses the standard system voice.
+      'highQualityReading':
+          prefs.getBool(_highQualityReadingKey) ?? false,
       'preferredMethods': prefs.getStringList(_preferredMethodsKey) ?? <String>[],
     };
 
@@ -466,6 +480,8 @@ class StorageService {
           settings['alwaysListenForPal'];
       settings['livePalVoice'] =
           cloudProfile['live_pal_voice'] ?? settings['livePalVoice'];
+      settings['highQualityReading'] = cloudProfile['high_quality_reading'] ??
+          settings['highQualityReading'];
       settings['isWinterMode'] =
           cloudProfile['is_winter_mode'] ?? settings['isWinterMode'];
       settings['showMotivation'] =

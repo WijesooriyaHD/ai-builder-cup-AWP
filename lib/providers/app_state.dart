@@ -144,6 +144,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool _liveChatPal = false;
   bool _alwaysListenForPal = false;
   String _livePalVoice = kDefaultLivePalVoice;
+  bool _highQualityReading = false;
   List<String> _preferredMethods = const [];
   
   List<Dream> get dreams => _dreams;
@@ -192,6 +193,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// [kLivePalVoices]). Applied when a Live session is created, so a change
   /// takes effect on the next conversation.
   String get livePalVoice => _livePalVoice;
+
+  /// When true, Wellness Reads narration uses the best available enhanced /
+  /// neural system voice (selected in [_applyReadingVoice]) for a noticeably
+  /// smoother read. Off by default (standard system voice). Persists locally
+  /// and to the cloud like other settings.
+  bool get highQualityReading => _highQualityReading;
   /// Stable ids of the user's preferred wellness methods (see kWellnessMethods).
   /// Drives Today's Plan personalization. May be empty for pre-existing users.
   List<String> get preferredMethods => List.unmodifiable(_preferredMethods);
@@ -515,6 +522,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Toggles the higher-quality (enhanced/neural) narration voice for Wellness
+  /// Reads. Re-applies the reading voice immediately so an in-progress read
+  /// picks up the change on its next chunk.
+  Future<void> setHighQualityReading(bool value) async {
+    if (_highQualityReading == value) return;
+    _highQualityReading = value;
+    _saveSettings();
+    notifyListeners();
+    await _applyReadingVoice();
+  }
+
   Future<void> _saveSettings() async {
     debugPrint('💾 _saveSettings: aiVoice=$_aiVoice, '
         'cloudSettingsLoaded=$_cloudSettingsLoaded');
@@ -532,6 +550,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       liveChatPal: _liveChatPal,
       alwaysListenForPal: _alwaysListenForPal,
       livePalVoice: _livePalVoice,
+      highQualityReading: _highQualityReading,
       preferredMethods: _preferredMethods,
       // Don't push settings to the cloud until the authoritative cloud values
       // have been loaded, so a transient pre-sync default can't overwrite them.
@@ -658,6 +677,104 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
       notifyListeners();
     });
+
+    // Apply the reading voice once settings have loaded (async; safe to await
+    // in the background).
+    await _applyReadingVoice();
+  }
+
+  /// Picks the narration voice based on [highQualityReading].
+  ///
+  /// ON  → scans the installed system voices and selects the best-sounding
+  ///        English one (enhanced / premium / neural / Siri-quality), which is
+  ///        markedly smoother than the compact default, and eases the rate.
+  /// OFF → clears any custom voice so the standard system voice is used.
+  ///
+  /// This is intentionally the single seam for narration voice quality: a
+  /// future cloud neural-TTS engine can branch here (or replace playback)
+  /// behind the same toggle without touching the chunk/playback logic.
+  Future<void> _applyReadingVoice() async {
+    try {
+      if (!_highQualityReading) {
+        // Standard voice + the app's default calm article pace.
+        await _flutterTts.setSpeechRate(0.45);
+        // Best-effort reset to the system default voice for the locale.
+        try {
+          await _flutterTts.setVoice({'name': '', 'locale': 'en-US'});
+        } catch (_) {/* not all platforms accept an empty voice */}
+        return;
+      }
+
+      final best = await _findBestEnhancedVoice();
+      if (best != null) {
+        await _flutterTts.setVoice(best);
+      }
+      // A slightly slower pace suits the richer voice.
+      await _flutterTts.setSpeechRate(0.44);
+    } catch (e) {
+      debugPrint('AppState._applyReadingVoice failed: $e');
+    }
+  }
+
+  /// Finds the highest-quality installed English voice, or null if none stand
+  /// out (in which case the caller keeps the current voice). Returns the raw
+  /// {name, locale} map flutter_tts expects for setVoice.
+  Future<Map<String, String>?> _findBestEnhancedVoice() async {
+    try {
+      final raw = await _flutterTts.getVoices;
+      if (raw is! List) return null;
+
+      // Normalise to a list of {name, locale} string maps.
+      final voices = <Map<String, String>>[];
+      for (final v in raw) {
+        if (v is Map) {
+          final name = v['name']?.toString();
+          final locale = v['locale']?.toString();
+          if (name != null && locale != null) {
+            voices.add({'name': name, 'locale': locale});
+          }
+        }
+      }
+      if (voices.isEmpty) return null;
+
+      // English voices only.
+      final english = voices
+          .where((v) => v['locale']!.toLowerCase().startsWith('en'))
+          .toList();
+      if (english.isEmpty) return null;
+
+      // Score by quality keywords apparent in the voice name. Apple exposes
+      // "enhanced"/"premium" (and Siri) voices; Android exposes network /
+      // neural voices. Higher score = better.
+      int score(String name) {
+        final n = name.toLowerCase();
+        var s = 0;
+        if (n.contains('premium')) s += 5;
+        if (n.contains('enhanced')) s += 4;
+        if (n.contains('neural')) s += 4;
+        if (n.contains('siri')) s += 3;
+        if (n.contains('network')) s += 2;
+        // Prefer en-US as a mild tiebreaker for a neutral accent.
+        return s;
+      }
+
+      english.sort((a, b) {
+        final byScore = score(b['name']!).compareTo(score(a['name']!));
+        if (byScore != 0) return byScore;
+        // en-US first among equals.
+        final aUs = a['locale']!.toLowerCase() == 'en-us' ? 1 : 0;
+        final bUs = b['locale']!.toLowerCase() == 'en-us' ? 1 : 0;
+        return bUs.compareTo(aUs);
+      });
+
+      final best = english.first;
+      // Only override if the best voice actually looks higher-quality than a
+      // plain compact voice; otherwise keep whatever the system default is.
+      return score(best['name']!) > 0 ? best : null;
+    } catch (e) {
+      debugPrint('AppState._findBestEnhancedVoice failed: $e');
+      return null;
+    }
   }
 
   /// Strips markdown for speech while PRESERVING structure: paragraph breaks
@@ -1737,6 +1854,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         settings['alwaysListenForPal'] as bool? ?? false;
     _livePalVoice =
         settings['livePalVoice'] as String? ?? kDefaultLivePalVoice;
+    _highQualityReading = settings['highQualityReading'] as bool? ?? false;
+    // Apply the (possibly restored) narration voice now that the preference is
+    // known. Fire-and-forget: TTS setup is async and must not block settings.
+    // ignore: discarded_futures
+    _applyReadingVoice();
     final methods = settings['preferredMethods'];
     if (methods is List) {
       _preferredMethods = methods.map((e) => e.toString()).toList();

@@ -852,6 +852,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 8),
         Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
         const SizedBox(height: 8),
+        _buildHighQualityReadingToggle(context, appState),
+        const SizedBox(height: 8),
+        Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
+        const SizedBox(height: 8),
         _buildLiveChatPalToggle(context, appState),
         if (LiveConversationService.isAvailable && appState.liveChatPal) ...[
           const SizedBox(height: 12), // Reduced from 18
@@ -1086,6 +1090,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'naturally and your pal responds as you speak.'
                 : 'Tapping the mic uses the standard pal: it listens, then '
                     'replies. Turn this on for a flowing, real-time chat.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                  height: 1.4,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// "Higher-quality voice" — when on, Wellness Reads narration uses the best
+  /// available enhanced/neural system voice for a smoother, more natural read.
+  Widget _buildHighQualityReadingToggle(
+      BuildContext context, AppState appState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final enabled = appState.highQualityReading;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Higher-quality voice for readings',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+            Switch.adaptive(
+              value: enabled,
+              onChanged: (value) => appState.setHighQualityReading(value),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, right: 48),
+          child: Text(
+            enabled
+                ? 'Wellness Reads are narrated with the smoothest voice your '
+                    'device has installed.'
+                : 'Wellness Reads use the standard system voice. Turn this on '
+                    'for a more natural, higher-quality read.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: isDark ? Colors.white54 : Colors.grey.shade600,
                   height: 1.4,
