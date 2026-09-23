@@ -29,6 +29,7 @@ import '../screens/weight_tracker_screen.dart';
 import '../screens/wellness_studio_screen.dart';
 import '../services/app_navigation_service.dart';
 import '../services/conversation_store.dart';
+import '../services/home_tool_cards_service.dart';
 import '../services/live_conversation_service.dart';
 import '../services/live_tool_bridge.dart';
 import 'conversation_mode_sheet.dart' show kLivePalPersona, livePalLanguageRule;
@@ -174,6 +175,7 @@ mixin LivePalSessionMixin<T extends StatefulWidget> on State<T> {
       calorieBudget: context.read<CalorieBudgetState>(),
       meditation: context.read<MeditationState>(),
       challenges: context.read<ChallengeState>(),
+      homeCards: context.read<HomeToolCardsService>(),
       onNavigate: _onNavRequested,
       onEndConversation: _onEndRequested,
     );

@@ -156,6 +156,118 @@ class HomeToolCard {
 
   static bool isToolCard(String id) => all.contains(id);
 
+  /// Keyword/alias phrases that map a spoken request to a card id. Each entry's
+  /// phrases are lower-cased; [resolveFromSpeech] scores a query against them.
+  /// Order roughly follows the tool grouping. Used by the Live pal's
+  /// `manage_home_card` voice action so users can say e.g. "add my weight
+  /// history to the home screen".
+  static const Map<String, List<String>> _spokenAliases = {
+    nutrition: ['nutrition progress', "today's progress", 'daily progress',
+        'nutrition today', 'macros progress'],
+    nutritionCoach: ['coach insights', 'nutrition coach', 'coach feedback',
+        'nutrition insights', 'coaching'],
+    nutritionRecentMeals: ['recent meals', 'last meals', 'meals i logged',
+        'recently logged meals'],
+    mealPlanner: ["today's meals", 'meal plan today', 'planned meals',
+        'my meals', 'meal planner today'],
+    mealNutritionSummary: ["today's nutrition", 'daily nutrition',
+        'nutrition summary', 'plan nutrition'],
+    mealInsights: ['meal plan insights', 'meal insights', 'plan insights'],
+    mealWeeklyOverview: ['weekly meal plan', 'weekly overview',
+        'monthly meal plan', 'meal plan overview', 'week plan'],
+    mealGrocery: ['grocery list', 'shopping list', 'groceries'],
+    calorieBudget: ['calorie budget', 'calories remaining', 'calorie ring',
+        'energy balance', 'kcal remaining', 'calorie dashboard'],
+    calorieInsight: ['calorie insights', 'calorie prediction', 'ai prediction',
+        'calorie ai'],
+    calorieStreak: ['calorie streak', 'budget streak', 'goal streak'],
+    calorieTimeline: ["today's timeline", 'calorie timeline',
+        'food timeline', 'daily timeline'],
+    calorieWeekly: ['calorie weekly', 'calories last 7 days',
+        'weekly calories', 'calorie trend'],
+    periodTracker: ['period tracker', 'cycle ring', 'cycle tracker',
+        'my cycle', 'period ring'],
+    periodPrediction: ['cycle predictions', 'next period', 'ovulation',
+        'period prediction', 'fertile window'],
+    periodPhase: ['phase insight', 'cycle phase', 'period phase',
+        'phase tips'],
+    hydration: ['hydration', 'water intake', 'hydration ring', 'water ring',
+        'hydration progress', 'drink water progress'],
+    hydrationInsights: ['hydration insights', 'smart insights', 'water insights',
+        'hydration reminders'],
+    hydrationScore: ['hydration score', 'water score'],
+    hydrationStreak: ['hydration streak', 'water streak'],
+    hydrationTimeline: ['hydration timeline', 'water timeline',
+        'water log timeline'],
+    hydrationWeekly: ['hydration weekly', 'water last 7 days',
+        'weekly hydration', 'hydration trend'],
+    bodyWeight: ['body weight', 'current weight', 'weight', 'my weight'],
+    bodyWeightChart: ['weight trend', 'weight chart', 'weight graph',
+        'weight over time'],
+    bodyWeightBmi: ['bmi', 'body mass index'],
+    bodyWeightHistory: ['weight history', 'weight log', 'past weights',
+        'weight entries'],
+  };
+
+  /// Resolves a free-text spoken phrase (e.g. "my weight history",
+  /// "calorie streak card") to a card id, or null if nothing matches well
+  /// enough. Case-insensitive; scores each card by how many of its alias
+  /// phrases the query contains, preferring the longest phrase matched so
+  /// "hydration score" beats a bare "hydration".
+  static String? resolveFromSpeech(String query) {
+    final matches = resolveCandidatesFromSpeech(query);
+    return matches.length == 1 ? matches.first : null;
+  }
+
+  /// Like [resolveFromSpeech] but returns EVERY card whose best-matching alias
+  /// phrase ties for the longest match — so the caller can disambiguate when a
+  /// vague phrase (e.g. "insights") maps to several tools. Returns an empty
+  /// list when nothing matches, one id for a clear match, or multiple ids for
+  /// an ambiguous one.
+  static List<String> resolveCandidatesFromSpeech(String query) {
+    final q = query
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (q.isEmpty) return const [];
+
+    // For each card, the length of its longest alias phrase contained in the
+    // query (0 if none match). Then keep all cards tied at the global best.
+    final matchLen = <String, int>{};
+    var bestLen = 0;
+    _spokenAliases.forEach((id, phrases) {
+      var cardBest = 0;
+      for (final phrase in phrases) {
+        if (q.contains(phrase) && phrase.length > cardBest) {
+          cardBest = phrase.length;
+        }
+      }
+      if (cardBest > 0) {
+        matchLen[id] = cardBest;
+        if (cardBest > bestLen) bestLen = cardBest;
+      }
+    });
+    if (bestLen == 0) return const [];
+    return matchLen.entries
+        .where((e) => e.value == bestLen)
+        .map((e) => e.key)
+        .toList();
+  }
+
+  /// A human-readable, comma-separated catalog of the addable cards grouped by
+  /// tool, for embedding in the pal's app-knowledge so it knows what it can add.
+  static String get spokenCatalog =>
+      'Nutrition Coach: Today\'s Progress, Coach Insights, Recent Meals. '
+      'Meal Planner: Today\'s Meals, Today\'s Nutrition, Meal Plan Insights, '
+      'Weekly Meal Plan, Grocery List. '
+      'Calorie Budget: Calorie Budget, Calorie Insights, Calorie Streak, '
+      'Today\'s Timeline, Calorie Last 7 Days. '
+      'Period Tracker: Period Tracker, Cycle Predictions, Phase Insight. '
+      'Hydration: Hydration, Hydration Insights, Hydration Score, '
+      'Hydration Streak, Hydration Timeline, Hydration Last 7 Days. '
+      'Body Weight: Body Weight, Weight Trend, BMI, Weight History.';
+
   /// Representative icon for a tool card id (used in the Home section header so
   /// tool cards match the default Home cards' icon + title formatting).
   static IconData iconFor(String id) {

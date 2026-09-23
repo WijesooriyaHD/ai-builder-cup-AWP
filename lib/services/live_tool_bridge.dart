@@ -22,6 +22,7 @@ import '../providers/check_in_state.dart';
 import '../providers/wellness_plan_state.dart';
 import 'accent_colors.dart';
 import 'app_navigation_service.dart';
+import 'home_tool_cards_service.dart';
 import 'notification_service.dart';
 
 /// A navigation destination the Live pal can request. Mirrors the tap-to-speak
@@ -96,6 +97,7 @@ class LiveToolBridge {
     required CalorieBudgetState calorieBudget,
     required MeditationState meditation,
     required ChallengeState challenges,
+    required HomeToolCardsService homeCards,
     this.onNavigate,
     this.onEndConversation,
   })  : _habits = habits,
@@ -107,7 +109,8 @@ class LiveToolBridge {
         _nutrition = nutrition,
         _calorieBudget = calorieBudget,
         _meditation = meditation,
-        _challenges = challenges;
+        _challenges = challenges,
+        _homeCards = homeCards;
 
   final HabitBuilderState _habits;
   final AppState _appState;
@@ -119,6 +122,7 @@ class LiveToolBridge {
   final CalorieBudgetState _calorieBudget;
   final MeditationState _meditation;
   final ChallengeState _challenges;
+  final HomeToolCardsService _homeCards;
 
   /// Called when the pal requests navigation. The UI orchestrates the
   /// end-session / reflection-gate / navigate flow (see ConversationModeSheet).
@@ -430,6 +434,38 @@ class LiveToolBridge {
             },
             optionalParameters: ['meal_type'],
           ),
+          // ── Home screen cards ───────────────────────────────────────
+          FunctionDeclaration(
+            'manage_home_card',
+            'Add or remove a wellness card on the user\'s Home screen. Use when '
+                'the user asks to put a tool card on Home (or take it off), e.g. '
+                '"add my weight history to the home screen", "show calorie '
+                'streak on home", "remove the hydration score card". The '
+                'card_name is a natural phrase naming the card; match it to one '
+                'of the available cards. Available cards — '
+                'Nutrition: Today\'s Progress, Coach Insights, Recent Meals; '
+                'Meal Planner: Today\'s Meals, Today\'s Nutrition, Meal Plan '
+                'Insights, Weekly Meal Plan, Grocery List; '
+                'Calorie Budget: Calorie Budget, Calorie Insights, Calorie '
+                'Streak, Today\'s Timeline, Calorie Last 7 Days; '
+                'Period Tracker: Period Tracker, Cycle Predictions, Phase '
+                'Insight; '
+                'Hydration: Hydration, Hydration Insights, Hydration Score, '
+                'Hydration Streak, Hydration Timeline, Hydration Last 7 Days; '
+                'Body Weight: Body Weight, Weight Trend, BMI, Weight History.',
+            parameters: {
+              'action': Schema.enumString(
+                enumValues: const ['add', 'remove'],
+                description:
+                    'Whether to add the card to Home or remove it from Home.',
+              ),
+              'card_name': Schema.string(
+                description:
+                    'The card to add/remove, named in natural language, '
+                    'e.g. "weight history", "calorie streak", "grocery list".',
+              ),
+            },
+          ),
           // ── Navigation ──────────────────────────────────────────────
           FunctionDeclaration(
             'navigate',
@@ -527,6 +563,8 @@ class LiveToolBridge {
         return _logPeriodStart();
       case 'log_meal':
         return _logMeal(args);
+      case 'manage_home_card':
+        return _manageHomeCard(args);
       case 'navigate':
         return _navigate(args);
       case 'end_conversation':
@@ -1069,6 +1107,79 @@ class LiveToolBridge {
 
   String _titleCase(String w) =>
       w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}';
+
+  // ── Home screen cards ─────────────────────────────────────────────────
+
+  Future<Map<String, Object?>> _manageHomeCard(
+      Map<String, Object?> args) async {
+    final action = (args['action'] as String?)?.toLowerCase();
+    final rawName = (args['card_name'] as String?)?.trim();
+    if (rawName == null || rawName.isEmpty) {
+      return {
+        'status': 'error',
+        'message': 'Which card? Name a wellness card to add or remove.',
+      };
+    }
+    final candidates = HomeToolCard.resolveCandidatesFromSpeech(rawName);
+    if (candidates.isEmpty) {
+      return {
+        'status': 'error',
+        'message':
+            'I couldn\'t match "$rawName" to a card. You can add cards like '
+            'Weight History, Calorie Streak, or Hydration Score.',
+      };
+    }
+    if (candidates.length > 1) {
+      // Ambiguous phrase (e.g. "insights") — ask the user which one, listing
+      // the tied options by their friendly titles.
+      final options = candidates.map(HomeToolCard.titleFor).toList();
+      final joined = options.length == 2
+          ? '${options[0]} or ${options[1]}'
+          : '${options.sublist(0, options.length - 1).join(', ')}, '
+              'or ${options.last}';
+      return {
+        'status': 'needs_clarification',
+        'message': 'Did you mean $joined? Ask the user which one, then call '
+            'manage_home_card again with the specific card name.',
+      };
+    }
+    final id = candidates.first;
+    final title = HomeToolCard.titleFor(id);
+    try {
+      if (action == 'remove') {
+        if (!_homeCards.isEnabled(id)) {
+          return {
+            'status': 'ok',
+            'message': 'The $title card isn\'t on your Home screen.',
+          };
+        }
+        await _homeCards.remove(id);
+        return {
+          'status': 'ok',
+          'message': 'Removed the $title card from your Home screen.',
+        };
+      }
+      // Default to add.
+      if (_homeCards.isEnabled(id)) {
+        return {
+          'status': 'ok',
+          'message':
+              'The $title card is already on your Home screen. You can pin '
+              'or re-arrange it with a long press.',
+        };
+      }
+      await _homeCards.add(id);
+      return {
+        'status': 'ok',
+        'message':
+            'Added the $title card to your Home screen. You can pin or '
+            're-arrange it there with a long press.',
+      };
+    } catch (e) {
+      if (kDebugMode) debugPrint('LiveToolBridge.manage_home_card failed: $e');
+      return {'status': 'error', 'message': 'Could not update your Home cards.'};
+    }
+  }
 
   // ── Navigation ──────────────────────────────────────────────────────────
 
