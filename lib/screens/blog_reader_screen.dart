@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/blog_post.dart';
 import '../providers/app_state.dart';
 
@@ -124,23 +123,11 @@ class _BlogReaderScreenState extends State<BlogReaderScreen> {
               ),
             ),
 
-            // Content
+            // Content — paragraphs are rendered as narration chunks so the
+            // one currently being read aloud can be highlighted in sync.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: MarkdownBody(
-                data: widget.blog.content,
-                selectable: true,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(
-                    fontSize: 16,
-                    height: 1.7,
-                    color: Colors.black87,
-                  ),
-                  h1: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  h2: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  listBullet: const TextStyle(fontSize: 16, color: Colors.black87),
-                ),
-              ),
+              child: _NarratedContent(blog: widget.blog),
             ),
 
             // Survey (if available)
@@ -288,6 +275,108 @@ class _BlogReaderScreenState extends State<BlogReaderScreen> {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Renders the article body as narration chunks and highlights the chunk that
+/// is currently being read aloud (kept in sync with [AppState]'s TTS). When
+/// nothing is playing it just shows the plain text. Auto-scrolls the active
+/// chunk into view.
+class _NarratedContent extends StatefulWidget {
+  const _NarratedContent({required this.blog});
+  final BlogPost blog;
+
+  @override
+  State<_NarratedContent> createState() => _NarratedContentState();
+}
+
+class _NarratedContentState extends State<_NarratedContent> {
+  late final List<String> _chunks;
+  late final List<String> _normChunks;
+  // A GlobalKey per chunk so we can scroll the active one into view.
+  late final List<GlobalKey> _keys;
+  int _lastActive = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    final appState = context.read<AppState>();
+    _chunks = appState.narrationChunksFor(widget.blog.content);
+    _normChunks = _chunks.map(_normalize).toList();
+    _keys = List.generate(_chunks.length, (_) => GlobalKey());
+  }
+
+  static String _normalize(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  /// The index of the chunk currently narrated that also belongs to THIS
+  /// article's body, or -1. Matches by normalised text so the narrator's
+  /// title/excerpt chunks (which aren't in the body) simply don't match.
+  int _activeIndex(AppState appState) {
+    if (!appState.isNarratingBlog(widget.blog.id)) return -1;
+    final current = appState.currentNarratedChunk;
+    if (current == null) return -1;
+    final norm = _normalize(current);
+    return _normChunks.indexOf(norm);
+  }
+
+  void _maybeScrollTo(int index) {
+    if (index < 0 || index >= _keys.length) return;
+    final ctx = _keys[index].currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      alignment: 0.3, // keep the active line in the upper third
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final active = _activeIndex(appState);
+
+    // Scroll the newly-active chunk into view after this frame.
+    if (active != _lastActive) {
+      _lastActive = active;
+      if (active >= 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _maybeScrollTo(active));
+      }
+    }
+
+    final primary = Theme.of(context).primaryColor;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List.generate(_chunks.length, (i) {
+        final isActive = i == active;
+        return Container(
+          key: _keys[i],
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isActive ? primary.withOpacity(0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border(
+              left: BorderSide(
+                color: isActive ? primary : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Text(
+            _chunks[i],
+            style: TextStyle(
+              fontSize: 16,
+              height: 1.7,
+              color: isActive ? Colors.black : Colors.black87,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        );
+      }),
     );
   }
 }

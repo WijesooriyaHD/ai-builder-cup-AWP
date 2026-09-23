@@ -56,15 +56,57 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   double _audioProgress = 0.0;
   int _audioLastOffset = 0;
   String _audioFullText = "";
-  static const int _charsPerSecond = 10;
-  
+  static const int _charsPerSecond = 15;
+
+  // Narration is spoken in natural chunks (paragraphs / sentences) so pauses
+  // land at sentence boundaries and the read sounds smooth instead of one long
+  // run-on. [_audioChunks] holds the ordered chunks; [_audioChunkStart] the
+  // cumulative character offset where each chunk begins in [_audioFullText];
+  // [_audioChunkIndex] the chunk currently being (or about to be) spoken.
+  List<String> _audioChunks = const [];
+  List<int> _audioChunkStart = const [];
+  int _audioChunkIndex = 0;
+  // Total spoken length across chunks (sum of chunk lengths + joins). Used as
+  // the progress/seek denominator so it always matches the chunk offsets and
+  // progress stays monotonic and ends at ~1.0.
+  int _audioSpokenLength = 1;
+  // Guards the sequential speak loop from being advanced by a completion
+  // event that fires after we deliberately stopped/paused/seeked.
+  int _speakGeneration = 0;
+
   BlogPost? get currentAudioBlog => _currentAudioBlog;
   bool get isAudioPlaying => _isAudioPlaying;
   double get audioProgress => _audioProgress;
   int get audioLastOffset => _audioLastOffset;
   String get audioFullText => _audioFullText;
-  int get audioTotalSeconds => _audioFullText.length ~/ _charsPerSecond;
+  int get audioTotalSeconds => _audioSpokenLength ~/ _charsPerSecond;
   int get audioElapsedSeconds => (_audioProgress * audioTotalSeconds).toInt();
+
+  /// The index of the chunk currently being narrated (0-based), or -1 when
+  /// nothing is playing. Used by the reader view to highlight the sentence.
+  int get audioChunkIndex =>
+      (_isAudioPlaying && _audioChunks.isNotEmpty) ? _audioChunkIndex : -1;
+
+  /// The text of the chunk currently being narrated, or null. The reader
+  /// matches this (normalised) against its own displayed paragraphs to
+  /// highlight the active sentence/paragraph.
+  String? get currentNarratedChunk =>
+      (_isAudioPlaying &&
+              _audioChunkIndex >= 0 &&
+              _audioChunkIndex < _audioChunks.length)
+          ? _audioChunks[_audioChunkIndex]
+          : null;
+
+  /// Whether narration is currently for the blog with [blogId] (so a reader
+  /// only highlights when ITS article is the one playing).
+  bool isNarratingBlog(String blogId) =>
+      _isAudioPlaying && _currentAudioBlog?.id == blogId;
+
+  /// The normalised speakable chunks for [text], using the SAME cleaning +
+  /// chunking the narrator uses. Lets the reader build a display that lines up
+  /// with the spoken chunks so highlighting matches word-for-word.
+  List<String> narrationChunksFor(String text) =>
+      _buildChunks(_cleanMarkdownForTts(text));
 
   List<Dream> _dreams = [];
   List<TravelMemory> _travelMemories = [];
@@ -562,7 +604,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _initTts() async {
     await _flutterTts.setLanguage("en-US");
     await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.5);
+    // A slightly slower, calmer pace reads more naturally for articles than
+    // the previous 0.5. (flutter_tts rate is 0..1; ~0.45 is an unhurried read.)
+    await _flutterTts.setSpeechRate(0.45);
+    // Ensure speak() futures resolve on utterance completion so we can chain
+    // chunks reliably (especially on iOS, where without this the completion
+    // handler timing is unreliable).
+    await _flutterTts.awaitSpeakCompletion(true);
 
     _flutterTts.setStartHandler(() {
       _isAudioPlaying = true;
@@ -575,30 +623,29 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
     });
 
-    _flutterTts.setCompletionHandler(() {
-      _isAudioPlaying = false;
-      _audioProgress = 1.0;
-      _audioLastOffset = 0;
+    // With awaitSpeakCompletion(true), each speak() future resolves when its
+    // utterance finishes, so the chunk loop in [_runChunkLoop] drives
+    // advancement. We deliberately do NOT advance from here (driving it from
+    // both the awaited future AND this callback caused chunks to be skipped /
+    // the read to stop early).
+    _flutterTts.setCompletionHandler(() {});
+
+    // Within a chunk, refine progress using the word boundary so the slider
+    // moves continuously rather than jumping a whole chunk at a time.
+    _flutterTts.setProgressHandler((text, start, end, word) {
+      if (_audioFullText.isEmpty || _audioChunks.isEmpty) return;
+      final base = _audioChunkIndex < _audioChunkStart.length
+          ? _audioChunkStart[_audioChunkIndex]
+          : _audioLastOffset;
+      final pos = (base + start).clamp(0, _audioSpokenLength);
+      _audioProgress = pos / _audioSpokenLength;
       if (_isAudioHandlerReady) {
         _audioHandler?.updatePlaybackState(
-          playing: false,
-          position: Duration(seconds: audioTotalSeconds),
+          playing: _isAudioPlaying,
+          position: Duration(seconds: audioElapsedSeconds),
         );
       }
       notifyListeners();
-    });
-
-    _flutterTts.setProgressHandler((text, start, end, word) {
-      if (_audioFullText.isNotEmpty) {
-        _audioProgress = (_audioLastOffset + start) / _audioFullText.length;
-        if (_isAudioHandlerReady) {
-          _audioHandler?.updatePlaybackState(
-            playing: _isAudioPlaying,
-            position: Duration(seconds: audioElapsedSeconds),
-          );
-        }
-        notifyListeners();
-      }
     });
 
     _flutterTts.setErrorHandler((msg) {
@@ -613,54 +660,188 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
+  /// Strips markdown for speech while PRESERVING structure: paragraph breaks
+  /// and list items are kept as line breaks so [_buildChunks] can turn them
+  /// into natural pauses. (The old version collapsed everything to a single
+  /// line, which made the read a long run-on.)
   String _cleanMarkdownForTts(String text) {
-    // Remove headers (#, ##, etc.)
-    var cleaned = text.replaceAll(RegExp(r'#+\s*'), '');
-    // Remove bold/italic (**, *, __, _)
-    cleaned = cleaned.replaceAll(RegExp(r'\*\*|__|\*|_'), '');
-    // Remove links ([text](url)) - keep only text
-    cleaned = cleaned.replaceAllMapped(RegExp(r'\[(.*?)\]\(.*?\)') , (match) => match.group(1) ?? '');
-    // Remove images (![alt](url))
-    cleaned = cleaned.replaceAll(RegExp(r'!\[.*?\]\(.*?\)') , '');
-    // Remove extra whitespace
-    cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ');
+    var cleaned = text;
+    // Images first (![alt](url)) — drop entirely.
+    cleaned = cleaned.replaceAll(RegExp(r'!\[.*?\]\(.*?\)'), '');
+    // Links ([text](url)) — keep only the visible text.
+    cleaned = cleaned.replaceAllMapped(
+        RegExp(r'\[(.*?)\]\(.*?\)'), (m) => m.group(1) ?? '');
+    // Headers (#, ##, …) — keep the heading text (it becomes its own chunk,
+    // read then briefly paused before the body).
+    cleaned = cleaned.replaceAll(RegExp(r'^#+\s*', multiLine: true), '');
+    // Blockquotes.
+    cleaned = cleaned.replaceAll(RegExp(r'^>\s?', multiLine: true), '');
+    // Bullet / numbered list markers → keep the item text on its own line.
+    cleaned = cleaned.replaceAll(
+        RegExp(r'^\s*[-*+]\s+', multiLine: true), '');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'^\s*\d+\.\s+', multiLine: true), '');
+    // Inline emphasis / code.
+    cleaned = cleaned.replaceAll(RegExp(r'\*\*|__|\*|_|`'), '');
+    // Normalise spaces WITHIN a line, but preserve line breaks.
+    cleaned = cleaned.replaceAll(RegExp(r'[ \t]+'), ' ');
+    // Collapse 3+ newlines to a paragraph break.
+    cleaned = cleaned.replaceAll(RegExp(r'\n{3,}'), '\n\n');
     return cleaned.trim();
+  }
+
+  /// Splits cleaned narration text into speakable chunks — one per paragraph,
+  /// further split so no single chunk is enormous (long paragraphs break at
+  /// sentence boundaries). Each chunk is spoken separately so a brief pause
+  /// falls between them, giving the read a natural cadence.
+  List<String> _buildChunks(String cleaned) {
+    const maxChunkChars = 320;
+    final chunks = <String>[];
+    for (final para in cleaned.split(RegExp(r'\n+'))) {
+      final p = para.trim();
+      if (p.isEmpty) continue;
+      if (p.length <= maxChunkChars) {
+        chunks.add(p);
+        continue;
+      }
+      // Long paragraph: break into sentences, then re-pack up to the limit.
+      final sentences = p.split(RegExp(r'(?<=[.!?])\s+'));
+      final buf = StringBuffer();
+      for (final s in sentences) {
+        if (buf.isNotEmpty && buf.length + s.length + 1 > maxChunkChars) {
+          chunks.add(buf.toString().trim());
+          buf.clear();
+        }
+        if (buf.isNotEmpty) buf.write(' ');
+        buf.write(s);
+      }
+      if (buf.isNotEmpty) chunks.add(buf.toString().trim());
+    }
+    return chunks;
   }
 
   Future<void> playBlog(BlogPost blog, {List<BlogPost>? allBlogs}) async {
     if (allBlogs != null) {
       _allBlogs = allBlogs;
     }
-    
+
     if (_currentAudioBlog?.id != blog.id) {
       await stopBlog();
       _currentAudioBlog = blog;
-      _audioFullText = _cleanMarkdownForTts("${blog.title}. ${blog.excerpt}. ${blog.content}");
+      // Separate the headline, intro, and body with paragraph breaks so each
+      // reads as its own chunk with a natural pause between them.
+      final composed =
+          '${blog.title}\n\n${blog.excerpt}\n\n${blog.content}';
+      _audioFullText = _cleanMarkdownForTts(composed);
+      _prepareChunks();
       _audioProgress = 0.0;
       _audioLastOffset = 0;
+      _audioChunkIndex = 0;
       if (_isAudioHandlerReady) {
         _audioHandler?.updateMetadata(blog);
       }
     }
 
+    // Finished previously → restart from the top. Otherwise resume from the
+    // chunk that contains the current progress point.
     if (_audioProgress >= 0.99) {
-      _audioLastOffset = 0;
+      _audioChunkIndex = 0;
       _audioProgress = 0.0;
     } else {
-      _audioLastOffset = (_audioProgress * _audioFullText.length).toInt();
+      _audioChunkIndex = _chunkIndexForProgress(_audioProgress);
     }
 
-    final textToSpeak = _audioFullText.substring(_audioLastOffset);
-    if (textToSpeak.isNotEmpty) {
-      _isAudioPlaying = true;
-      if (_isAudioHandlerReady) {
-        _audioHandler?.updatePlaybackState(
-          playing: true,
-          position: Duration(seconds: audioElapsedSeconds),
-        );
+    if (_audioChunks.isEmpty) return;
+    _isAudioPlaying = true;
+    if (_isAudioHandlerReady) {
+      _audioHandler?.updatePlaybackState(
+        playing: true,
+        position: Duration(seconds: audioElapsedSeconds),
+      );
+    }
+    notifyListeners();
+    await _speakFromCurrentChunk();
+  }
+
+  /// Builds [_audioChunks] and their cumulative start offsets from the current
+  /// [_audioFullText]. Offsets let progress/seek map between the chunk cursor
+  /// and a character position in the full text.
+  void _prepareChunks() {
+    _audioChunks = _buildChunks(_audioFullText);
+    final starts = <int>[];
+    var cursor = 0;
+    for (final c in _audioChunks) {
+      starts.add(cursor);
+      // +1 approximates the pause/space joining chunks.
+      cursor += c.length + 1;
+    }
+    _audioChunkStart = starts;
+    _audioSpokenLength = cursor > 0 ? cursor : 1;
+  }
+
+  int _chunkIndexForProgress(double progress) {
+    if (_audioChunks.isEmpty || _audioFullText.isEmpty) return 0;
+    final targetChar = (progress * _audioSpokenLength).toInt();
+    var idx = 0;
+    for (var i = 0; i < _audioChunkStart.length; i++) {
+      if (_audioChunkStart[i] <= targetChar) {
+        idx = i;
+      } else {
+        break;
       }
+    }
+    return idx;
+  }
+
+  /// Speaks every chunk from [_audioChunkIndex] to the end, one at a time,
+  /// awaiting each so a brief natural pause falls between them. Because
+  /// awaitSpeakCompletion(true) makes speak() resolve on completion, this loop
+  /// is the SINGLE driver of advancement (the completion handler does not
+  /// advance). Guarded by [_speakGeneration] so a stop/pause/seek that bumps
+  /// the generation cleanly ends a stale loop.
+  Future<void> _speakFromCurrentChunk() async {
+    final gen = _speakGeneration;
+    while (_isAudioPlaying &&
+        gen == _speakGeneration &&
+        _audioChunkIndex < _audioChunks.length) {
+      final chunk = _audioChunks[_audioChunkIndex];
+      _audioLastOffset = _audioChunkIndex < _audioChunkStart.length
+          ? _audioChunkStart[_audioChunkIndex]
+          : 0;
+
+      if (chunk.trim().isNotEmpty) {
+        // Resolves when the utterance finishes (awaitSpeakCompletion(true)).
+        await _flutterTts.speak(chunk);
+      }
+
+      // A stop/pause/seek during the utterance invalidates this loop.
+      if (!_isAudioPlaying || gen != _speakGeneration) return;
+
+      final next = _audioChunkIndex + 1;
+      if (next >= _audioChunks.length) {
+        // Whole article done.
+        _audioChunkIndex = next;
+        _isAudioPlaying = false;
+        _audioProgress = 1.0;
+        _audioChunkIndex = 0;
+        _audioLastOffset = 0;
+        if (_isAudioHandlerReady) {
+          _audioHandler?.updatePlaybackState(
+            playing: false,
+            position: Duration(seconds: audioTotalSeconds),
+          );
+        }
+        notifyListeners();
+        return;
+      }
+
+      // Advance and snap progress to the next chunk boundary (monotonic).
+      _audioChunkIndex = next;
+      _audioProgress = _audioChunkStart[_audioChunkIndex] / _audioSpokenLength;
       notifyListeners();
-      await _flutterTts.speak(textToSpeak);
+
+      // A brief breath between chunks for a natural cadence.
+      await Future<void>.delayed(const Duration(milliseconds: 260));
     }
   }
 
@@ -687,8 +868,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> pauseBlog() async {
-    await _flutterTts.pause();
+    // Invalidate any in-flight chunk chaining, then stop the engine. We use
+    // stop() rather than pause() because iOS TTS cannot reliably resume a
+    // paused utterance; we resume cleanly at the current chunk boundary.
+    _speakGeneration++;
     _isAudioPlaying = false;
+    await _flutterTts.stop();
     if (_isAudioHandlerReady) {
       _audioHandler?.updatePlaybackState(
         playing: false,
@@ -699,12 +884,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> stopBlog() async {
+    _speakGeneration++;
     await _flutterTts.stop();
     _isAudioPlaying = false;
     _currentAudioBlog = null;
     _audioProgress = 0.0;
     _audioLastOffset = 0;
     _audioFullText = "";
+    _audioChunks = const [];
+    _audioChunkStart = const [];
+    _audioChunkIndex = 0;
+    _audioSpokenLength = 1;
     if (_isAudioHandlerReady) {
       _audioHandler?.updatePlaybackState(
         playing: false,
@@ -716,19 +906,28 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> seekAudio(double value) async {
     if (_currentAudioBlog == null) return;
-    
+
+    // Cancel current chunk chaining and stop the engine.
+    _speakGeneration++;
     final wasPlaying = _isAudioPlaying;
+    _isAudioPlaying = false;
     await _flutterTts.stop();
-    
-    _audioProgress = value;
-    _audioLastOffset = (value * _audioFullText.length).toInt();
+
+    // Snap the seek to the nearest chunk boundary so playback resumes at a
+    // clean sentence/paragraph start instead of mid-word.
+    _audioChunkIndex = _chunkIndexForProgress(value.clamp(0.0, 1.0));
+    _audioProgress = _audioChunks.isEmpty
+        ? value
+        : _audioChunkStart[_audioChunkIndex] / _audioSpokenLength;
+    _audioLastOffset = _audioChunks.isEmpty
+        ? (value * _audioSpokenLength).toInt()
+        : _audioChunkStart[_audioChunkIndex];
     notifyListeners();
 
     if (wasPlaying) {
-      final textToSpeak = _audioFullText.substring(_audioLastOffset);
-      if (textToSpeak.isNotEmpty) {
-        await _flutterTts.speak(textToSpeak);
-      }
+      _isAudioPlaying = true;
+      notifyListeners();
+      await _speakFromCurrentChunk();
     }
   }
 
