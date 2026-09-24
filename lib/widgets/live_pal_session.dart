@@ -206,30 +206,58 @@ mixin LivePalSessionMixin<T extends StatefulWidget> on State<T> {
       isPremium: true,
       systemInstruction: systemInstruction,
       voiceName: voiceName,
-      openingPrompt: _buildOpeningGreetingPrompt(),
+      openingPrompt: await _buildOpeningGreetingPrompt(),
     );
   }
 
   /// Builds the one-off prompt that makes the pal open with a warm, spoken
-  /// greeting — by name when we know it and matched to the time of day. It's a
-  /// SYSTEM-EVENT instruction (not words the user said), kept short so the pal
-  /// greets and then hands the floor straight back to the user.
-  String _buildOpeningGreetingPrompt() {
+  /// greeting. It's a SYSTEM-EVENT instruction (not words the user said), kept
+  /// short so the pal greets and then hands the floor straight back to the user.
+  ///
+  /// The FIRST Live Pal conversation of the day (by voice OR mic tap) gets a
+  /// time-of-day greeting ("Good morning/evening, {name}…"). Every later
+  /// conversation the same day skips the time-of-day phrasing and uses a
+  /// lighter, varied name-based greeting, so opening the pal repeatedly doesn't
+  /// feel like Groundhog Day.
+  Future<String> _buildOpeningGreetingPrompt() async {
     final name = _resolveUserFirstName();
-    final hour = DateTime.now().hour;
-    final partOfDay = hour < 12
-        ? 'morning'
-        : (hour < 17 ? 'afternoon' : 'evening');
+    final isFirstToday =
+        await context.read<AppState>().consumeIsFirstLivePalGreetingToday();
+
+    if (isFirstToday) {
+      final hour = DateTime.now().hour;
+      final partOfDay =
+          hour < 12 ? 'morning' : (hour < 17 ? 'afternoon' : 'evening');
+      final nameClause =
+          name != null ? 'Greet them by name ($name).' : 'Greet them warmly.';
+      final example = name != null
+          ? '"Good $partOfDay $name, how are you today?"'
+          : '"Good $partOfDay, how are you today?"';
+      return '[SYSTEM EVENT: This is the first conversation of the day and it '
+          'just opened. $nameClause Give a short, warm spoken greeting that '
+          'includes "good $partOfDay" and asks how they are today (for '
+          'example, $example). Keep it to one sentence, sound natural (not '
+          'scripted), then stop and wait for their reply. Do not imply the '
+          'user said anything yet.]';
+    }
+
+    // A subsequent open today: no "good morning/evening" — a lighter, varied
+    // greeting that uses their name. Let the model pick the wording so it
+    // differs each time rather than repeating a fixed line.
     final nameClause = name != null
-        ? 'Greet them by name ($name).'
+        ? 'Address them by name ($name).'
         : 'Greet them warmly.';
-    final example =
-        name != null ? '"Hi $name, how are you today?"' : '"Hi, how are you today?"';
-    return '[SYSTEM EVENT: The conversation just opened. $nameClause Give a '
-        'short, warm spoken greeting suited to the $partOfDay and ask how '
-        'they are today (for example, $example). Keep it to one sentence, '
-        'sound natural (not scripted), then stop and wait for their reply. Do '
-        'not imply the user said anything yet.]';
+    final example = name != null
+        ? '(for example, "Hey $name, what\'s on your mind?" or "Welcome '
+            'back, $name — how can I help?")'
+        : '(for example, "Hey, what\'s on your mind?")';
+    return '[SYSTEM EVENT: The user has opened another conversation with you '
+        'later the same day. Do NOT say "good morning", "good afternoon", or '
+        '"good evening". $nameClause Give a short, warm, casual welcome-back '
+        'greeting and invite them to talk $example. VARY the wording from a '
+        'plain "how are you"; keep it to one sentence, sound natural, then '
+        'stop and wait for their reply. Do not imply the user said anything '
+        'yet.]';
   }
 
   /// Called (from the tool bridge) when the pal wants to navigate somewhere.

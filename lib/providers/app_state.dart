@@ -2142,6 +2142,34 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  static const String _lastLivePalGreetingDateKey =
+      'aiwellnesspal_live_pal_greeting_date';
+
+  /// Whether THIS Live Pal open is the first one today — used to give a
+  /// time-of-day greeting ("Good morning/evening, {name}…") only on the first
+  /// conversation of the day, and a lighter name-based greeting thereafter.
+  ///
+  /// Consuming (marking): records today's date on the first call each day, so
+  /// subsequent calls the same day return false. Best-effort; on any storage
+  /// error it returns true (a first-of-day greeting is the safe default).
+  Future<bool> consumeIsFirstLivePalGreetingToday() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final today = DateTime.now();
+      final todayKey =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-'
+          '${today.day.toString().padLeft(2, '0')}';
+      final last = prefs.getString(_lastLivePalGreetingDateKey);
+      if (last == todayKey) return false;
+      await prefs.setString(_lastLivePalGreetingDateKey, todayKey);
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ Error checking first Live Pal greeting: $e');
+      return true;
+    }
+  }
+
   Future<List<Achievement>> addDream(String title, {DateTime? deadline, int? themeColor, int? themeIcon, List<Map<String, dynamic>>? initialSteps}) async {
     // Determine steps source: provided AI steps OR generated mock steps
     final steps = (initialSteps != null && initialSteps.isNotEmpty)
