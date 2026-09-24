@@ -88,7 +88,11 @@ const String kWellnessPalAppKnowledge =
       '"Today\'s Plan", built from a quick daily check-in (energy, mood, body '
       'recovery, and time available). The app has five tabs: Home (Today\'s '
       'Plan + check-in), Intentions (wellness goals), Habit Builder (habits + '
-      'Challenges), Reflection (journal + saved conversations), and Settings. '
+      'Challenges), Reflection, and Settings. The Reflection tab holds the '
+      'journal AND "Recent Conversations" — every Live chat is saved there as a '
+      'conversation card (it is NOT auto-saved as a reflection). From a saved '
+      'conversation the user taps "Generate Reflection" to turn it into a '
+      'reflection they can then revisit and discuss. '
       'The Wellness Toolkit includes: Hydration Coach (water tracking), '
       'Nutrition Coach (log meals), Meal Planner, Calorie Budget (exercise + '
       'calories), Sleep Coach, Meditation Pal (breathing + guided sessions), '
@@ -193,9 +197,15 @@ const String _livePalActionRules =
       '\n'
       'When the user wants to finish ("let\'s end", "I\'m done", "goodbye", '
       '"stop"), give a brief warm sign-off, then call end_conversation to '
-      'close the session. Do NOT ask about saving — the conversation is kept '
-      'automatically and can become a reflection later. Always call '
-      'end_conversation; never just say goodbye without it.';
+      'close the session. Do NOT ask about saving. IMPORTANT — be accurate '
+      'about what happens to the chat: this conversation is saved to "Recent '
+      'Conversations" (in the Reflection tab), NOT automatically turned into a '
+      'reflection. From that saved conversation the user can tap "Generate '
+      'Reflection" to create a reflection and then discuss it further. So if '
+      'the user asks, say it\'s kept under Recent Conversations and they can '
+      'generate a reflection from it there — never claim it was automatically '
+      'saved as a reflection. Always call end_conversation; never just say '
+      'goodbye without it.';
 
 /// The full Live pal persona: shared identity + shared app knowledge +
 /// Live-only action rules.

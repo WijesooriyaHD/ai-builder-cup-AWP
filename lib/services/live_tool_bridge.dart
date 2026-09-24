@@ -472,8 +472,8 @@ class LiveToolBridge {
             'Open another screen/tab in the app (e.g. settings, sleep coach, '
                 'meditation). Set has_wellness_context to true ONLY if the '
                 'conversation so far included meaningful wellness discussion '
-                '(feelings, stress, sleep, habits, goals) that would be worth '
-                'saving as a reflection; set it to false for a plain request '
+                '(feelings, stress, sleep, habits, goals) worth keeping as a '
+                'saved conversation; set it to false for a plain request '
                 'like "go to settings" with no wellness discussion.',
             parameters: {
               'destination': Schema.enumString(
@@ -503,7 +503,7 @@ class LiveToolBridge {
               'has_wellness_context': Schema.boolean(
                 description:
                     'True if the conversation had wellness content worth '
-                    'saving as a reflection before leaving.',
+                    'keeping as a saved conversation before leaving.',
               ),
             },
           ),
