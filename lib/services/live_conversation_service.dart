@@ -278,6 +278,10 @@ class LiveConversationService extends ChangeNotifier {
   Timer? _idleCheckInTimer;
   Timer? _idleGoodbyeTimer;
   bool _idleCheckInSent = false;
+  // True from connect until the opening greeting has actually been delivered.
+  // While set, the idle check-in must NOT arm/fire, so the greeting and the
+  // idle "Are you still there?" can never race or fire out of order.
+  bool _greetingPending = false;
   bool _idleCheckInInFlight = false;
   bool _awaitingIdleResponse = false;
 
@@ -779,6 +783,7 @@ class LiveConversationService extends ChangeNotifier {
     String? systemInstruction,
     String? modelId,
     String? voiceName,
+    String? openingPrompt,
   }) async {
     if (!isAvailable) {
       _fail('Conversation Mode is not enabled in this build.');
@@ -817,6 +822,7 @@ class LiveConversationService extends ChangeNotifier {
     _lastConfirmedUserSpeechAt = DateTime.fromMillisecondsSinceEpoch(0);
     _stopIdleCheckIn();
     _idleCheckInSent = false;
+    _greetingPending = false;
 
     debugPrint('LiveConversationService: start() — requesting mic permission…');
     try {
@@ -893,7 +899,16 @@ class LiveConversationService extends ChangeNotifier {
       }
       _setState(LiveConversationState.active);
       _startMicWatchdog();
-      _armIdleCheckIn(newSilencePeriod: true);
+      // If we're going to greet, hold the idle check-in until the greeting has
+      // actually been delivered (armed inside _sendOpeningGreeting). Otherwise
+      // arm it now. This prevents the greeting and the idle "Are you still
+      // there?" from racing / firing out of order.
+      final willGreet =
+          openingPrompt != null && openingPrompt.trim().isNotEmpty;
+      _greetingPending = willGreet;
+      if (!willGreet) {
+        _armIdleCheckIn(newSilencePeriod: true);
+      }
 
       // Stream mic audio up as realtime PCM chunks. The Live API expects raw
       // 16-bit LE PCM at 16 kHz, tagged 'audio/pcm;rate=16000'. firebase_ai
@@ -908,9 +923,74 @@ class LiveConversationService extends ChangeNotifier {
       // completes, so we re-subscribe for the next turn until the session is
       // closed — that's what makes it a back-and-forth conversation.
       unawaited(_receiveLoop());
+
+      // Optional opening greeting: Gemini Live waits for the user to speak
+      // first, so to have the pal greet on open we send a one-off system-event
+      // prompt (same mechanism as the idle check-in) that makes it say a short
+      // hello. The mic is already live, so the user can reply immediately.
+      if (willGreet) {
+        unawaited(_sendOpeningGreeting(_session, openingPrompt.trim()));
+      }
     } catch (e) {
       _fail('Could not start Conversation Mode: $e');
     }
+  }
+
+  /// Sends the opening greeting so the pal speaks first, RETRYING until the
+  /// session actually accepts it (the socket often isn't ready to take a turn
+  /// the instant connect() returns, which previously made the greeting silently
+  /// fail — no hello — or arrive so late it collided with the idle check-in).
+  /// Once delivered (or after giving up), the idle check-in is armed so the
+  /// 45s "still there?" timer only starts counting from AFTER the greeting.
+  Future<void> _sendOpeningGreeting(LiveSession? session, String prompt) async {
+    if (session == null) {
+      _greetingPending = false;
+      _armIdleCheckIn(newSilencePeriod: true);
+      return;
+    }
+    var sent = false;
+    // Up to ~5 attempts over ~2s: 300ms, then 400ms between tries.
+    for (var attempt = 0; attempt < 5; attempt++) {
+      await Future<void>.delayed(
+          Duration(milliseconds: attempt == 0 ? 300 : 400));
+      // Session was torn down, replaced, or the user already spoke — abort.
+      if (_state != LiveConversationState.active || _session != session) {
+        _greetingPending = false;
+        return;
+      }
+      if (_lastConfirmedUserSpeechAt
+              .isAfter(DateTime.fromMillisecondsSinceEpoch(0)) ||
+          _userTurnBuf.isNotEmpty) {
+        // The user beat us to it — skip the canned greeting entirely.
+        _greetingPending = false;
+        _armIdleCheckIn(newSilencePeriod: true);
+        return;
+      }
+      try {
+        // turnComplete: true is REQUIRED — it tells Gemini Live the turn is
+        // finished so it actually responds. Without it the model waits for
+        // more input and never speaks the greeting (this matches how the idle
+        // check-in triggers a spoken reply).
+        await session.send(
+          input: Content.text(prompt),
+          turnComplete: true,
+        );
+        sent = true;
+        break;
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('LiveConversationService: greeting send attempt '
+              '${attempt + 1} failed: $e');
+        }
+      }
+    }
+    // Whether or not the greeting landed, resume normal idle behaviour now —
+    // counting the 45s silence window from AFTER the greeting attempt.
+    _greetingPending = false;
+    if (kDebugMode && sent) {
+      debugPrint('LiveConversationService: opening greeting sent.');
+    }
+    _armIdleCheckIn(newSilencePeriod: true);
   }
 
   /// Pumps captured mic PCM chunks to the model as realtime audio input.
@@ -1099,6 +1179,7 @@ class LiveConversationService extends ChangeNotifier {
     _idleCheckInTimer = null;
     if (_state != LiveConversationState.active ||
         _idleCheckInSent ||
+        _greetingPending ||
         _endPending) {
       return;
     }
@@ -1116,6 +1197,7 @@ class LiveConversationService extends ChangeNotifier {
     if (session == null ||
         _state != LiveConversationState.active ||
         _idleCheckInSent ||
+        _greetingPending ||
         _endPending) {
       return;
     }

@@ -206,7 +206,30 @@ mixin LivePalSessionMixin<T extends StatefulWidget> on State<T> {
       isPremium: true,
       systemInstruction: systemInstruction,
       voiceName: voiceName,
+      openingPrompt: _buildOpeningGreetingPrompt(),
     );
+  }
+
+  /// Builds the one-off prompt that makes the pal open with a warm, spoken
+  /// greeting — by name when we know it and matched to the time of day. It's a
+  /// SYSTEM-EVENT instruction (not words the user said), kept short so the pal
+  /// greets and then hands the floor straight back to the user.
+  String _buildOpeningGreetingPrompt() {
+    final name = _resolveUserFirstName();
+    final hour = DateTime.now().hour;
+    final partOfDay = hour < 12
+        ? 'morning'
+        : (hour < 17 ? 'afternoon' : 'evening');
+    final nameClause = name != null
+        ? 'Greet them by name ($name).'
+        : 'Greet them warmly.';
+    final example =
+        name != null ? '"Hi $name, how are you today?"' : '"Hi, how are you today?"';
+    return '[SYSTEM EVENT: The conversation just opened. $nameClause Give a '
+        'short, warm spoken greeting suited to the $partOfDay and ask how '
+        'they are today (for example, $example). Keep it to one sentence, '
+        'sound natural (not scripted), then stop and wait for their reply. Do '
+        'not imply the user said anything yet.]';
   }
 
   /// Called (from the tool bridge) when the pal wants to navigate somewhere.

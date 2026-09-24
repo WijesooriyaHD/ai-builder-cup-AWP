@@ -24,12 +24,26 @@ class PalWakeWordService extends ChangeNotifier {
 
   /// Regex matching the wake phrases. Word boundaries around the "pal" family
   /// so words like "palm"/"palace"/"pale" do NOT trigger, but common STT
-  /// mishears of "pal" (pals, pao, pow…) still do when preceded by a wake word.
+  /// mishears of "pal" (pals, pao, pow, paul…) still do — either on their own
+  /// or preceded by a wake word. iOS dictation mis-hears "Hey Pal" in many
+  /// ways ("hey pao", "hi pal", "a pal", "hey paul", "hey pow"…), so the
+  /// leading-word set is generous and the standalone "pal/pals/paul" family is
+  /// also accepted. Matching runs on a normalised (lowercased, punctuation-
+  /// stripped, whitespace-collapsed) copy of the transcript — see [_normalize].
   static final RegExp _wakePattern = RegExp(
-    r'\b(?:hey|ok(?:ay)?|hi|hello|a)\s+(?:pal|pals|pao|pow|pah|paul|powl)\b'
-    r'|\bpal\b|\bpals\b',
+    r'\b(?:hey|hay|heya|ok(?:ay)?|hi|hello|yo|a|the)\s+'
+    r'(?:pal|pals|palo|pao|pow|powl|pah|paul|paw|pao|val|bao)\b'
+    r'|\b(?:pal|pals|paul|powl)\b',
     caseSensitive: false,
   );
+
+  /// Lowercases, strips punctuation, and collapses whitespace so the matcher
+  /// sees clean tokens (STT partials often carry commas/odd spacing).
+  static String _normalize(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r"[^a-z0-9\s]"), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 
   final stt.SpeechToText _speech = stt.SpeechToText();
 
@@ -43,6 +57,17 @@ class PalWakeWordService extends ChangeNotifier {
   VoidCallback? _onWake;
   bool _wakeFired = false;
   DateTime _lastWakeAt = DateTime.fromMillisecondsSinceEpoch(0);
+  // Last time the recognizer showed ANY sign of life (a result callback or a
+  // fresh listen() beginning). Used to detect a session that reports
+  // isListening==true but has silently wedged (iOS STT can get stuck holding
+  // the mic without delivering results), so the watchdog can force-recycle it.
+  DateTime _lastActivityAt = DateTime.fromMillisecondsSinceEpoch(0);
+  // How long a "listening" session may go with no result activity before we
+  // assume it wedged and force a fresh session. Must be comfortably LONGER than
+  // a normal quiet stretch (the session is kept alive through silence), so a
+  // simply-quiet room is never mistaken for a wedged session and needlessly
+  // recycled (recycling introduces a warm-up gap where a "Hey Pal" is missed).
+  static const Duration _stallTimeout = Duration(seconds: 30);
 
   /// True while the recognizer is actively listening for the wake phrase.
   bool get isListening => _running;
@@ -104,12 +129,28 @@ class PalWakeWordService extends ChangeNotifier {
 
   void _startHealthWatchdog() {
     _healthTimer?.cancel();
-    _healthTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Check often so a session that quietly ended is revived before the user
+    // gets a chance to speak into a dead mic. 400ms keeps the listen loop
+    // effectively continuous without busy-spinning.
+    _healthTimer = Timer.periodic(const Duration(milliseconds: 400), (_) {
       // Only act on a clean, running, non-teardown state; otherwise we could
       // race a listen() into a half-released audio unit (the crash path).
       if (!_running || _tearingDown || _starting) return;
-      if (!_speech.isListening && !_restartScheduled) {
-        _scheduleRestart();
+      if (!_speech.isListening) {
+        // Session ended → restart quickly.
+        if (!_restartScheduled) _scheduleRestart();
+        return;
+      }
+      // Session CLAIMS to be listening but has been silent too long → it has
+      // likely wedged (holding the mic without delivering results, so no
+      // "Hey Pal" is ever heard). Force a full recycle: cancel releases the
+      // stuck audio unit, then a fresh listen() re-arms it.
+      if (!_restartScheduled &&
+          DateTime.now().difference(_lastActivityAt) > _stallTimeout) {
+        if (kDebugMode) {
+          debugPrint('PalWakeWordService: session stalled — recycling.');
+        }
+        _forceRecycle();
       }
     });
   }
@@ -154,16 +195,33 @@ class PalWakeWordService extends ChangeNotifier {
     // Hard gate: only ever call listen() when cleanly running.
     if (!_running || !_initialized || _tearingDown) return;
     if (_speech.isListening) return;
+    // A fresh session counts as activity so the stall watchdog gives it time.
+    _lastActivityAt = DateTime.now();
     try {
       await _speech.listen(
         onResult: _onResult,
         listenOptions: stt.SpeechListenOptions(
+          // dictation mode does NOT auto-stop on the first recognised phrase
+          // (search/confirmation modes end the session as soon as they think
+          // the user finished — which, for wake-spotting, means the recognizer
+          // keeps ending and needing a warm-up restart, and any "Hey Pal"
+          // spoken during that warm-up gap is missed). dictation keeps the
+          // session open so the mic stays continuously hot.
           listenMode: stt.ListenMode.dictation,
           partialResults: true,
           cancelOnError: false,
-          listenFor: const Duration(seconds: 55),
-          // pauseFor == listenFor so a natural silence doesn't end the session.
-          pauseFor: const Duration(seconds: 55),
+          // Prefer on-device recognition when available: lower latency, no
+          // network dependency, and it doesn't get throttled/ended by the
+          // server the way cloud dictation can.
+          onDevice: true,
+          autoPunctuation: false,
+          // Keep ONE session alive as long as iOS allows and DON'T end it on
+          // silence: pauseFor == listenFor so a quiet room never ends the
+          // session. Fewer restarts = far fewer dead windows where a spoken
+          // "Hey Pal" would be missed. The health watchdog re-arms the next
+          // session the instant this one ends.
+          listenFor: const Duration(seconds: 60),
+          pauseFor: const Duration(seconds: 60),
         ),
       );
     } catch (e) {
@@ -176,10 +234,34 @@ class PalWakeWordService extends ChangeNotifier {
     if (!_running || _tearingDown || _restartScheduled) return;
     _restartScheduled = true;
     _restartTimer?.cancel();
-    // A slightly longer gap than before: it gives iOS time to release the
-    // previous session's audio unit before the next listen(), avoiding a
-    // reclaim-during-teardown race.
-    _restartTimer = Timer(const Duration(milliseconds: 300), () async {
+    // Restart the SAME recognizer's listen() quickly. This gap is between two
+    // consecutive wake sessions on one recognizer (it reuses its own input
+    // node), NOT the wake→Live handoff, so it can be short. A long gap here is
+    // exactly what made users repeat "Hey Pal": a spoken phrase landing in the
+    // dead window between sessions was never heard. Keep it minimal.
+    _restartTimer = Timer(const Duration(milliseconds: 120), () async {
+      _restartScheduled = false;
+      if (!_running || _tearingDown) return;
+      await _beginSession();
+    });
+  }
+
+  /// Force-recycles a wedged session: fully releases the stuck audio unit with
+  /// cancel() (NOT stop-the-feature), then re-arms listen() after a short beat.
+  /// Guarded by [_restartScheduled] so only one recycle is in flight.
+  Future<void> _forceRecycle() async {
+    if (!_running || _tearingDown || _restartScheduled) return;
+    _restartScheduled = true;
+    try {
+      await _speech.cancel();
+    } catch (e) {
+      debugPrint('PalWakeWordService: recycle cancel() failed: $e');
+    }
+    // Reset the activity clock so the fresh session isn't immediately judged
+    // stalled again.
+    _lastActivityAt = DateTime.now();
+    _restartTimer?.cancel();
+    _restartTimer = Timer(const Duration(milliseconds: 150), () async {
       _restartScheduled = false;
       if (!_running || _tearingDown) return;
       await _beginSession();
@@ -188,7 +270,9 @@ class PalWakeWordService extends ChangeNotifier {
 
   void _onResult(SpeechRecognitionResult result) {
     if (!_running || _tearingDown || _wakeFired) return;
-    final text = result.recognizedWords.trim();
+    // Any result (even a non-matching partial) proves the session is alive.
+    _lastActivityAt = DateTime.now();
+    final text = _normalize(result.recognizedWords);
     if (text.isEmpty) return;
     if (!_wakePattern.hasMatch(text)) return;
 

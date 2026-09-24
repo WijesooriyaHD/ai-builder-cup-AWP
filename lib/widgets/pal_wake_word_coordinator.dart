@@ -108,6 +108,11 @@ class _PalWakeWordCoordinatorState extends State<PalWakeWordCoordinator>
     final shouldListen = eligible &&
         _appIsResumed &&
         !_sheetOpen &&
+        // Don't fight the Wellness Reads narration for the audio session: while
+        // TTS is speaking, iOS holds the output/route and the wake recognizer
+        // gets starved (so "Hey Pal" is missed). Pause the listener during
+        // narration; it's re-armed (kept warm) the moment playback stops.
+        !appState.isAudioPlaying &&
         liveService.state == LiveConversationState.idle;
 
     if (shouldListen) {
