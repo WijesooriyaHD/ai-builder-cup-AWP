@@ -47,7 +47,14 @@ import 'conversation_transcript_sheet.dart';
 /// A bottom sheet that houses the voice assistant with the Siri-style orb,
 /// conversation messages, and real-time speech transcription.
 class VoiceAssistantSheet extends StatefulWidget {
-  const VoiceAssistantSheet({super.key});
+  const VoiceAssistantSheet({super.key, this.autoStartLive = true});
+
+  /// When true (a normal mic TAP), the Live pal conversation starts
+  /// automatically as the sheet opens. When false (a mic LONG-PRESS), the sheet
+  /// opens idle — the Wellness Pal window with Recent Conversations visible —
+  /// and the user taps the orb to start talking. Only affects the Live pal; the
+  /// default tap-to-speak pal is unaffected.
+  final bool autoStartLive;
 
   @override
   State<VoiceAssistantSheet> createState() => _VoiceAssistantSheetState();
@@ -92,6 +99,11 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
       // makes the model's audio echo badly).
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         await _voiceService.shutdownForHandoff();
+        // On a normal TAP, auto-start the conversation. On a LONG-PRESS
+        // (autoStartLive == false) we deliberately do NOT start — the sheet
+        // just shows the Wellness Pal window with Recent Conversations, and the
+        // user taps the orb when they're ready to talk.
+        if (!widget.autoStartLive) return;
         // iOS releases the tap-to-speak recognizer/TTS audio session
         // asynchronously. Give it a beat before the native engine claims
         // .playAndRecord, otherwise the first session can come up with a dead

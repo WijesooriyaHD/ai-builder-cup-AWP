@@ -230,16 +230,22 @@ class _MainWrapperState extends State<MainWrapper> {
                 liveService.state == LiveConversationState.active;
         return Padding(
           padding: const EdgeInsets.only(bottom: 80),
-          child: FloatingActionButton(
-            onPressed: () => _showVoiceAssistant(context),
-            backgroundColor: isActive
-                ? theme.colorScheme.primary
-                : theme.colorScheme.surface,
-            elevation: isActive ? 8 : 4,
-            child: Icon(
-              isActive ? Icons.mic : Icons.mic_none_rounded,
-              color: isActive ? Colors.white : theme.colorScheme.primary,
-              size: 26,
+          // TAP → open + start the pal. LONG-PRESS → open the Wellness Pal
+          // window WITHOUT starting a conversation, so the user can see their
+          // Recent Conversations first (then tap the orb to talk).
+          child: GestureDetector(
+            onLongPress: () => _showVoiceAssistant(context, autoStart: false),
+            child: FloatingActionButton(
+              onPressed: () => _showVoiceAssistant(context),
+              backgroundColor: isActive
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.surface,
+              elevation: isActive ? 8 : 4,
+              child: Icon(
+                isActive ? Icons.mic : Icons.mic_none_rounded,
+                color: isActive ? Colors.white : theme.colorScheme.primary,
+                size: 26,
+              ),
             ),
           ),
         );
@@ -247,12 +253,12 @@ class _MainWrapperState extends State<MainWrapper> {
     );
   }
 
-  void _showVoiceAssistant(BuildContext context) {
+  void _showVoiceAssistant(BuildContext context, {bool autoStart = true}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const VoiceAssistantSheet(),
+      builder: (_) => VoiceAssistantSheet(autoStartLive: autoStart),
     );
   }
 
