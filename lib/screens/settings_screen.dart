@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../providers/app_state.dart';
+import '../services/onesignal_service.dart';
 import '../providers/check_in_state.dart';
 import '../providers/personalization_state.dart';
 import '../providers/wellness_plan_state.dart';
@@ -40,11 +41,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _aiInsightsSummary = '';
   bool _summaryLoaded = false;
   bool _isDeletingAccount = false;
+  // Push notification opt-in state (defaults to true; read live from OneSignal
+  // so the toggle reflects reality even if changed outside the app).
+  bool _pushNotificationsEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _loadAiInsightsPreference();
+    // Read the live OneSignal opt-in state so the toggle matches reality.
+    _pushNotificationsEnabled = OneSignalService().optedIn;
   }
 
   @override
@@ -188,7 +194,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               
-              _buildAiInsightsSection(context),
+              _buildDisableNotificationSection(context),
               const SizedBox(height: 16),
               
               _buildCard(
@@ -464,7 +470,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildAiInsightsSection(BuildContext context) {
+  Widget _buildDisableNotificationSection(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return FrostedContainer(
@@ -474,7 +480,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'AI INSIGHTS',
+              'NOTIFICATIONS',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
@@ -483,6 +489,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            // Push notifications toggle.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Push Notifications',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _pushNotificationsEnabled
+                            ? 'Wellness nudges, streak reminders, and plan updates.'
+                            : 'Push notifications are turned off.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: isDark
+                                  ? Colors.white54
+                                  : Colors.grey.shade600,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Switch.adaptive(
+                  value: _pushNotificationsEnabled,
+                  onChanged: (enabled) async {
+                    if (enabled) {
+                      // Request OS permission first (no-op if already granted).
+                      final granted =
+                          await OneSignalService().requestPermission();
+                      if (granted) {
+                        OneSignalService().optIn();
+                        if (mounted) {
+                          setState(() => _pushNotificationsEnabled = true);
+                        }
+                      } else {
+                        // OS permission denied — guide them to iPhone Settings.
+                        if (mounted) {
+                          showDialog<void>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text('Enable notifications'),
+                              content: const Text(
+                                'Notifications are blocked for this app. '
+                                'To re-enable them, open iPhone Settings → '
+                                'AI Wellness Pal → Notifications, and turn '
+                                'on Allow Notifications.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                      }
+                    } else {
+                      // Opt out — keeps the OS permission but stops delivery.
+                      OneSignalService().optOut();
+                      if (mounted) {
+                        setState(() => _pushNotificationsEnabled = false);
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+            const Divider(height: 24),
             Text(
               _aiInsightsSummary,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -496,7 +578,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Disable AI Insights',
+                    "Today's Plan",
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -512,7 +594,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'AI Insight card is hidden on the Home screen.',
+                  'Daily Plan Notifications will be disabled',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: isDark ? Colors.white54 : Colors.grey.shade600,
                       ),

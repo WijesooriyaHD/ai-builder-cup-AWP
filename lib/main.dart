@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:home_widget/home_widget.dart';
 import 'theme/app_theme.dart';
 import 'providers/app_state.dart';
@@ -16,6 +17,7 @@ import 'services/storage_service.dart';
 import 'services/check_in_service.dart';
 import 'services/personalization_service.dart';
 import 'services/notification_service.dart';
+import 'services/onesignal_service.dart';
 import 'services/voice_command_service.dart';
 import 'services/live_conversation_service.dart';
 import 'services/native_aec_audio_io.dart';
@@ -37,14 +39,42 @@ import 'screens/auth_wrapper.dart';
 import 'widgets/snow_overlay.dart';
 import 'widgets/audio_floating_player.dart';
 import 'widgets/pal_wake_word_coordinator.dart';
+import 'widgets/onesignal_verification_gate.dart';
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
+
+/// OneSignal App ID (public client identifier — safe to ship in the app).
+const String kOneSignalAppId = 'b9e6a19e-8072-4118-bf06-0fd21868cb2e';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
   await Firebase.initializeApp();
+
+  // Initialize OneSignal (push + in-app messaging). Must run before runApp so
+  // the SDK is ready when the app mounts. Permission is NOT requested here —
+  // it's requested from the push-subscription verification dialog's button.
+  // All OneSignal SDK access goes through OneSignalService (the single wrapper).
+  try {
+    OneSignalService().initialize(kOneSignalAppId);
+    // Tie the OneSignal user to the Firebase UID so sends can target this user
+    // and their subscriptions stay merged across devices/reinstalls. Bind now
+    // for the already-signed-in user, and keep it in sync as auth changes.
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid != null && currentUid.isNotEmpty) {
+      OneSignalService().login(currentUid);
+    }
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null && user.uid.isNotEmpty) {
+        OneSignalService().login(user.uid);
+      } else {
+        OneSignalService().logout();
+      }
+    });
+  } catch (e) {
+    debugPrint('Failed to initialize OneSignal: $e');
+  }
 
   // Activate Firebase App Check. Firebase AI Logic requires App Check to be
   // enforced, otherwise calls fail with "Firebase AI Logic has been
@@ -207,13 +237,15 @@ class AiWellnessPalApp extends StatelessWidget {
                 data: MediaQuery.of(context).copyWith(
                   textScaler: TextScaler.linear(appState.textScaleFactor),
                 ),
-                child: SnowOverlay(
-                  child: PalWakeWordCoordinator(
-                    child: Stack(
-                      children: [
-                        child!,
-                        const AudioFloatingPlayer(),
-                      ],
+                child: OneSignalVerificationGate(
+                  child: SnowOverlay(
+                    child: PalWakeWordCoordinator(
+                      child: Stack(
+                        children: [
+                          child!,
+                          const AudioFloatingPlayer(),
+                        ],
+                      ),
                     ),
                   ),
                 ),

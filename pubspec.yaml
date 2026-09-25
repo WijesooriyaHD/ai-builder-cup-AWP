@@ -80,6 +80,9 @@ dependencies:
   # flutter_pcm_sound: plays the model's 24 kHz PCM16 audio in real time.
   record: ^6.1.1
   flutter_pcm_sound: ^3.1.6
+  # OneSignal push + in-app messaging (Stable track, pinned to the exact
+  # version from onesignal.github.io/sdk-releases/releases.json).
+  onesignal_flutter: 5.5.2
 
 # Force a newer objective_c than the transitive 9.2.4 pulled in by
 # path_provider_foundation / mapbox. 9.2.4 fails to load its native dylib

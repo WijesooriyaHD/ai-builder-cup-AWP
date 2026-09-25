@@ -31,19 +31,23 @@ target 'Runner' do
   use_frameworks!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
+  # The NSE is nested under Runner so it shares the same Pods aggregate and
+  # inherits search paths. Even nested, CocoaPods still creates a separate
+  # aggregate for the NSE's XCFramework subsets. The post_install hook below
+  # removes that duplicate copy phase to avoid "Multiple commands produce
+  # OneSignalCore.framework" build errors.
+  target 'OneSignalNotificationServiceExtension' do
+    inherit! :search_paths
+    pod 'OneSignalXCFramework/OneSignalExtension', '5.5.1'
+  end
+
   target 'RunnerTests' do
     inherit! :search_paths
   end
 end
 
-# The AI Wellness home-screen widget extension. It links the `home_widget`
-# plugin so the interactive checkbox (ToggleWellnessActionIntent, iOS 17+) can
-# call HomeWidgetBackgroundWorker.run(...) and execute the Dart backgroundCallback.
-#
-# NOTE: The `AIWellnessWidget` target must first be created in Xcode
-# (File > New > Target > Widget Extension, named exactly "AIWellnessWidget").
-# The pod path is resolved from the Flutter plugin symlink that
-# `flutter pub get` writes into ios/.symlinks/plugins/home_widget/ios.
+# The AI Wellness home-screen widget extension.
 target 'AIWellnessWidget' do
   use_frameworks!
 
@@ -51,12 +55,53 @@ target 'AIWellnessWidget' do
 end
 
 post_install do |installer|
+  # ── Standard Flutter + Firebase settings ──────────────────────────────────
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
-      # firebase_ai 4.0.0 requires iOS 15.0+. Force every pod target to match
-      # the app's raised deployment target so pod install / build succeeds.
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
+  end
+
+  # ── Remove duplicate NSE XCFramework copy phases ──────────────────────────
+  # CocoaPods generates one "[CP] Copy XCFrameworks" aggregate pod target for
+  # Runner (all OneSignal frameworks) and a second one for the NSE (the 3
+  # subset frameworks). Both produce output to the SAME directory:
+  #   ${PODS_XCFRAMEWORKS_BUILD_DIR}/OneSignalXCFramework/OneSignalCore/…
+  # Xcode treats duplicate output paths as a build error ("Multiple commands
+  # produce …"). Fix: identify the NSE-only aggregate (the one whose output
+  # list is the smaller subset) and delete its xcframeworks phase so only
+  # Runner's phase copies the frameworks — the NSE uses them via the same
+  # build products dir (they're already extracted by Runner's phase).
+  installer.pods_project.targets.each do |pods_target|
+    # Only touch the aggregate helper targets CocoaPods creates for XCFramework
+    # copy scripts (named "OneSignalXCFramework-XXXXXXXX").
+    next unless pods_target.name =~ /\AOneSignalXCFramework-/
+
+    pods_target.build_phases.each do |phase|
+      next unless phase.respond_to?(:shell_script)
+      next unless phase.name == '[CP] Copy XCFrameworks'
+
+      # Read the output-files xcfilelist to count how many frameworks this
+      # phase copies. The NSE aggregate copies only 3 (Core, Extension,
+      # Outcomes) while Runner's copies 10 (the full set). Remove only the
+      # smaller one so Runner's phase — which copies all frameworks — runs.
+      output_list_paths = phase.output_file_list_paths
+      next if output_list_paths.nil? || output_list_paths.empty?
+
+      # Resolve the xcfilelist path relative to the Pods project root.
+      list_file = output_list_paths.first
+                                   .gsub('${PODS_ROOT}', installer.sandbox.root.to_s)
+                                   .gsub('${SRCROOT}', installer.sandbox.root.to_s)
+      next unless File.exist?(list_file)
+
+      line_count = File.read(list_file).lines.count
+      # The NSE subset has 3 output entries; Runner's full set has 10.
+      # Remove this phase if it's clearly the smaller NSE-only set (≤5 lines).
+      if line_count <= 5
+        pods_target.build_phases.delete(phase)
+        break
+      end
     end
   end
 end
