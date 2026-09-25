@@ -37,6 +37,8 @@ import '../utils/pro_modal_utils.dart';
 import 'check_in_screen.dart';
 import 'explore_tab_screen.dart';
 import 'achievements_screen.dart';
+import 'achievement_completion_page.dart';
+import '../services/achievement_service.dart';
 import '../services/home_tool_cards_service.dart';
 import '../widgets/home_tool_card_views.dart';
 import '../features/nutrition/presentation/nutrition_state.dart';
@@ -1341,6 +1343,17 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             );
           },
+          // ── TEST SHORTCUT — remove before shipping ──────────────────
+          // Long-press the level badge to preview the achievement
+          // completion screen with the first badge in the catalog.
+          onLongPress: () {
+            final badge = AchievementService().achievements.first;
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => AchievementCompletionPage(achievement: badge),
+              fullscreenDialog: true,
+            ));
+          },
+          // ────────────────────────────────────────────────────────────
           behavior: HitTestBehavior.opaque,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1371,15 +1384,14 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ],
             ),
-          ),
-        )
-            .animate(onPlay: (c) => c.repeat(reverse: true))
-            // Subtle, slow shimmer to be eye-catching but not distracting.
-            .shimmer(
-              duration: 2200.ms,
-              delay: 1200.ms,
-              color: primary.withOpacity(0.35),
-            );
+          )
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .shimmer(
+                duration: 2200.ms,
+                delay: 1200.ms,
+                color: primary.withOpacity(0.35),
+              ),
+        );
       },
     );
   }

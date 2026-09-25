@@ -11,11 +11,11 @@ class AchievementService extends ChangeNotifier {
 
   final List<Achievement> _achievements = [];
   final List<String> _unlockedAchievementIds = [];
-  
+
   List<Achievement> get achievements => _achievements;
-  List<Achievement> get unlockedAchievements => 
+  List<Achievement> get unlockedAchievements =>
       _achievements.where((a) => _unlockedAchievementIds.contains(a.id)).toList();
-  
+
   int get totalUnlocked => _unlockedAchievementIds.length;
 
   Future<void> initialize() async {
@@ -26,64 +26,63 @@ class AchievementService extends ChangeNotifier {
   void _initializeAchievements() {
     // NOTE: every emoji below is unique across the whole set (no repeats).
     _achievements.addAll([
-      // Streak achievements (5)
-      Achievement('first_step', '🌅', 'First Sunrise', 'Complete your first daily check-in', AchievementType.streak, 1),
-      Achievement('week_warrior', '🧘', 'Mindful Week', 'Complete a full week of check-ins', AchievementType.streak, 7),
-      Achievement('month_master', '🌳', 'Rooted in Routine', 'Complete 30 days in a row', AchievementType.streak, 30),
-      Achievement('half_century', '🏔️', 'Inner Strength', 'Maintain a 50-day streak', AchievementType.streak, 50),
-      Achievement('century_club', '🧗', 'Zen Master', 'Reach a 100-day streak', AchievementType.streak, 100),
-      
-      // Points achievements (4)
-      Achievement('point_starter', '🌾', 'Seeds of Growth', 'Earn your first 100 points', AchievementType.points, 100),
-      Achievement('shining_bright', '☀️', 'Radiant Energy', 'Reach 1,000 points', AchievementType.points, 1000),
-      Achievement('diamond_status', '💎', 'Vibrant Vitality', 'Earn 5,000 points', AchievementType.points, 5000),
-      Achievement('legendary', '🕉️', 'Enlightened', 'Reach 10,000 points', AchievementType.points, 10000),
-      
-      // Intention achievements (5)
-      Achievement('dreamer', '💭', 'First Intention', 'Set your first wellness intention', AchievementType.dreams, 1),
-      Achievement('goal_setter', '🎯', 'Intentional Living', 'Set 3 wellness intentions', AchievementType.dreams, 3),
-      Achievement('ambitious', '🌻', 'Growth Mindset', 'Track 5 wellness intentions', AchievementType.dreams, 5),
-      Achievement('dream_achiever', '🎊', 'Intention Realized', 'Complete your first wellness intention', AchievementType.completedDreams, 1),
-      Achievement('visionary_master', '🌈', 'Path to Purpose', 'Fully realize 5 wellness intentions', AchievementType.completedDreams, 5),
+      // ── Streak (5) ───────────────────────────────────────────────────────────
+      Achievement('first_step',    '🌅', 'First Sunrise',     'Complete your first daily check-in',    AchievementType.streak, 1),
+      Achievement('week_warrior',  '🧘', 'Mindful Week',      'Complete a full week of check-ins',      AchievementType.streak, 7),
+      Achievement('month_master',  '🌳', 'Rooted in Routine', 'Complete 30 days in a row',             AchievementType.streak, 30),
+      Achievement('half_century',  '🏔️', 'Inner Strength',    'Maintain a 50-day streak',              AchievementType.streak, 50),
+      Achievement('century_club',  '🧗', 'Zen Master',        'Reach a 100-day streak',                AchievementType.streak, 100),
 
-      // Action achievements (4)
-      Achievement('first_action', '👣', 'First Mindful Step', 'Complete your first micro-action', AchievementType.actions, 1),
-      Achievement('action_taker', '🌼', 'Nurturing Habits', 'Complete 10 micro-actions', AchievementType.actions, 10),
-      Achievement('momentum_builder', '🌊', 'Flowing Forward', 'Finish 50 micro-actions', AchievementType.actions, 50),
-      Achievement('unstoppable', '🔆', 'Thriving', 'Complete 100 micro-actions', AchievementType.actions, 100),
-      
-      // Travel achievements (3) — reframed as mindful exploration for wellbeing
-      Achievement('explorer', '🧭', 'Mindful Explorer', 'Add your first travel memory', AchievementType.travel, 1),
-      Achievement('vacation_mode', '🌴', 'Restful Escape', 'Record 5 travel memories', AchievementType.travel, 5),
-      Achievement('world_traveler', '🌍', 'Worldly Soul', 'Collect memories from 5 countries', AchievementType.countries, 5),
-      
-      // Journal achievements (4)
-      Achievement('journal_starter', '📓', 'First Reflection', 'Write your first journal entry', AchievementType.journalEntries, 1),
-      Achievement('journal_regular', '🖋️', 'Mindful Journaler', 'Write 10 journal entries', AchievementType.journalEntries, 10),
-      Achievement('journal_legend', '📚', 'Inner Chronicle', 'Write 100 journal entries', AchievementType.journalEntries, 100),
-      Achievement('todo_master', '✅', 'Self-Care Champion', 'Complete 25 todo items', AchievementType.todoItems, 25),
+      // ── Points (4) ───────────────────────────────────────────────────────────
+      Achievement('point_starter',  '🌾', 'Seeds of Growth', 'Earn your first 100 points',  AchievementType.points, 100),
+      Achievement('shining_bright', '☀️', 'Radiant Energy',  'Reach 1,000 points',          AchievementType.points, 1000),
+      Achievement('diamond_status', '💎', 'Vibrant Vitality', 'Earn 5,000 points',           AchievementType.points, 5000),
+      Achievement('legendary',      '🕉️', 'Enlightened',      'Reach 10,000 points',         AchievementType.points, 10000),
 
-      // Wellness Studio achievements (3) — replaces the old Garden achievements
-      Achievement('studio_first', '🎧', 'Studio Debut', 'Complete your first Wellness Studio activity', AchievementType.studioActivities, 1),
-      Achievement('studio_regular', '💆', 'Self-Care Ritual', 'Complete 10 Wellness Studio activities', AchievementType.studioActivities, 10),
-      Achievement('studio_devotee', '🏆', 'Wellness Devotee', 'Complete 30 Wellness Studio activities', AchievementType.studioActivities, 30),
+      // ── Intentions / Dreams (5) ──────────────────────────────────────────────
+      Achievement('dreamer',          '💭', 'First Intention',    'Set your first wellness intention',       AchievementType.dreams, 1),
+      Achievement('goal_setter',      '🎯', 'Intentional Living', 'Set 3 wellness intentions',               AchievementType.dreams, 3),
+      Achievement('ambitious',        '🌻', 'Growth Mindset',     'Track 5 wellness intentions',             AchievementType.dreams, 5),
+      Achievement('dream_achiever',   '🎊', 'Intention Realized', 'Complete your first wellness intention',  AchievementType.completedDreams, 1),
+      Achievement('visionary_master', '🌈', 'Path to Purpose',    'Fully realize 5 wellness intentions',    AchievementType.completedDreams, 5),
 
-      // Special achievements (2)
-      Achievement('customizer', '🎨', 'Made It Yours', 'Change your theme', AchievementType.special, 1),
-      Achievement('pro_access', '🌟', 'Premium Wellbeing', 'Upgrade to Premium', AchievementType.special, 1),
-      
-      // Level achievements (2)
-      Achievement('level_5', '🌿', 'Growing Strong', 'Reach level 5', AchievementType.level, 5),
-      Achievement('level_20', '🦋', 'Wellness Sage', 'Reach level 20', AchievementType.level, 20),
+      // ── Actions / Micro-actions (4) ──────────────────────────────────────────
+      Achievement('first_action',      '👣', 'First Mindful Step', 'Complete your first micro-action',  AchievementType.actions, 1),
+      Achievement('action_taker',      '🌼', 'Nurturing Habits',   'Complete 10 micro-actions',         AchievementType.actions, 10),
+      Achievement('momentum_builder',  '🌊', 'Flowing Forward',    'Finish 50 micro-actions',           AchievementType.actions, 50),
+      Achievement('unstoppable',       '🔆', 'Thriving',           'Complete 100 micro-actions',        AchievementType.actions, 100),
 
-      // Meditation & Mindfulness achievements (7) — mirrored from MeditationState
-      Achievement('med_first_session', '🌱', 'First Breath', 'Complete your very first meditation session', AchievementType.meditation, 1),
-      Achievement('med_streak_7', '🕯️', '7-Day Practice', 'Sit in stillness 7 days in a row', AchievementType.meditation, 7),
-      Achievement('med_streak_30', '🌳', 'Deep Roots', 'Sustain a daily meditation practice for 30 days', AchievementType.meditation, 30),
-      Achievement('med_minutes_100', '⏳', '100 Mindful Minutes', 'Accumulate 100 minutes of meditation practice', AchievementType.meditation, 100),
-      Achievement('med_breathing_master', '🌬️', 'Breath Master', 'Complete 10 dedicated breathing sessions', AchievementType.meditation, 10),
-      Achievement('med_explorer', '🧭', 'Mindful Explorer', 'Experience 4 different types of meditation', AchievementType.meditation, 4),
-      Achievement('med_champion', '👑', 'Meditation Champion', 'Complete 50 meditation sessions', AchievementType.meditation, 50),
+      // ── Journal (4) ──────────────────────────────────────────────────────────
+      Achievement('journal_starter', '📓', 'First Reflection',  'Write your first journal entry',  AchievementType.journalEntries, 1),
+      Achievement('journal_regular', '🖋️', 'Mindful Journaler', 'Write 10 journal entries',        AchievementType.journalEntries, 10),
+      Achievement('journal_legend',  '📚', 'Inner Chronicle',   'Write 100 journal entries',       AchievementType.journalEntries, 100),
+      Achievement('todo_master',     '✅', 'Self-Care Champion','Complete 25 todo items',           AchievementType.todoItems, 25),
+
+      // ── Wellness Studio (3) ──────────────────────────────────────────────────
+      Achievement('studio_first',   '🎧', 'Studio Debut',    'Complete your first Wellness Studio activity', AchievementType.studioActivities, 1),
+      Achievement('studio_regular', '💆', 'Self-Care Ritual', 'Complete 10 Wellness Studio activities',      AchievementType.studioActivities, 10),
+      Achievement('studio_devotee', '🏆', 'Wellness Devotee', 'Complete 30 Wellness Studio activities',      AchievementType.studioActivities, 30),
+
+      // ── Special (2) ──────────────────────────────────────────────────────────
+      // 'customizer' is unlocked by AppState.setWellnessTheme / setThemeColor.
+      Achievement('customizer', '🎨', 'Made It Yours',    'Change your app theme',    AchievementType.special, 1),
+      Achievement('pro_access', '🌟', 'Premium Wellbeing','Upgrade to Premium',       AchievementType.special, 1),
+
+      // ── Level (2) ────────────────────────────────────────────────────────────
+      Achievement('level_5',  '🌿', 'Growing Strong', 'Reach level 5',  AchievementType.level, 5),
+      Achievement('level_20', '🦋', 'Wellness Sage',  'Reach level 20', AchievementType.level, 20),
+
+      // ── Meditation & Mindfulness (7) ─────────────────────────────────────────
+      // These are unlocked externally by MeditationState via
+      // unlockSpecialAchievement(); the service mirrors and persists them so
+      // they appear in the global Achievements screen.
+      Achievement('med_first_session',    '🌱', 'First Breath',        'Complete your very first meditation session',          AchievementType.meditation, 1),
+      Achievement('med_streak_7',         '🕯️', '7-Day Practice',      'Sit in stillness 7 days in a row',                    AchievementType.meditation, 7),
+      Achievement('med_streak_30',        '🌲', 'Deep Roots',          'Sustain a daily meditation practice for 30 days',     AchievementType.meditation, 30),
+      Achievement('med_minutes_100',      '⏳', '100 Mindful Minutes', 'Accumulate 100 minutes of meditation practice',       AchievementType.meditation, 100),
+      Achievement('med_breathing_master', '🌬️', 'Breath Master',       'Complete 10 dedicated breathing sessions',            AchievementType.meditation, 10),
+      Achievement('med_explorer',         '🔭', 'Meditation Explorer', 'Experience 4 different types of meditation',          AchievementType.meditation, 4),
+      Achievement('med_champion',         '👑', 'Meditation Champion', 'Complete 50 meditation sessions',                     AchievementType.meditation, 50),
     ]);
   }
 
@@ -92,25 +91,26 @@ class AchievementService extends ChangeNotifier {
     final unlockedJson = prefs.getString('unlocked_achievements');
     if (unlockedJson != null) {
       _unlockedAchievementIds.clear();
-      _unlockedAchievementIds.addAll(List<String>.from(json.decode(unlockedJson)));
+      _unlockedAchievementIds
+          .addAll(List<String>.from(json.decode(unlockedJson)));
     }
   }
 
   Future<void> _saveUnlockedAchievements() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('unlocked_achievements', json.encode(_unlockedAchievementIds));
+    await prefs.setString(
+        'unlocked_achievements', json.encode(_unlockedAchievementIds));
   }
 
-  /// Check and unlock achievements based on user stats
+  /// Check and unlock achievements based on current user stats.
+  ///
+  /// Returns the list of achievements that are *newly* unlocked by this call.
   Future<List<Achievement>> checkAchievements({
     int? currentStreak,
     int? totalPoints,
     int? totalDreams,
     int? completedActions,
     int? completedDreams,
-    int? travelMemories,
-    int? countriesVisited,
-    int? travelPhotos,
     int? totalCheckIns,
     int? currentLevel,
     int? journalEntries,
@@ -122,7 +122,6 @@ class AchievementService extends ChangeNotifier {
     bool hasChanges = false;
 
     for (final achievement in _achievements) {
-      // Logic determines if it SHOULD be unlocked right now
       bool shouldBeUnlocked = false;
 
       switch (achievement.type) {
@@ -141,20 +140,9 @@ class AchievementService extends ChangeNotifier {
         case AchievementType.completedDreams:
           shouldBeUnlocked = (completedDreams ?? 0) >= achievement.requirement;
           break;
-        case AchievementType.travel:
-          shouldBeUnlocked = (travelMemories ?? 0) >= achievement.requirement;
-          break;
-        case AchievementType.countries:
-          shouldBeUnlocked = (countriesVisited ?? 0) >= achievement.requirement;
-          break;
-        case AchievementType.travelPhotos:
-          shouldBeUnlocked = (travelPhotos ?? 0) >= achievement.requirement;
-          break;
-
         case AchievementType.level:
           shouldBeUnlocked = (currentLevel ?? 0) >= achievement.requirement;
           break;
-
         case AchievementType.journalEntries:
           shouldBeUnlocked = (journalEntries ?? 0) >= achievement.requirement;
           break;
@@ -165,26 +153,28 @@ class AchievementService extends ChangeNotifier {
           shouldBeUnlocked =
               (studioActivitiesCompleted ?? 0) >= achievement.requirement;
           break;
-
         case AchievementType.special:
           if (achievement.id == 'pro_access') {
-             shouldBeUnlocked = isPro ?? false;
+            shouldBeUnlocked = isPro ?? false;
           } else {
-             shouldBeUnlocked = _unlockedAchievementIds.contains(achievement.id);
+            // Other special badges (e.g. 'customizer') are unlocked externally
+            // via unlockSpecialAchievement(). Preserve any already-stored
+            // unlock so a re-check doesn't accidentally revoke them.
+            shouldBeUnlocked =
+                _unlockedAchievementIds.contains(achievement.id);
           }
           break;
         case AchievementType.meditation:
-          // Meditation badges are unlocked by MeditationState calling
-          // unlockSpecialAchievement(). Here we just preserve any already-stored
-          // unlock so a re-check doesn't accidentally lock them again.
-          shouldBeUnlocked = _unlockedAchievementIds.contains(achievement.id);
+          // Unlocked externally by MeditationState — preserve stored state.
+          shouldBeUnlocked =
+              _unlockedAchievementIds.contains(achievement.id);
           break;
       }
 
-      final isCurrentlyUnlocked = _unlockedAchievementIds.contains(achievement.id);
+      final isCurrentlyUnlocked =
+          _unlockedAchievementIds.contains(achievement.id);
 
       if (shouldBeUnlocked && !isCurrentlyUnlocked) {
-        // New unlock!
         _unlockedAchievementIds.add(achievement.id);
         newlyUnlocked.add(achievement);
         hasChanges = true;
@@ -193,30 +183,33 @@ class AchievementService extends ChangeNotifier {
 
     if (hasChanges) {
       await _saveUnlockedAchievements();
-      
-      // Sync to cloud
-      await StorageService().saveUnlockedAchievementsToCloud(_unlockedAchievementIds);
-      
+      await StorageService()
+          .saveUnlockedAchievementsToCloud(_unlockedAchievementIds);
       notifyListeners();
     }
 
     return newlyUnlocked;
   }
 
-  /// Manually unlock a special achievement
+  /// Manually unlock a special achievement (e.g. 'customizer', meditation
+  /// badges). No-op if already unlocked.
   Future<void> unlockSpecialAchievement(String achievementId) async {
     if (!_unlockedAchievementIds.contains(achievementId)) {
       _unlockedAchievementIds.add(achievementId);
       await _saveUnlockedAchievements();
-      await StorageService().saveUnlockedAchievementsToCloud(_unlockedAchievementIds);
+      await StorageService()
+          .saveUnlockedAchievementsToCloud(_unlockedAchievementIds);
       notifyListeners();
     }
   }
 
-  bool isUnlocked(String achievementId) {
-    return _unlockedAchievementIds.contains(achievementId);
-  }
+  bool isUnlocked(String achievementId) =>
+      _unlockedAchievementIds.contains(achievementId);
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Achievement model
+// ────────────────────────────────────────────────────────────────────────────
 
 class Achievement {
   final String id;
@@ -226,7 +219,8 @@ class Achievement {
   final AchievementType type;
   final int requirement;
 
-  Achievement(this.id, this.emoji, this.name, this.description, this.type, this.requirement);
+  const Achievement(this.id, this.emoji, this.name, this.description,
+      this.type, this.requirement);
 
   String get requirementText {
     switch (type) {
@@ -235,28 +229,22 @@ class Achievement {
       case AchievementType.points:
         return '$requirement points';
       case AchievementType.dreams:
-        return '$requirement ${requirement == 1 ? 'dream' : 'dreams'}';
+        return '$requirement ${requirement == 1 ? 'intention' : 'intentions'}';
       case AchievementType.actions:
         return '$requirement ${requirement == 1 ? 'action' : 'actions'}';
       case AchievementType.completedDreams:
-        return 'Complete $requirement ${requirement == 1 ? 'dream' : 'dreams'}';
-      case AchievementType.travel:
-        return '$requirement ${requirement == 1 ? 'memory' : 'memories'}';
-      case AchievementType.countries:
-        return '$requirement ${requirement == 1 ? 'country' : 'countries'}';
-      case AchievementType.travelPhotos:
-        return '$requirement ${requirement == 1 ? 'photo' : 'photos'}';
-
+        return 'Complete $requirement '
+            '${requirement == 1 ? 'intention' : 'intentions'}';
       case AchievementType.level:
         return 'Level $requirement';
-
       case AchievementType.journalEntries:
         return 'Write $requirement ${requirement == 1 ? 'entry' : 'entries'}';
       case AchievementType.todoItems:
-        return 'Complete $requirement todo ${requirement == 1 ? 'item' : 'items'}';
+        return 'Complete $requirement todo '
+            '${requirement == 1 ? 'item' : 'items'}';
       case AchievementType.studioActivities:
-        return 'Complete $requirement studio ${requirement == 1 ? 'activity' : 'activities'}';
-
+        return 'Complete $requirement studio '
+            '${requirement == 1 ? 'activity' : 'activities'}';
       case AchievementType.special:
         return 'Special action';
       case AchievementType.meditation:
@@ -265,22 +253,22 @@ class Achievement {
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Achievement type enum
+// ────────────────────────────────────────────────────────────────────────────
+
 enum AchievementType {
   streak,
   points,
   dreams,
   actions,
   completedDreams,
-  travel,
-  countries,
-  travelPhotos,
   level,
   journalEntries,
   todoItems,
   studioActivities,
   special,
   /// Meditation & Mindfulness badges — unlocked externally by MeditationState
-  /// via [AchievementService.unlockSpecialAchievement]; the service just mirrors
-  /// and persists them so they appear in the global Achievements screen.
+  /// via [AchievementService.unlockSpecialAchievement].
   meditation,
 }

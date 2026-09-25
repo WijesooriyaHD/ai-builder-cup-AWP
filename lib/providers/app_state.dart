@@ -206,7 +206,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// Stable ids of the user's preferred wellness methods (see kWellnessMethods).
   /// Drives Today's Plan personalization. May be empty for pre-existing users.
   List<String> get preferredMethods => List.unmodifiable(_preferredMethods);
-  int get activityPoints => (AchievementService().totalUnlocked * 100) + (_travelMemories.length * 50) + (_currentStreak * 10); // Updated formula to match storage service
+  int get activityPoints =>
+      (AchievementService().totalUnlocked * 100) +
+      (_currentStreak * 50); // Streak is the primary daily-commitment signal
 
   // Settings
   ThemeMode _themeMode = ThemeMode.light;
@@ -416,6 +418,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _themeColor = color;
     _saveSettings();
     notifyListeners();
+    // Unlock "Made It Yours" the first time the user changes the theme.
+    unawaited(AchievementService().unlockSpecialAchievement('customizer'));
   }
 
   /// Applies a wellness theme. Throws [PremiumFeatureException] if the theme
@@ -427,6 +431,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _themeColor = theme.seedColor;
     _saveSettings();
     notifyListeners();
+    // Unlock "Made It Yours" the first time the user changes the theme.
+    unawaited(AchievementService().unlockSpecialAchievement('customizer'));
   }
 
   void setTextScaleFactor(double scale) {
@@ -2512,12 +2518,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final completedDreams = _dreams.where((dream) => 
         dream.steps.every((step) => step.isCompleted)).length;
     
-    final travelMemories = _travelMemories.length;
-    final countriesVisited = _travelMemories.map((m) => m.place).toSet().length;
-    final travelPhotos = _travelMemories
-        .expand((m) => m.photos)
-        .length;
-    
     // Wellness Studio activity completions are stored by WellnessStudioScreen
     // in SharedPreferences as a JSON list of activity IDs.
     int studioActivitiesCompleted = 0;
@@ -2547,9 +2547,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       totalDreams: totalDreams,
       completedActions: completedActions,
       completedDreams: completedDreams,
-      travelMemories: travelMemories,
-      countriesVisited: countriesVisited,
-      travelPhotos: travelPhotos,
       totalCheckIns: _totalCheckIns,
       currentLevel: snapshotLevel,
       studioActivitiesCompleted: studioActivitiesCompleted,

@@ -11,7 +11,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../providers/app_state.dart';
 import '../services/onesignal_service.dart';
 import '../providers/check_in_state.dart';
-import '../providers/personalization_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../services/auth_service.dart';
 import '../services/live_conversation_service.dart';
@@ -34,12 +33,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  /// SharedPreferences key for disabling AI insights.
-  static const String _aiInsightsDisabledKey = 'wellness_ai_insights_disabled';
-
-  bool _aiInsightsDisabled = false;
-  String _aiInsightsSummary = '';
-  bool _summaryLoaded = false;
   bool _isDeletingAccount = false;
   // Push notification opt-in state (defaults to true; read live from OneSignal
   // so the toggle reflects reality even if changed outside the app).
@@ -48,52 +41,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAiInsightsPreference();
     // Read the live OneSignal opt-in state so the toggle matches reality.
     _pushNotificationsEnabled = OneSignalService().optedIn;
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_summaryLoaded) {
-      _summaryLoaded = true;
-      _loadAiInsightsSummary();
-    }
-  }
-
-  Future<void> _loadAiInsightsPreference() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final disabled = prefs.getBool(_aiInsightsDisabledKey) ?? false;
-      if (mounted) {
-        setState(() {
-          _aiInsightsDisabled = disabled;
-        });
-      }
-    } catch (e) {
-      debugPrint('SettingsScreen: Failed to load AI insights preference: $e');
-    }
-  }
-
-  void _loadAiInsightsSummary() {
-    final personalization =
-        Provider.of<PersonalizationState>(context, listen: false);
-    setState(() {
-      _aiInsightsSummary = personalization.summarizePreferences();
-    });
-  }
-
-  Future<void> _toggleAiInsights(bool disabled) async {
-    setState(() {
-      _aiInsightsDisabled = disabled;
-    });
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_aiInsightsDisabledKey, disabled);
-    } catch (e) {
-      debugPrint('SettingsScreen: Failed to persist AI insights preference: $e');
-    }
   }
 
   @override
@@ -565,41 +514,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
             const Divider(height: 24),
-            Text(
-              _aiInsightsSummary,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: isDark ? Colors.white70 : Colors.black87,
-                    height: 1.5,
-                  ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    "Today's Plan",
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-                Switch.adaptive(
-                  value: _aiInsightsDisabled,
-                  onChanged: (value) => _toggleAiInsights(value),
-                ),
-              ],
-            ),
-            if (_aiInsightsDisabled)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Daily Plan Notifications will be disabled',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.white54 : Colors.grey.shade600,
-                      ),
-                ),
-              ),
           ],
         ),
       ),
