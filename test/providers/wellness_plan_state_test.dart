@@ -116,6 +116,16 @@ class FakeAIService implements AIService {
   }
 
   @override
+  Future<String?> chatWithPal({
+    required List<Map<String, String>> history,
+    required String userMessage,
+    String? userName,
+    String? wellnessContext,
+  }) async {
+    return null;
+  }
+
+  @override
   Future<String?> explainAction({
     required String actionTitle,
     required String category,

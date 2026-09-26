@@ -2203,6 +2203,32 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  static const String _defaultPalGreetedKey =
+      'aiwellnesspal_default_pal_greeted';
+
+  /// Whether this is the very FIRST time the default pal's window has been
+  /// opened — used to give the time-of-day greeting ("Good morning! I'm your
+  /// wellness pal…") once, and a "Welcome back" line on every open after.
+  ///
+  /// Note this differs from [consumeIsFirstLivePalGreetingToday], which resets
+  /// each day; this one is once for the lifetime of the install.
+  ///
+  /// Consuming (marking): sets the flag on the first call, so every later call
+  /// returns false. Best-effort; on any storage error it returns false, since
+  /// repeating the introduction to a returning user is the worse failure.
+  Future<bool> consumeIsFirstDefaultPalGreeting() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      if (prefs.getBool(_defaultPalGreetedKey) == true) return false;
+      await prefs.setBool(_defaultPalGreetedKey, true);
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ Error checking first default pal greeting: $e');
+      return false;
+    }
+  }
+
   Future<List<Achievement>> addDream(String title, {DateTime? deadline, int? themeColor, int? themeIcon, List<Map<String, dynamic>>? initialSteps}) async {
     // Determine steps source: provided AI steps OR generated mock steps
     final steps = (initialSteps != null && initialSteps.isNotEmpty)

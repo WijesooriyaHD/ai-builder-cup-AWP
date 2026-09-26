@@ -15,6 +15,7 @@ import '../services/app_navigation_service.dart';
 import '../services/life_tool_registry.dart';
 import '../main.dart' show globalNavigatorKey;
 import '../widgets/voice_assistant_sheet.dart';
+import '../widgets/pal_fab.dart';
 
 
 class MainWrapper extends StatefulWidget {
@@ -210,7 +211,7 @@ class _MainWrapperState extends State<MainWrapper> {
             _buildNavItem(0, Icons.wb_sunny_outlined, Icons.wb_sunny_rounded),
             _buildNavItem(1, Icons.self_improvement_outlined, Icons.self_improvement_rounded),
             _buildNavItem(2, Icons.checklist_rounded, Icons.checklist_rounded),
-            _buildNavItem(3, Icons.auto_awesome_outlined, Icons.auto_awesome_rounded),
+            _buildNavItem(3, Icons.menu_book_outlined, Icons.menu_book_rounded),
             _buildNavItem(4, Icons.settings_outlined, Icons.settings_rounded),
           ],
         ),
@@ -219,34 +220,32 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   Widget _buildVoiceFab(BuildContext context) {
-    final theme = Theme.of(context);
-    // Watch BOTH pals so the mic reflects whichever one is running (the Live
+    // Watch BOTH pals so the button reflects whichever one is running (the Live
     // pal is selected in Settings → AI Voice).
     return Consumer2<VoiceCommandService, LiveConversationService>(
       builder: (context, voiceService, liveService, _) {
-        final isActive =
-            voiceService.state != VoiceAssistantState.idle ||
-                liveService.state == LiveConversationState.connecting ||
-                liveService.state == LiveConversationState.active;
+        // The Live pal has its own state machine, so map it onto the assistant
+        // states the orb understands. Connecting reads as "processing", an
+        // active session as "listening" (the mic really is open).
+        final VoiceAssistantState state;
+        if (liveService.state == LiveConversationState.connecting) {
+          state = VoiceAssistantState.processing;
+        } else if (liveService.state == LiveConversationState.active) {
+          state = VoiceAssistantState.listening;
+        } else {
+          state = voiceService.state;
+        }
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 80),
           // TAP → open + start the pal. LONG-PRESS → open the Wellness Pal
           // window WITHOUT starting a conversation, so the user can see their
           // Recent Conversations first (then tap the orb to talk).
-          child: GestureDetector(
+          child: PalFab(
+            state: state,
+            soundLevel: voiceService.soundLevel,
+            onTap: () => _showVoiceAssistant(context),
             onLongPress: () => _showVoiceAssistant(context, autoStart: false),
-            child: FloatingActionButton(
-              onPressed: () => _showVoiceAssistant(context),
-              backgroundColor: isActive
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.surface,
-              elevation: isActive ? 8 : 4,
-              child: Icon(
-                isActive ? Icons.mic : Icons.mic_none_rounded,
-                color: isActive ? Colors.white : theme.colorScheme.primary,
-                size: 26,
-              ),
-            ),
           ),
         );
       },

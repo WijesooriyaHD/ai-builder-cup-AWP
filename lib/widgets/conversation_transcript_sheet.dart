@@ -181,7 +181,7 @@ class _ConversationTranscriptSheetState
                   : const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.auto_awesome_rounded, size: 18),
+                        Icon(Icons.menu_book_rounded, size: 18),
                         SizedBox(width: 8),
                         Text('Reflection'),
                       ],

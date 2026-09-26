@@ -22,6 +22,7 @@ import '../services/app_navigation_service.dart';
 import '../services/notification_service.dart';
 import '../services/toolkit_context_builder.dart';
 import '../screens/achievement_completion_page.dart';
+import '../screens/wellness_pal_chat_screen.dart';
 import 'voice_orb.dart';
 
 // Tool + tab screens reachable by voice.
@@ -71,6 +72,18 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
   /// the user's "Live chat Pal" setting. Captured at open time so flipping the
   /// setting mid-session can't swap engines underneath a running conversation.
   late final bool _isLivePal;
+
+  /// True when the sheet was opened by LONG-PRESSING the Pal button rather than
+  /// tapping it.
+  ///
+  /// This is what decides whether "Recent Conversations" gets the user's
+  /// attention, for both pals:
+  ///  - Long-press → the user came to browse past conversations, so the band is
+  ///    shown and in focus.
+  ///  - Tap → the user came to talk, so the band is out of the way (blurred for
+  ///    the Live pal, hidden entirely for the default pal, which otherwise
+  ///    shows just the conversation).
+  bool get _openedByLongPress => !widget.autoStartLive;
 
   /// The Wellness Pal sheet stays open after a Live session ends so the user can
   /// tap the orb to start a new one.
@@ -124,12 +137,16 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
     // it can answer questions about Today's Plan, the Toolkit, Challenges, the
     // Wellness Studio, and Wellness Reads just as well.
     _voiceService.appKnowledge = kWellnessPalAppKnowledge;
-    _voiceService.initialize().then((_) {
+    _voiceService.initialize().then((_) async {
+      if (!mounted) return;
+      // The full time-of-day introduction only the first time this window is
+      // ever opened; a "Welcome back" line on every open after that.
+      final isFirstOpen = await appState.consumeIsFirstDefaultPalGreeting();
       if (!mounted) return;
       // Greet out loud (like the Live pal opens the conversation), then start
       // listening once the greeting has finished playing.
       Future.delayed(const Duration(milliseconds: 250), () {
-        if (mounted) _voiceService.greetAndListen();
+        if (mounted) _voiceService.greetAndListen(isFirstOpen: isFirstOpen);
       });
     });
   }
@@ -773,15 +790,52 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                   size: 20,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  'Wellness Pal',
-                  style: GoogleFonts.outfit(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
+                // Flexible so the title yields instead of overflowing the row
+                // once the Chat button and a status badge sit beside it.
+                Flexible(
+                  child: Text(
+                    'Wellness Pal',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 const Spacer(),
+                // The default pal reaches Chat through the orb's sibling down
+                // in the orb section, so the button here is only needed by the
+                // Live pal, whose body has no orb section.
+                if (_isLivePal)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: TextButton.icon(
+                      onPressed: () => WellnessPalChatScreen.open(context),
+                      icon: Icon(Icons.forum_rounded,
+                          size: 16, color: theme.colorScheme.primary),
+                      label: Text(
+                        'Chat',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        backgroundColor:
+                            theme.colorScheme.primary.withOpacity(0.1),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
                 // A quiet "Live" marker so it's clear which pal is active. The
                 // Live pal is selected in Settings → AI Voice, so there's no
                 // longer a "Talk" button to switch modes here.
@@ -836,12 +890,34 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
           // the default pal keeps the message-list layout.
           if (_isLivePal)
             Expanded(child: _buildLivePalBody(theme, isDark))
-          else ...[
-            // NOTE: "Recent Conversations" is intentionally NOT shown for the
-            // default pal — those cards are saved Live conversations, so they
-            // only belong in the Live pal's view.
+          else if (_openedByLongPress) ...[
+            // Long-press: the user came to browse, so Recent Conversations is
+            // the point of the screen. It gets the lion's share of the space
+            // (flex 4 vs 1) so all three cards fit, and the conversation is
+            // reduced to just the pal's last message.
+            Flexible(
+              flex: 4,
+              child: _buildRecentConversations(theme, isDark),
+            ),
+            Flexible(
+              flex: 1,
+              child: _voiceService.messages.isEmpty
+                  ? const SizedBox.shrink()
+                  : _buildLastMessageOnly(theme, isDark),
+            ),
 
-            // Conversation messages
+            if (_voiceService.currentWords.isNotEmpty &&
+                _voiceService.state == VoiceAssistantState.listening)
+              _buildTranscriptionBar(theme),
+
+            if (kDebugMode) _buildDebugInput(theme, isDark),
+
+            // Compact orb: browsing mode doesn't need the full-size one, and
+            // the space it frees is what lets all three cards fit.
+            _buildOrbSection(theme, isDark, compact: true),
+          ] else ...[
+            // Plain tap means "talk to me": no Recent Conversations, just the
+            // conversation with the default pal at full size.
             Expanded(
               child: _voiceService.messages.isEmpty
                   ? _buildEmptyState(theme)
@@ -884,10 +960,13 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
 
         return Column(
           children: [
-            // Recent conversations, blurred + dimmed while talking.
-            _buildBlurredWhenActive(
-              blurred: isConversing,
-              child: _buildRecentConversations(theme, isDark),
+            // In focus only when the user long-pressed to come and browse.
+            // A plain tap (or any running session) pushes it out of the way.
+            Flexible(
+              child: _buildBlurredWhenActive(
+                blurred: isConversing || !_openedByLongPress,
+                child: _buildRecentConversations(theme, isDark),
+              ),
             ),
 
             Expanded(
@@ -1068,44 +1147,88 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
   /// A "Recent conversations" band showing up to 3 saved Live conversations as
   /// cards (styled like the Habit Builder active-habit tiles). Hidden entirely
   /// when there are none. Rebuilds via Consumer<ConversationStore>.
+  ///
+  /// Whether it is shown at all, and whether it is in focus, is decided by the
+  /// caller from [_openedByLongPress] — see that getter.
   Widget _buildRecentConversations(ThemeData theme, bool isDark) {
     return Consumer<ConversationStore>(
       builder: (context, store, _) {
         final records = store.records;
         if (records.isEmpty) return const SizedBox.shrink();
-        return Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.34,
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'RECENT CONVERSATIONS',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                  color: theme.colorScheme.onSurface.withOpacity(0.45),
+
+        // Everything around the cards: padding plus the header and its gap.
+        const chromeHeight = 12 + 14 + 10 + 4.0;
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            // How many WHOLE cards fit in the space the parent is offering.
+            // Sizing to a whole number is what stops the last card being
+            // sliced in half where the band ends.
+            final available = constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : MediaQuery.of(context).size.height * 0.34;
+            final fitsWhole =
+                ((available - chromeHeight) / _ConversationCard.cardPitch)
+                    .floor();
+
+            // Not even one whole card — drop the band rather than show a
+            // sliver of one.
+            if (fitsWhole < 1) return const SizedBox.shrink();
+
+            final visibleCards =
+                fitsWhole < records.length ? fitsWhole : records.length;
+
+            return SizedBox(
+              height:
+                  chromeHeight + (visibleCards * _ConversationCard.cardPitch),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'RECENT CONVERSATIONS',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: theme.colorScheme.onSurface.withOpacity(0.45),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      // Still scrollable, so any records beyond what fits are
+                      // reachable rather than lost.
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: records.length,
+                        itemBuilder: (context, index) => _ConversationCard(
+                          record: records[index],
+                          isDark: isDark,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  padding: EdgeInsets.zero,
-                  itemCount: records.length,
-                  itemBuilder: (context, index) => _ConversationCard(
-                    record: records[index],
-                    isDark: isDark,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
+    );
+  }
+
+  /// Just the most recent message, for the browsing (long-press) layout where
+  /// Recent Conversations takes the space the full list would have used.
+  ///
+  /// Scrolls rather than clips, so a long reply can still be read in full and
+  /// nothing overflows however little height it is given.
+  Widget _buildLastMessageOnly(ThemeData theme, bool isDark) {
+    final message = _voiceService.messages.last;
+    return SingleChildScrollView(
+      reverse: true, // Keep the end of a long message in view.
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: _buildMessageBubble(message, theme, isDark),
     );
   }
 
@@ -1275,12 +1398,25 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
     );
   }
 
-  Widget _buildOrbSection(ThemeData theme, bool isDark) {
+  /// The orb and its labels.
+  ///
+  /// [compact] shrinks the orb and tightens the spacing, used when Recent
+  /// Conversations is on screen — the space it gives back is what lets all
+  /// three conversation cards fit without anything overflowing.
+  Widget _buildOrbSection(ThemeData theme, bool isDark, {bool compact = false}) {
     final isListening = _voiceService.state == VoiceAssistantState.listening;
+    final orbSize = compact ? 92.0 : 130.0;
+    // Deliberately much smaller than the speak orb: it's a sibling, not a
+    // rival, and speaking stays the primary action on this screen.
+    final chatOrbSize = compact ? 40.0 : 54.0;
+    final gap = compact ? 6.0 : 12.0;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(20, 8, 20, 14)
+          : const EdgeInsets.fromLTRB(20, 16, 20, 32),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           // State label
           AnimatedSwitcher(
@@ -1295,20 +1431,51 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: gap),
 
-          // Orb
-          GestureDetector(
-            onTap: _onOrbTap,
-            onLongPress: _onOrbLongPress,
-            child: VoiceOrb(
-              state: _voiceService.state,
-              soundLevel: _voiceService.soundLevel,
-              size: 130,
-              primaryColor: theme.colorScheme.primary,
-            ),
+          // The speak orb, with its Chat sibling beside it. The empty box on
+          // the left is the sibling's mirror image, so the main orb stays
+          // optically centred rather than being pushed off to one side.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(width: chatOrbSize + 16),
+              GestureDetector(
+                onTap: _onOrbTap,
+                onLongPress: _onOrbLongPress,
+                child: SizedBox(
+                  width: orbSize,
+                  height: orbSize,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      VoiceOrb(
+                        state: _voiceService.state,
+                        soundLevel: _voiceService.soundLevel,
+                        size: orbSize,
+                        primaryColor: theme.colorScheme.primary,
+                      ),
+                      // Mic glyph, matching how the Chat sibling carries its
+                      // own icon. Same icon-to-orb ratio (0.34) so the pair
+                      // reads as one family at their different sizes.
+                      Icon(
+                        _orbIcon,
+                        size: orbSize * 0.34,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              _ChatOrb(
+                size: chatOrbSize,
+                onTap: () => WellnessPalChatScreen.open(context),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: gap),
 
           // Action hint
           Text(
@@ -1321,6 +1488,21 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
         ],
       ),
     );
+  }
+
+  /// Glyph shown inside the speak orb, tracking what the pal is doing — the
+  /// mic opens up while listening, and becomes a waveform while it talks back.
+  IconData get _orbIcon {
+    switch (_voiceService.state) {
+      case VoiceAssistantState.idle:
+        return Icons.mic_none_rounded;
+      case VoiceAssistantState.listening:
+        return Icons.mic_rounded;
+      case VoiceAssistantState.processing:
+        return Icons.more_horiz_rounded;
+      case VoiceAssistantState.speaking:
+        return Icons.graphic_eq_rounded;
+    }
   }
 
   String get _stateLabel {
@@ -1363,8 +1545,93 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
 /// A card for one saved Live conversation, styled like the Habit Builder
 /// active-habit tiles. Tapping opens the full transcript; the trailing buttons
 /// delete it or turn it into a wellness reflection.
+/// The speak orb's smaller sibling: opens the typed Chat with the pal.
+///
+/// Built from the same [VoiceOrb], held permanently in its idle state, so it
+/// carries the identical sweeping gradient, glow rings and inner highlight —
+/// visibly the same family as the orb beside it, just quieter and smaller so
+/// speaking stays the primary action.
+class _ChatOrb extends StatefulWidget {
+  const _ChatOrb({required this.size, required this.onTap});
+
+  final double size;
+  final VoidCallback onTap;
+
+  @override
+  State<_ChatOrb> createState() => _ChatOrbState();
+}
+
+class _ChatOrbState extends State<_ChatOrb> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Semantics(
+      button: true,
+      label: 'Chat with your pal',
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.90 : 1.0,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: widget.size,
+                height: widget.size,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Always idle: the sibling ambles along while the speak orb
+                    // reacts, so the two never compete for attention.
+                    VoiceOrb(
+                      state: VoiceAssistantState.idle,
+                      size: widget.size,
+                      primaryColor: theme.colorScheme.primary,
+                    ),
+                    Icon(
+                      Icons.forum_rounded,
+                      size: widget.size * 0.34,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Chat',
+                style: GoogleFonts.dmSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface.withOpacity(0.5),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ConversationCard extends StatefulWidget {
   const _ConversationCard({required this.record, required this.isDark});
+
+  /// Fixed card height, and the gap below it. The Recent Conversations band
+  /// uses these to round its own height down to whole cards, so a card is
+  /// never cut in half by the bottom of the band.
+  static const double cardHeight = 62;
+  static const double cardGap = 10;
+
+  /// Vertical space one card occupies in the list.
+  static const double cardPitch = cardHeight + cardGap;
 
   final LiveConversationRecord record;
   final bool isDark;
@@ -1416,7 +1683,10 @@ class _ConversationCardState extends State<_ConversationCard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      // Definite height so the band can size itself to a whole number of cards
+      // instead of slicing the last one in half — see kConversationCardHeight.
+      height: _ConversationCard.cardHeight,
+      margin: const EdgeInsets.only(bottom: _ConversationCard.cardGap),
       decoration: BoxDecoration(
         color: widget.isDark ? const Color(0xFF1E2124) : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1432,14 +1702,22 @@ class _ConversationCardState extends State<_ConversationCard> {
         color: Colors.transparent,
         child: InkWell(
           // Disable tapping into the card while a reflection is generating.
+          // A chat reopens so the user can keep talking; a spoken conversation
+          // can only be read back, so it opens the transcript sheet.
           onTap: _generating
               ? null
-              : () => ConversationTranscriptSheet.open(context, widget.record),
+              : () => widget.record.isChat
+                  ? WellnessPalChatScreen.open(context,
+                      record: widget.record)
+                  : ConversationTranscriptSheet.open(context, widget.record),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
             child: Row(
               children: [
-                const Text('🗣️', style: TextStyle(fontSize: 20)),
+                // Spoken vs typed, so the two kinds are tellable apart at a
+                // glance now that they share one list.
+                Text(widget.record.isChat ? '💬' : '🗣️',
+                    style: const TextStyle(fontSize: 20)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -1456,7 +1734,8 @@ class _ConversationCardState extends State<_ConversationCard> {
                       Text(
                         _generating
                             ? 'Creating your reflection…'
-                            : '${widget.record.turns.length} messages · tap to view',
+                            : '${widget.record.turns.length} messages · '
+                                '${widget.record.isChat ? "tap to continue" : "tap to view"}',
                         style: theme.textTheme.bodySmall?.copyWith(
                             color:
                                 theme.colorScheme.onSurface.withOpacity(0.5)),
@@ -1478,7 +1757,7 @@ class _ConversationCardState extends State<_ConversationCard> {
                 else ...[
                   IconButton(
                     tooltip: 'Generate reflection',
-                    icon: Icon(Icons.auto_awesome_rounded,
+                    icon: Icon(Icons.edit_note_rounded,
                         color: theme.colorScheme.primary),
                     onPressed: _generateReflection,
                   ),

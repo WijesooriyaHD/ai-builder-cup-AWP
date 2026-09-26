@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show Random;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -304,12 +305,18 @@ class VoiceCommandService extends ChangeNotifier {
   ///
   /// Mirrors how the Live pal opens the conversation itself, so the default pal
   /// no longer starts in silence.
-  Future<void> greetAndListen() async {
+  ///
+  /// [isFirstOpen] picks which greeting: the full time-of-day introduction the
+  /// very first time the pal's window is opened, and a shorter "Welcome back"
+  /// line every time after — a returning user doesn't need introducing to
+  /// their pal again.
+  Future<void> greetAndListen({bool isFirstOpen = true}) async {
     if (_liveActive) return;
     if (!_isInitialized) await initialize();
     if (_liveActive) return;
 
-    final greeting = openingGreeting();
+    final greeting =
+        isFirstOpen ? openingGreeting() : returningGreeting();
     _addAssistantMessage(greeting);
 
     _afterSpeakOnce = () {
@@ -343,6 +350,19 @@ class VoiceCommandService extends ChangeNotifier {
             ? 'Good afternoon'
             : 'Good evening';
     return "$timeGreeting! I'm your wellness pal. What's on your mind today?";
+  }
+
+  /// The opening line for someone who has opened the pal before — no
+  /// time-of-day and no re-introduction, just picking the conversation back up.
+  ///
+  /// Varied so it doesn't feel like a recording to a daily user.
+  String returningGreeting() {
+    const lines = [
+      'Welcome back! How can I assist you today?',
+      'Welcome back! What can I help you with today?',
+      'Good to see you again. How can I help today?',
+    ];
+    return lines[Random().nextInt(lines.length)];
   }
 
   /// Starts the conversational check-in flow.

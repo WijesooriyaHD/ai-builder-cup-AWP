@@ -107,6 +107,36 @@ class ConversationStore extends ChangeNotifier {
     }
   }
 
+  /// Inserts [record] if it's new, or replaces it in place if a record with
+  /// the same id is already held.
+  ///
+  /// An ongoing Chat conversation saves after every exchange, so it must update
+  /// its own card rather than pushing a fresh copy to the top each time (which
+  /// would both duplicate it and evict the other two conversations). Keeps the
+  /// record at its existing position so the list doesn't reshuffle mid-chat.
+  Future<void> upsert(LiveConversationRecord record) async {
+    final index = _records.indexWhere((r) => r.id == record.id);
+    if (index == -1) {
+      // New conversation — goes through add() so the FIFO cap is enforced.
+      await add(record);
+      return;
+    }
+
+    _records[index] = record;
+    notifyListeners();
+
+    final col = _collection();
+    if (col == null) return;
+    try {
+      await col
+          .doc(record.id)
+          .set(record.toMap())
+          .timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('❌ ConversationStore.upsert error: $e');
+    }
+  }
+
   /// Generates an AI title for [record] and updates it in place (local +
   /// Firestore). Best-effort — leaves the fallback title on any failure.
   Future<void> _generateTitle(LiveConversationRecord record) async {
