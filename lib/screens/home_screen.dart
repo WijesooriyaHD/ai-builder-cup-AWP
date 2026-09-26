@@ -1345,11 +1345,15 @@ class _HomeScreenState extends State<HomeScreen>
           },
           // ── TEST SHORTCUT — remove before shipping ──────────────────
           // Long-press the level badge to preview the achievement
-          // completion screen with the first badge in the catalog.
+          // completion screen with the most recently unlocked badge
+          // (or the first catalog badge if nothing is unlocked yet).
           onLongPress: () {
-            final badge = AchievementService().achievements.first;
+            final svc = AchievementService();
+            final lastUnlocked = svc.unlockedAchievements.lastOrNull
+                ?? svc.achievements.first;
             Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => AchievementCompletionPage(achievement: badge),
+              builder: (_) =>
+                  AchievementCompletionPage(achievement: lastUnlocked),
               fullscreenDialog: true,
             ));
           },
