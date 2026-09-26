@@ -1544,23 +1544,23 @@ PODS:
   - PromisesObjC (2.4.1)
   - PromisesSwift (2.4.1):
     - PromisesObjC (= 2.4.1)
-  - purchases_flutter (9.16.1):
+  - purchases_flutter (10.13.2):
     - Flutter
-    - PurchasesHybridCommon (= 17.55.1)
-  - purchases_ui_flutter (9.16.1):
+    - PurchasesHybridCommon (= 19.3.1)
+  - purchases_ui_flutter (10.13.2):
     - Flutter
-    - PurchasesHybridCommonUI (= 17.55.1)
-  - PurchasesHybridCommon (17.55.1):
-    - RevenueCat (= 5.67.1)
-  - PurchasesHybridCommonUI (17.55.1):
-    - PurchasesHybridCommon (= 17.55.1)
-    - RevenueCatUI (= 5.67.1)
+    - PurchasesHybridCommonUI (= 19.3.1)
+  - PurchasesHybridCommon (19.3.1):
+    - RevenueCat (= 5.90.2)
+  - PurchasesHybridCommonUI (19.3.1):
+    - PurchasesHybridCommon (= 19.3.1)
+    - RevenueCatUI (= 5.90.2)
   - RecaptchaInterop (101.0.0)
   - record_ios (1.2.1):
     - Flutter
-  - RevenueCat (5.67.1)
-  - RevenueCatUI (5.67.1):
-    - RevenueCat (= 5.67.1)
+  - RevenueCat (5.90.2)
+  - RevenueCatUI (5.90.2):
+    - RevenueCat (= 5.90.2)
   - share_plus (0.0.1):
     - Flutter
   - shared_preferences_foundation (0.0.1):
@@ -1780,14 +1780,14 @@ SPEC CHECKSUMS:
   permission_handler_apple: 92d754bbaa7361d436db2d6c3c1c2a0fdcec462e
   PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
   PromisesSwift: 217dea0fd5d2ad65222a109c48698add13cc1c5b
-  purchases_flutter: b44fcb4ff5e68a4dfe53fd0c339683803b04dd2c
-  purchases_ui_flutter: 64afab2a2adc79a73ed5ca77f416c8d360a12734
-  PurchasesHybridCommon: ecd9d7c586287625f1225b8de5e24c1021502270
-  PurchasesHybridCommonUI: 3056a3d261529f6adb8f74ecc3ab7f1cc0d3fab4
+  purchases_flutter: 92f7f2c4730b13452fcc4301df141cc4b06bbca5
+  purchases_ui_flutter: f43f5ce4f46f7e43b337ae69cb07b12ffadcf66b
+  PurchasesHybridCommon: c364d4198150bf4027b00fcada9b4ddc280df108
+  PurchasesHybridCommonUI: 060fadc5112e8c0c750bd7e8f1b19c78f3fcb657
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   record_ios: 980fd386a97a35987d0fce3dfda4b26a38c90f4c
-  RevenueCat: 9357239a9f0978285e68983637b8a602e65c94f0
-  RevenueCatUI: 6f9291da540f98baf405b5bdfc46b2d5547b704a
+  RevenueCat: c44e15b3ee88506da1fdf537c62a6c239cc41b21
+  RevenueCatUI: 0a1f31996e19f7905ea3175c11b4732b3908837b
   share_plus: 50da8cb520a8f0f65671c6c6a99b3617ed10a58a
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   speech_to_text: 3b313d98516d3d0406cea424782ec25470c59d19

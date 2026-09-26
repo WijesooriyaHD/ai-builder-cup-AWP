@@ -123,6 +123,17 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
                 ),
               ),
             ),
+            TextButton(
+              onPressed: () => _redeemPromoCode(),
+              child: Text(
+                'Have a promo code?',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -340,6 +351,74 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
           isError: true,
         );
       }
+    }
+  }
+
+  /// Opens the platform promo-code redemption flow, then re-checks entitlements.
+  ///
+  /// Neither Apple's redemption sheet nor the Play redeem page tells us whether
+  /// a code was actually applied, so we always re-read entitlements afterwards
+  /// and report based on what came back rather than on the sheet closing.
+  Future<void> _redeemPromoCode() async {
+    final opened = await _revenueCatService.redeemPromoCode();
+
+    if (!mounted) return;
+
+    if (!opened) {
+      WellnessPalSnackBar.show(
+        context,
+        message: 'Promo code redemption is not available on this device.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final appState = Provider.of<AppState>(context, listen: false);
+      await appState.updateProStatus(forceRefresh: true);
+      if (!mounted) return;
+      await _loadSubscriptionStatus();
+      if (!mounted) return;
+
+      if (appState.isPro) {
+        final newAchievements =
+            await AchievementService().checkAchievements(isPro: true);
+        if (!mounted) return;
+        for (final achievement in newAchievements) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) =>
+                  AchievementCompletionPage(achievement: achievement),
+              fullscreenDialog: true,
+            ),
+          );
+          if (!mounted) return;
+        }
+        ProModalUtils.showWelcomeProModal(context);
+      } else {
+        // Expected on Android, where the code is redeemed in the Play Store
+        // and the entitlement may not have propagated yet.
+        WellnessPalSnackBar.show(
+          context,
+          message:
+              'No new subscription found yet. If you just redeemed a code, '
+              'reopen this screen in a moment.',
+          icon: Icons.info_outline_rounded,
+          duration: const Duration(seconds: 4),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        WellnessPalSnackBar.show(
+          context,
+          message: 'Could not confirm redemption: $e',
+          icon: Icons.error_outline_rounded,
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

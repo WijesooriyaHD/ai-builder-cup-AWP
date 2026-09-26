@@ -159,6 +159,30 @@ class RevenueCatService {
     }
   }
 
+  /// Forces a server round-trip, bypassing the *native* SDK cache as well as
+  /// the in-memory one.
+  ///
+  /// [refreshCustomerInfo] only re-reads through `Purchases.getCustomerInfo()`,
+  /// which the native SDK may answer from its own short-lived cache. That's
+  /// fine after a purchase (the SDK updates itself), but NOT after an
+  /// entitlement changes out of band:
+  ///  - a promotional entitlement granted from the RevenueCat dashboard,
+  ///  - an Apple offer code redeemed in the App Store app or redemption sheet,
+  ///  - a Google Play promo code redeemed in the Play Store.
+  ///
+  /// In those cases the user can sit on a stale "free" state until the cache
+  /// expires. Call this instead so the new entitlement lands immediately.
+  Future<CustomerInfo> hardRefreshCustomerInfo() async {
+    if (!_isConfigured) return refreshCustomerInfo();
+    try {
+      await Purchases.invalidateCustomerInfoCache();
+    } catch (e) {
+      // Non-fatal: fall through to a normal refresh.
+      debugPrint('⚠️ invalidateCustomerInfoCache failed: $e');
+    }
+    return refreshCustomerInfo();
+  }
+
   /// Get active subscription status
   Future<SubscriptionStatus> getSubscriptionStatus() async {
     // TEST-ONLY: report an active plan when force-Pro is on.
@@ -396,6 +420,65 @@ class RevenueCatService {
       debugPrint('❌ presentPaywall error: $e');
       return null;
     }
+  }
+
+  /// Opens the platform's promo-code redemption flow.
+  ///
+  /// NOTE: this deliberately does NOT go through a `redemption_button`
+  /// component on the RevenueCat-hosted paywall. That component type is not
+  /// decodable by any current mobile SDK (verified against RevenueCat /
+  /// RevenueCatUI 5.90.2 via purchases_flutter 10.13.2) — and worse, when it
+  /// appears inside a Workflow the whole remote config fails to decode and
+  /// takes `getOfferings()` down with it (BackendError 8). The native flows
+  /// below are the supported path.
+  ///
+  ///  - **iOS**: presents Apple's in-app offer-code redemption sheet.
+  ///  - **Android**: opens the Play Store redeem page (Play has no in-app
+  ///    sheet; codes are always redeemed in the Play Store app).
+  ///
+  /// Neither platform reports the redemption result synchronously, so callers
+  /// must re-check entitlements afterwards — this method already performs a
+  /// [hardRefreshCustomerInfo] on iOS, and callers should re-check on resume
+  /// for the Android path.
+  ///
+  /// Returns false when no redemption flow could be opened.
+  Future<bool> redeemPromoCode() async {
+    if (!_isConfigured) {
+      debugPrint('⚠️ redeemPromoCode: RevenueCat not configured — skipping.');
+      return false;
+    }
+
+    if (Platform.isIOS) {
+      try {
+        await Purchases.presentCodeRedemptionSheet();
+        // StoreKit finishes the transaction asynchronously and gives us no
+        // callback, so force a server read rather than trusting the cache.
+        await hardRefreshCustomerInfo();
+        return true;
+      } on PlatformException catch (e) {
+        debugPrint('❌ presentCodeRedemptionSheet failed: ${e.message}');
+        return false;
+      } catch (e) {
+        debugPrint('❌ presentCodeRedemptionSheet error: $e');
+        return false;
+      }
+    }
+
+    if (Platform.isAndroid) {
+      try {
+        final uri = Uri.parse('https://play.google.com/redeem');
+        if (await canLaunchUrl(uri)) {
+          return await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+        debugPrint('❌ redeemPromoCode: cannot launch Play redeem URL.');
+        return false;
+      } catch (e) {
+        debugPrint('❌ redeemPromoCode (Android) error: $e');
+        return false;
+      }
+    }
+
+    return false;
   }
 
   /// Purchase a package

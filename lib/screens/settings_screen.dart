@@ -1852,11 +1852,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
+              // Promo codes are for people who aren't subscribed yet, and
+              // non-subscribers are sent straight to the paywall above (never
+              // to the Customer Center), so the redeem entry point has to live
+              // here to be reachable at all.
+              if (status == SubscriptionStatus.none)
+                Center(
+                  child: TextButton(
+                    onPressed: () => _redeemPromoCode(context),
+                    child: Text(
+                      'Have a promo code?',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white70
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
       },
     );
+  }
+
+  /// Opens the platform promo-code redemption flow, then re-checks entitlements.
+  ///
+  /// Neither Apple's redemption sheet nor the Play redeem page reports whether
+  /// a code was applied, so we always re-read entitlements afterwards and
+  /// report based on what came back.
+  Future<void> _redeemPromoCode(BuildContext context) async {
+    final opened = await RevenueCatService().redeemPromoCode();
+    if (!context.mounted) return;
+
+    if (!opened) {
+      WellnessPalSnackBar.show(
+        context,
+        message: 'Promo code redemption is not available on this device.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+
+    final appState = Provider.of<AppState>(context, listen: false);
+    try {
+      await appState.updateProStatus(forceRefresh: true);
+    } catch (e) {
+      debugPrint('❌ Promo code: failed to refresh pro status: $e');
+    }
+    if (!context.mounted) return;
+
+    if (appState.isPro) {
+      // Rebuild the subscription card so it flips to "Manage Subscription".
+      setState(() {});
+      ProModalUtils.showWelcomeProModal(context);
+    } else {
+      // Expected on Android, where the code is redeemed in the Play Store and
+      // the entitlement may not have propagated back yet.
+      WellnessPalSnackBar.show(
+        context,
+        message: 'No new subscription found yet. If you just redeemed a code, '
+            'reopen Settings in a moment.',
+        icon: Icons.info_outline_rounded,
+        duration: const Duration(seconds: 4),
+      );
+    }
   }
 
   String _getStatusText(SubscriptionStatus status) {
