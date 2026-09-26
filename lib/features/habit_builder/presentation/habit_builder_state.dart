@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../services/notification_service.dart';
+import '../../../services/achievement_service.dart';
 import '../domain/habit_models.dart';
 
 /// State provider for the Habit Builder feature.
@@ -353,6 +354,8 @@ class HabitBuilderState extends ChangeNotifier {
       '${d.day.toString().padLeft(2, '0')}';
 
   /// Marks the habit as completed for today (value = targetValue or 1.0).
+  static const String _totalCompletionsKey = 'habit_total_completions';
+
   Future<void> markComplete(String id) async {
     final idx = _habits.indexWhere((h) => h.id == id);
     if (idx == -1) return;
@@ -363,6 +366,13 @@ class HabitBuilderState extends ChangeNotifier {
     _habits[idx] = h.copyWith(log: newLog);
     notifyListeners();
     await _save();
+    // Keep a running total in prefs so activityPoints can read it cheaply.
+    final totalCompletions =
+        _habits.fold<int>(0, (sum, hab) => sum + hab.log.length);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_totalCompletionsKey, totalCompletions);
+    } catch (_) {}
     // Suppress today's reminder now that it's done.
     await _syncReminder(_habits[idx]);
   }
@@ -406,6 +416,29 @@ class HabitBuilderState extends ChangeNotifier {
       await markComplete(id);
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Achievement helpers
+  // ---------------------------------------------------------------------------
+
+  /// Checks and returns any newly-unlocked habit-related achievements.
+  /// Callers that need to show the completion modal (screens) should await
+  /// this via the updated public methods below.
+  Future<List<Achievement>> _checkHabitAchievements() async {
+    final total = _habits.length;
+    final completions =
+        _habits.fold<int>(0, (sum, h) => sum + h.log.length);
+    return AchievementService().checkAchievements(
+      totalHabits: total,
+      totalHabitCompletions: completions,
+    );
+  }
+
+  /// Public wrapper so screens can request an achievement check after any
+  /// habit mutation (create, complete, toggle) without accessing private
+  /// state directly.
+  Future<List<Achievement>> checkHabitAchievements() =>
+      _checkHabitAchievements();
 
   // ---------------------------------------------------------------------------
   // Context string for today's plan (future integration)

@@ -265,7 +265,7 @@ class _AchievementCompletionPageState extends State<AchievementCompletionPage>
                               elevation: 0,
                             ),
                             child: const Text(
-                              'Awesome!',
+                              'On to the Next One!',
                               style: TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.bold),
                             ),

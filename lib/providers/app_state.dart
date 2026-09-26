@@ -208,7 +208,33 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   List<String> get preferredMethods => List.unmodifiable(_preferredMethods);
   int get activityPoints =>
       (AchievementService().totalUnlocked * 100) +
-      (_currentStreak * 50); // Streak is the primary daily-commitment signal
+      (_currentStreak * 50) + // Streak is the primary daily-commitment signal
+      (_habitCompletionPoints) +
+      (_challengeCompletedPoints);
+
+  /// Cached points contributions from habits and challenges, updated lazily
+  /// by [_refreshActivityBonusPoints]. Stored as instance fields so the getter
+  /// stays synchronous (activityPoints is read frequently by the UI).
+  int _habitCompletionPoints = 0;
+  int _challengeCompletedPoints = 0;
+
+  /// Reads the habit-completion and challenge-completion counters that
+  /// HabitBuilderState/ChallengeState write to SharedPreferences whenever
+  /// they mutate, then updates the cached bonus fields. Called from
+  /// [_checkAchievements] so the formula is fresh before the achievement
+  /// threshold comparisons run.
+  Future<void> _refreshActivityBonusPoints() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final habitCompletions =
+          prefs.getInt('habit_total_completions') ?? 0;
+      final challengesCompleted =
+          prefs.getInt('challenge_total_completed') ?? 0;
+      _habitCompletionPoints = habitCompletions * 5;   // 5 pts per check-off
+      _challengeCompletedPoints = challengesCompleted * 150; // 150 pts per finish
+    } catch (_) {}
+  }
 
   // Settings
   ThemeMode _themeMode = ThemeMode.light;
@@ -2288,6 +2314,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _journalEntries.add(entry);
     await _save();
     notifyListeners();
+    // Unlock "Inner Voice" the first time a reflection (note-type entry, not
+    // a demo placeholder) is saved — triggered both by manual journal entries
+    // and by generating a Live Pal reflection.
+    final isRealNote = entry.type == JournalEntryType.note &&
+        entry.id != 'welcome_note' &&
+        entry.id != 'daily_rituals' &&
+        entry.id != 'example_reflection';
+    if (isRealNote) {
+      unawaited(
+          AchievementService().unlockSpecialAchievement('first_reflection'));
+    }
     return await _checkAchievements();
   }
 
@@ -2503,6 +2540,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<List<Achievement>> _checkAchievements() async {
     final achievementService = AchievementService();
 
+    // Refresh bonus points from habits/challenges before snapshotting, so the
+    // point total used for level/points achievements is up to date.
+    await _refreshActivityBonusPoints();
+
     // Snapshot points & level from the CURRENT totalUnlocked count, before
     // the check mutates it. activityPoints is a live getter that reads
     // AchievementService().totalUnlocked, so we freeze it here.
@@ -2539,6 +2580,30 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         .where((t) => t.isCompleted)
         .length;
     
+    // Read habit/challenge stats from prefs (written by their respective
+    // states whenever mutations happen).
+    int totalHabits = 0;
+    int totalHabitCompletions = 0;
+    int totalChallengesJoined = 0;
+    int totalChallengesCompleted = 0;
+    try {
+      // prefs already reloaded inside _refreshActivityBonusPoints above.
+      final prefs = await SharedPreferences.getInstance();
+      final habitsRaw = prefs.getString('habit_builder_habits');
+      if (habitsRaw != null && habitsRaw.isNotEmpty) {
+        // Parse minimally to count habits and total completions.
+        final decoded = jsonDecode(habitsRaw) as List<dynamic>;
+        totalHabits = decoded.length;
+        for (final h in decoded) {
+          final log = (h as Map<String, dynamic>)['log'] as Map<String, dynamic>?;
+          totalHabitCompletions += (log?.length ?? 0);
+        }
+      }
+      totalChallengesJoined = prefs.getInt('challenge_total_joined') ?? 0;
+      totalChallengesCompleted =
+          prefs.getInt('challenge_total_completed') ?? 0;
+    } catch (_) {}
+
     // Check achievements — use snapshotted points/level so newly-unlocked
     // badges don't inflate the score mid-check and cascade into further unlocks.
     final newAchievements = await achievementService.checkAchievements(
@@ -2553,6 +2618,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       isPro: _isPro,
       journalEntries: userJournalEntries,
       todoItems: userTodoItems,
+      totalHabits: totalHabits,
+      totalHabitCompletions: totalHabitCompletions,
+      totalChallengesJoined: totalChallengesJoined,
+      totalChallengesCompleted: totalChallengesCompleted,
     );
     
     if (newAchievements.isNotEmpty) {

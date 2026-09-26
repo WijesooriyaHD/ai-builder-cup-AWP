@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../services/achievement_service.dart';
 import '../domain/challenge_models.dart';
 
 /// Outcome of [ChallengeState.logDay].
@@ -112,6 +114,11 @@ class ChallengeState extends ChangeNotifier {
           .set(challenge.toFirestore());
       _challenges = [challenge, ..._challenges];
       notifyListeners();
+      // Persist total joined count for activityPoints / achievement checks.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('challenge_total_joined', _challenges.length);
+      } catch (_) {}
     } catch (e) {
       debugPrint('❌ ChallengeState.joinChallenge: $e');
       return null;
@@ -173,8 +180,18 @@ class ChallengeState extends ChangeNotifier {
       debugPrint('❌ ChallengeState.logDay: $e');
       return LogDayResult.failed;
     }
+    if (isNowComplete) {
+      // Persist total completed count to prefs so activityPoints can read it.
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt(
+            _completedChallengesKey, completedChallenges.length);
+      } catch (_) {}
+    }
     return isNowComplete ? LogDayResult.completed : LogDayResult.logged;
   }
+
+  static const String _completedChallengesKey = 'challenge_total_completed';
 
   // ---------------------------------------------------------------------------
   // Claim rewards
@@ -222,6 +239,20 @@ class ChallengeState extends ChangeNotifier {
             .update({'status': ChallengeStatus.completed.name});
       } catch (_) {}
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Achievement helpers
+  // ---------------------------------------------------------------------------
+
+  /// Checks and returns any newly-unlocked challenge-related achievements
+  /// based on the current in-memory challenge list. Screens call this after
+  /// joinChallenge() or logDay() to show the AchievementCompletionPage.
+  Future<List<Achievement>> checkChallengeAchievements() async {
+    return AchievementService().checkAchievements(
+      totalChallengesJoined: _challenges.length,
+      totalChallengesCompleted: completedChallenges.length,
+    );
   }
 
   // ---------------------------------------------------------------------------

@@ -72,6 +72,21 @@ class AchievementService extends ChangeNotifier {
       Achievement('level_5',  '🌿', 'Growing Strong', 'Reach level 5',  AchievementType.level, 5),
       Achievement('level_20', '🦋', 'Wellness Sage',  'Reach level 20', AchievementType.level, 20),
 
+      // ── Habits (4) ───────────────────────────────────────────────────────────
+      Achievement('habit_first',    '🔔', 'Habit Formed',     'Create your first wellness habit',         AchievementType.habits, 1),
+      Achievement('habit_builder',  '🏗️', 'Habit Builder',    'Set up 5 active wellness habits',          AchievementType.habits, 5),
+      Achievement('habit_week',     '🗓️', 'Seven-Day Streak', 'Complete 7 habit check-offs in total',     AchievementType.habitCompletions, 7),
+      Achievement('habit_champion', '🥇', 'Habit Champion',   'Complete 30 habit check-offs in total',    AchievementType.habitCompletions, 30),
+
+      // ── Challenges (3) ───────────────────────────────────────────────────────
+      Achievement('challenge_first',    '⚡', 'Challenge Accepted', 'Join your first wellness challenge',       AchievementType.challengesJoined, 1),
+      Achievement('challenge_finisher', '🎖️', 'Challenge Finisher', 'Complete your first wellness challenge',  AchievementType.challengesCompleted, 1),
+      Achievement('challenge_master',   '🏅', 'Challenge Master',   'Complete 3 wellness challenges',           AchievementType.challengesCompleted, 3),
+
+      // ── Reflection (1) ───────────────────────────────────────────────────────
+      // Unlocked when the user generates their first Live Pal reflection.
+      Achievement('first_reflection', '💬', 'Inner Voice', 'Generate your first Live Pal reflection', AchievementType.special, 1),
+
       // ── Meditation & Mindfulness (7) ─────────────────────────────────────────
       // These are unlocked externally by MeditationState via
       // unlockSpecialAchievement(); the service mirrors and persists them so
@@ -117,6 +132,16 @@ class AchievementService extends ChangeNotifier {
     int? todoItems,
     int? studioActivitiesCompleted,
     bool? isPro,
+    // ── Habits ──────────────────────────────────────────────────────────────
+    /// Total number of habits the user has ever created (active + inactive).
+    int? totalHabits,
+    /// Total all-time habit check-offs across all habits and all days.
+    int? totalHabitCompletions,
+    // ── Challenges ──────────────────────────────────────────────────────────
+    /// Total challenges the user has ever joined.
+    int? totalChallengesJoined,
+    /// Total challenges the user has completed.
+    int? totalChallengesCompleted,
   }) async {
     final newlyUnlocked = <Achievement>[];
     bool hasChanges = false;
@@ -168,6 +193,21 @@ class AchievementService extends ChangeNotifier {
           // Unlocked externally by MeditationState — preserve stored state.
           shouldBeUnlocked =
               _unlockedAchievementIds.contains(achievement.id);
+          break;
+        case AchievementType.habits:
+          shouldBeUnlocked = (totalHabits ?? 0) >= achievement.requirement;
+          break;
+        case AchievementType.habitCompletions:
+          shouldBeUnlocked =
+              (totalHabitCompletions ?? 0) >= achievement.requirement;
+          break;
+        case AchievementType.challengesJoined:
+          shouldBeUnlocked =
+              (totalChallengesJoined ?? 0) >= achievement.requirement;
+          break;
+        case AchievementType.challengesCompleted:
+          shouldBeUnlocked =
+              (totalChallengesCompleted ?? 0) >= achievement.requirement;
           break;
       }
 
@@ -249,6 +289,16 @@ class Achievement {
         return 'Special action';
       case AchievementType.meditation:
         return 'Meditation practice';
+      case AchievementType.habits:
+        return '$requirement ${requirement == 1 ? 'habit' : 'habits'}';
+      case AchievementType.habitCompletions:
+        return '$requirement habit '
+            '${requirement == 1 ? 'check-off' : 'check-offs'}';
+      case AchievementType.challengesJoined:
+        return '$requirement ${requirement == 1 ? 'challenge' : 'challenges'} joined';
+      case AchievementType.challengesCompleted:
+        return 'Complete $requirement '
+            '${requirement == 1 ? 'challenge' : 'challenges'}';
     }
   }
 }
@@ -271,4 +321,12 @@ enum AchievementType {
   /// Meditation & Mindfulness badges — unlocked externally by MeditationState
   /// via [AchievementService.unlockSpecialAchievement].
   meditation,
+  /// Habit badges — based on how many habits the user has created/active.
+  habits,
+  /// Habit-completion badges — based on total all-time habit check-offs.
+  habitCompletions,
+  /// Challenge-join badges.
+  challengesJoined,
+  /// Challenge-completion badges.
+  challengesCompleted,
 }

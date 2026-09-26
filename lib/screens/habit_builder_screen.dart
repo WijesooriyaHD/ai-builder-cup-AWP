@@ -7,6 +7,8 @@ import '../features/habit_builder/domain/habit_templates.dart';
 import '../features/habit_builder/presentation/challenge_engine_section.dart';
 import '../features/habit_builder/presentation/habit_builder_state.dart';
 import '../services/notification_service.dart';
+import '../services/achievement_service.dart';
+import 'achievement_completion_page.dart';
 
 // Tool screens
 import '../features/calorie_budget/presentation/calorie_budget_screen.dart';
@@ -355,9 +357,19 @@ class _HabitCheckTile extends StatelessWidget {
     final streak = habit.currentStreak;
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         HapticFeedback.selectionClick();
-        context.read<HabitBuilderState>().toggleToday(habit.id);
+        final habitState = context.read<HabitBuilderState>();
+        await habitState.toggleToday(habit.id);
+        if (!context.mounted) return;
+        final newAchievements = await habitState.checkHabitAchievements();
+        if (!context.mounted) return;
+        for (final achievement in newAchievements) {
+          await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => AchievementCompletionPage(achievement: achievement),
+            fullscreenDialog: true,
+          ));
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -1080,7 +1092,8 @@ class _SuggestionsTabState extends State<_SuggestionsTab> {
                   icon: Icon(Icons.add_circle_rounded,
                       color: theme.colorScheme.primary),
                   onPressed: () async {
-                    await context.read<HabitBuilderState>().createHabit(
+                    final habitState = context.read<HabitBuilderState>();
+                    await habitState.createHabit(
                           title: t.title,
                           description: t.description,
                           tool: t.tool,
@@ -1088,7 +1101,18 @@ class _SuggestionsTabState extends State<_SuggestionsTab> {
                           targetValue: t.targetValue,
                           targetUnit: t.targetUnit,
                         );
+                    if (!context.mounted) return;
+                    final newAchievements =
+                        await habitState.checkHabitAchievements();
                     if (context.mounted) Navigator.pop(context);
+                    if (!context.mounted) return;
+                    for (final achievement in newAchievements) {
+                      await Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) =>
+                            AchievementCompletionPage(achievement: achievement),
+                        fullscreenDialog: true,
+                      ));
+                    }
                   },
                 ),
               );
@@ -1282,6 +1306,22 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
         targetValue: target,
         targetUnit: unit,
       );
+      // Check achievements after creating a new habit.
+      if (mounted) {
+        final newAchievements = await state.checkHabitAchievements();
+        if (mounted) {
+          setState(() => _saving = false);
+          Navigator.pop(context);
+          for (final achievement in newAchievements) {
+            await Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) =>
+                  AchievementCompletionPage(achievement: achievement),
+              fullscreenDialog: true,
+            ));
+          }
+        }
+        return;
+      }
     }
     if (mounted) {
       setState(() => _saving = false);

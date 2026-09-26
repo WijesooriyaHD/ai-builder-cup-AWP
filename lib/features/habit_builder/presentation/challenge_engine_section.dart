@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 
 import 'challenge_state.dart';
 import '../domain/challenge_models.dart';
+import '../../../services/achievement_service.dart';
+import '../../../screens/achievement_completion_page.dart';
 
 // ---------------------------------------------------------------------------
 // Accent palette — consistent across all challenge cards
@@ -118,11 +120,25 @@ class _ChallengeEngineSectionState extends State<ChallengeEngineSection> {
                   catalog: ChallengeCatalog.all,
                   onLogDay: (id) async {
                     final messenger = ScaffoldMessenger.of(context);
-                    final result =
-                        await context.read<ChallengeState>().logDay(id);
+                    final challengeState = context.read<ChallengeState>();
+                    final result = await challengeState.logDay(id);
                     switch (result) {
                       case LogDayResult.completed:
                         _celebrate();
+                        // Check and show challenge achievements on completion.
+                        if (context.mounted) {
+                          final newAchievements =
+                              await challengeState.checkChallengeAchievements();
+                          if (context.mounted) {
+                            for (final achievement in newAchievements) {
+                              await Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => AchievementCompletionPage(
+                                    achievement: achievement),
+                                fullscreenDialog: true,
+                              ));
+                            }
+                          }
+                        }
                         break;
                       case LogDayResult.alreadyLoggedToday:
                         messenger.showSnackBar(const SnackBar(
@@ -139,8 +155,25 @@ class _ChallengeEngineSectionState extends State<ChallengeEngineSection> {
                         break;
                     }
                   },
-                  onJoin: (template) =>
-                      context.read<ChallengeState>().joinChallenge(template),
+                  onJoin: (template) async {
+                    final challengeState = context.read<ChallengeState>();
+                    final joined =
+                        await challengeState.joinChallenge(template);
+                    if (joined != null && context.mounted) {
+                      // Check for "Challenge Accepted" badge on first join.
+                      final newAchievements =
+                          await challengeState.checkChallengeAchievements();
+                      if (context.mounted) {
+                        for (final achievement in newAchievements) {
+                          await Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => AchievementCompletionPage(
+                                achievement: achievement),
+                            fullscreenDialog: true,
+                          ));
+                        }
+                      }
+                    }
+                  },
                 ),
             ],
           );
@@ -171,8 +204,23 @@ class _ChallengeEngineSectionState extends State<ChallengeEngineSection> {
       builder: (_) => _AllChallengesSheet(
         catalog: ChallengeCatalog.all,
         userChallenges: state.challenges,
-        onJoin: (template) =>
-            context.read<ChallengeState>().joinChallenge(template),
+        onJoin: (template) async {
+            final challengeState = context.read<ChallengeState>();
+            final joined = await challengeState.joinChallenge(template);
+            if (joined != null && context.mounted) {
+              final newAchievements =
+                  await challengeState.checkChallengeAchievements();
+              if (context.mounted) {
+                for (final achievement in newAchievements) {
+                  await Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) =>
+                        AchievementCompletionPage(achievement: achievement),
+                    fullscreenDialog: true,
+                  ));
+                }
+              }
+            }
+          },
       ),
     );
   }

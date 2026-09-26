@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../models/journal_entry.dart';
 import '../models/live_conversation_record.dart';
 import '../providers/app_state.dart';
+import '../services/achievement_service.dart';
 import 'ai_service.dart';
 
 /// Holds the most-recent Gemini Live "Talk" conversations (capped at
@@ -151,7 +152,7 @@ class ConversationStore extends ChangeNotifier {
   /// is stored in the entry body so the reflection's "Discuss" flow has full
   /// context. Needs [appState] to add the entry (local + notify); Firestore
   /// sync mirrors the journal-entry pattern.
-  Future<bool> generateReflection(
+  Future<({bool ok, List<Achievement> achievements})> generateReflection(
     LiveConversationRecord record,
     AppState appState,
   ) async {
@@ -166,9 +167,6 @@ class ConversationStore extends ChangeNotifier {
         ..writeln('— Conversation —')
         ..write(transcriptText);
 
-      // Reuse the title already generated for the conversation card so the
-      // reflection matches what the user saw. Fall back to the summarizer's
-      // title only if the card has no meaningful title yet.
       final cardTitle = record.title.trim();
       final title = cardTitle.isNotEmpty ? cardTitle : result.title;
 
@@ -184,13 +182,16 @@ class ConversationStore extends ChangeNotifier {
         isPinned: true,
       );
 
-      await appState.addJournalEntry(entry);
+      // addJournalEntry triggers _checkAchievements internally, and also
+      // unlocks 'first_reflection' on the first real note. Capture any newly
+      // unlocked badges so callers can show the AchievementCompletionPage.
+      final achievements = await appState.addJournalEntry(entry);
       final synced = await _syncJournalEntry(entry);
       if (!synced) appState.markEntryNeedsSync(entry.id);
-      return true;
+      return (ok: true, achievements: achievements);
     } catch (e) {
       debugPrint('❌ ConversationStore.generateReflection error: $e');
-      return false;
+      return (ok: false, achievements: const <Achievement>[]);
     }
   }
 

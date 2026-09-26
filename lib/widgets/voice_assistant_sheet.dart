@@ -21,6 +21,7 @@ import '../services/voice_command_service.dart';
 import '../services/app_navigation_service.dart';
 import '../services/notification_service.dart';
 import '../services/toolkit_context_builder.dart';
+import '../screens/achievement_completion_page.dart';
 import 'voice_orb.dart';
 
 // Tool + tab screens reachable by voice.
@@ -1385,16 +1386,27 @@ class _ConversationCardState extends State<_ConversationCard> {
     final rootNavigator = Navigator.of(context, rootNavigator: true);
     final messenger = ScaffoldMessenger.of(context);
 
-    final ok = await store.generateReflection(widget.record, appState);
+    final result = await store.generateReflection(widget.record, appState);
     if (!mounted) return;
     setState(() => _generating = false);
 
-    if (!ok) {
+    if (!result.ok) {
       messenger.showSnackBar(
         const SnackBar(content: Text("Couldn't create the reflection.")),
       );
       return;
     }
+    // Show any newly-unlocked achievement (e.g. "Inner Voice") before
+    // navigating away so the user sees the badge celebration.
+    for (final achievement in result.achievements) {
+      if (!mounted) break;
+      await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) =>
+            AchievementCompletionPage(achievement: achievement),
+        fullscreenDialog: true,
+      ));
+    }
+    if (!mounted) return;
     // Close the assistant sheet and land on the Reflection tab.
     if (rootNavigator.canPop()) rootNavigator.pop();
     nav.goToTab(AppTab.reflection);

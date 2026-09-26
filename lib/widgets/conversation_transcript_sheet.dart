@@ -5,6 +5,7 @@ import '../models/live_conversation_record.dart';
 import '../providers/app_state.dart';
 import '../services/app_navigation_service.dart';
 import '../services/conversation_store.dart';
+import '../screens/achievement_completion_page.dart';
 import 'ai_wellness_loader.dart';
 
 /// A bottom sheet that shows the full two-sided transcript of a saved Live
@@ -44,20 +45,32 @@ class _ConversationTranscriptSheetState
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    final ok = await store.generateReflection(widget.record, appState);
+    final result = await store.generateReflection(widget.record, appState);
     if (!mounted) return;
     setState(() => _generating = false);
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text(ok
+        content: Text(result.ok
             ? 'Reflection added to your Reflections.'
             : "Couldn't create the reflection. Please try again."),
       ),
     );
-    if (ok) {
-      navigator.pop(); // close the transcript sheet
-      nav.goToTab(AppTab.reflection);
+    if (result.ok) {
+      // Show any newly-unlocked achievement (e.g. "Inner Voice") before
+      // navigating away, so the user sees the badge celebration.
+      for (final achievement in result.achievements) {
+        if (!mounted) break;
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) =>
+              AchievementCompletionPage(achievement: achievement),
+          fullscreenDialog: true,
+        ));
+      }
+      if (mounted) {
+        navigator.pop(); // close the transcript sheet
+        nav.goToTab(AppTab.reflection);
+      }
     }
   }
 
