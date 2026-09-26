@@ -253,6 +253,10 @@ class _MainWrapperState extends State<MainWrapper> {
   }
 
   void _showVoiceAssistant(BuildContext context, {bool autoStart = true}) {
+    // A sheet may already be up — opened by "Hey Pal", or by a double tap on
+    // the Pal button. Opening a second one stacks two Wellness Pal windows,
+    // each with its own pal trying to hold the mic.
+    if (VoiceAssistantSheet.isOpen) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,

@@ -18,6 +18,7 @@ import 'services/check_in_service.dart';
 import 'services/personalization_service.dart';
 import 'services/notification_service.dart';
 import 'services/onesignal_service.dart';
+import 'services/notification_router.dart';
 import 'services/voice_command_service.dart';
 import 'services/live_conversation_service.dart';
 import 'services/native_aec_audio_io.dart';
@@ -40,6 +41,9 @@ import 'widgets/snow_overlay.dart';
 import 'widgets/audio_floating_player.dart';
 import 'widgets/pal_wake_word_coordinator.dart';
 import 'widgets/onesignal_verification_gate.dart';
+import 'widgets/notification_link_binder.dart';
+import 'services/notification_preferences_store.dart';
+import 'services/engagement_service.dart';
 
 final GlobalKey<NavigatorState> globalNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -71,6 +75,16 @@ void main() async {
       } else {
         OneSignalService().logout();
       }
+    });
+
+    // Capture notification taps from the very first moment.
+    //
+    // A tap that cold-starts the app is dispatched by OneSignal long before
+    // the widget tree — and therefore any provider-dependent listener —
+    // exists. Registering here means the destination is never lost; the tap is
+    // stored and NotificationLinkBinder routes it once the app can navigate.
+    OneSignalService().setNotificationClickListener((event) {
+      NotificationRouter.capturePayload(event.notification.additionalData);
     });
   } catch (e) {
     debugPrint('Failed to initialize OneSignal: $e');
@@ -222,6 +236,17 @@ class AiWellnessPalApp extends StatelessWidget {
         // Which wellness-tool summary cards the user has added to Home. Loaded
         // up front so the Home screen can render them immediately.
         ChangeNotifierProvider(create: (_) => HomeToolCardsService()..load()),
+        // What the user has agreed to be notified about. Loaded up front so
+        // the first eligibility check can't wrongly assume everything is on.
+        ChangeNotifierProvider(
+          create: (_) => NotificationPreferencesStore()..load(),
+        ),
+        // The engagement decision layer. Depends on the preferences store, so
+        // it's a ProxyProvider rather than a plain create.
+        ProxyProvider<NotificationPreferencesStore, EngagementService>(
+          update: (_, preferences, previous) =>
+              previous ?? EngagementService(preferences: preferences),
+        ),
       ],
       child: Consumer<AppState>(
         builder: (context, appState, child) {
@@ -237,14 +262,16 @@ class AiWellnessPalApp extends StatelessWidget {
                 data: MediaQuery.of(context).copyWith(
                   textScaler: TextScaler.linear(appState.textScaleFactor),
                 ),
-                child: OneSignalVerificationGate(
-                  child: SnowOverlay(
-                    child: PalWakeWordCoordinator(
-                      child: Stack(
-                        children: [
-                          child!,
-                          const AudioFloatingPlayer(),
-                        ],
+                child: NotificationLinkBinder(
+                  child: OneSignalVerificationGate(
+                    child: SnowOverlay(
+                      child: PalWakeWordCoordinator(
+                        child: Stack(
+                          children: [
+                            child!,
+                            const AudioFloatingPlayer(),
+                          ],
+                        ),
                       ),
                     ),
                   ),

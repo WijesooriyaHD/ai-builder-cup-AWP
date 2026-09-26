@@ -187,9 +187,18 @@ class ChallengeState extends ChangeNotifier {
         await prefs.setInt(
             _completedChallengesKey, completedChallenges.length);
       } catch (_) {}
+      // Only the final day counts as completing the challenge; the earlier
+      // days are progress, not an outcome.
+      onChallengeCompleted?.call();
     }
     return isNowComplete ? LogDayResult.completed : LogDayResult.logged;
   }
+
+  /// Fires when a challenge reaches its final day.
+  ///
+  /// Wired in `main.dart` to the engagement system. A plain callback so this
+  /// feature keeps no dependency on notifications.
+  void Function()? onChallengeCompleted;
 
   static const String _completedChallengesKey = 'challenge_total_completed';
 

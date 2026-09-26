@@ -273,7 +273,135 @@ class NotificationService {
   /// naturally and the user will be prompted for check-in if needed.
   void _onNotificationTapped(NotificationResponse response) {
     debugPrint('Notification tapped: ${response.payload}');
-    // The app will naturally prompt for check-in when opened
+    // Engagement notifications carry their category id as the payload, so a
+    // tap lands on the right screen. Older reminders have no payload and fall
+    // through to simply opening the app, exactly as they did before.
+    final handler = onEngagementTap;
+    final payload = response.payload;
+    if (handler != null && payload != null && payload.isNotEmpty) {
+      handler(payload);
+    }
+  }
+
+  /// Called with a [NotificationCategory.id] when an engagement notification is
+  /// tapped. Wired up in `main.dart` to the deep-link router.
+  ///
+  /// A callback rather than a direct import so this service stays free of any
+  /// dependency on navigation or widgets.
+  void Function(String categoryId)? onEngagementTap;
+
+  // ---------------------------------------------------------------------------
+  // Engagement notifications
+  //
+  // Generic local delivery for the engagement system. Local rather than remote
+  // because these are decided on-device from data the device already has
+  // (today's check-in, whether the plan was viewed), so they need no server
+  // round-trip, work offline, and cost nothing to test.
+  //
+  // Remote pushes — re-engagement for users who have not opened the app at all
+  // — are OneSignal's job, since by definition the app is not running to
+  // schedule them.
+  // ---------------------------------------------------------------------------
+
+  static const String _engagementChannelId = 'wellness_engagement';
+  static const String _engagementChannelName = 'Wellness Reminders';
+  static const String _engagementChannelDescription =
+      'Contextual nudges for check-ins, plans, hydration and more';
+
+  /// Base offset so engagement ids never collide with the other families
+  /// (check-in 1001, meditation 20000, habit 40000, plan 50000).
+  static const int _engagementIdBase = 60000;
+
+  /// Stable per-category notification id, so re-scheduling a category replaces
+  /// its previous notification rather than stacking duplicates.
+  int _engagementNotificationId(String categoryId) =>
+      _engagementIdBase + (categoryId.hashCode & 0xffff);
+
+  NotificationDetails get _engagementDetails => const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _engagementChannelId,
+          _engagementChannelName,
+          channelDescription: _engagementChannelDescription,
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      );
+
+  /// Shows an engagement notification immediately.
+  ///
+  /// [categoryId] is a [NotificationCategory.id]; it becomes the payload so a
+  /// tap can be routed to the right screen.
+  Future<void> showEngagementNotification({
+    required String categoryId,
+    required String title,
+    required String body,
+  }) async {
+    if (!_isInitialized) {
+      debugPrint('⚠️ NotificationService not initialized');
+      return;
+    }
+    if (!await hasNotificationPermission()) {
+      debugPrint('⚠️ No notification permission; skipping "$categoryId"');
+      return;
+    }
+    await _plugin.show(
+      _engagementNotificationId(categoryId),
+      title,
+      body,
+      _engagementDetails,
+      payload: categoryId,
+    );
+  }
+
+  /// Schedules an engagement notification for [when] (local time).
+  ///
+  /// Silently does nothing when [when] is in the past — callers decide
+  /// eligibility; this only delivers.
+  Future<void> scheduleEngagementNotification({
+    required String categoryId,
+    required String title,
+    required String body,
+    required DateTime when,
+  }) async {
+    if (!_isInitialized) {
+      debugPrint('⚠️ NotificationService not initialized');
+      return;
+    }
+    if (!await hasNotificationPermission()) {
+      debugPrint('⚠️ No notification permission; skipping "$categoryId"');
+      return;
+    }
+
+    final scheduled = tz.TZDateTime.from(when, tz.local);
+    if (!scheduled.isAfter(tz.TZDateTime.now(tz.local))) {
+      debugPrint('⚠️ "$categoryId" scheduled time already passed; skipping');
+      return;
+    }
+
+    await _plugin.zonedSchedule(
+      _engagementNotificationId(categoryId),
+      title,
+      body,
+      scheduled,
+      _engagementDetails,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      // Matches the other schedulers here: the time we computed is already
+      // absolute local wall-clock, so iOS must not re-interpret it.
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: categoryId,
+    );
+  }
+
+  /// Cancels a pending engagement notification for a category — used when the
+  /// user does the thing the reminder was about, so it never arrives stale.
+  Future<void> cancelEngagementNotification(String categoryId) async {
+    await _plugin.cancel(_engagementNotificationId(categoryId));
   }
 
   // ---------------------------------------------------------------------------

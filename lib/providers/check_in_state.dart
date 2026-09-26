@@ -5,6 +5,7 @@ import '../models/wellness_enums.dart';
 import '../models/user_behavior_profile.dart';
 import '../services/check_in_service.dart';
 import '../services/personalization_service.dart';
+import '../services/notification_category.dart';
 import '../services/notification_service.dart';
 
 /// State provider for the daily wellness check-in flow.
@@ -155,6 +156,13 @@ class CheckInState extends ChangeNotifier {
   /// Saves via [CheckInService], updates the user's behavior profile via
   /// [PersonalizationService], and sets the local state.
   /// Requirements: 2.6, 11.1
+  /// Invoked once a check-in has been saved successfully.
+  ///
+  /// Wired in `main.dart` to the engagement system, which reports it to
+  /// OneSignal. A callback rather than a direct import so this provider keeps
+  /// no dependency on notifications.
+  void Function()? onCheckInCompleted;
+
   Future<void> submitCheckIn(CheckIn checkIn) async {
     if (_isSubmitting) return;
     assert(_userId != null, 'loadTodaysCheckIn must be called before submitCheckIn');
@@ -183,9 +191,16 @@ class CheckInState extends ChangeNotifier {
       // 5. Cancel the daily check-in reminder notification
       try {
         await NotificationService().cancelDailyCheckInReminder();
+        // Also drop any pending engagement nudge for the check-in — it would
+        // otherwise arrive asking for something already done.
+        await NotificationService()
+            .cancelEngagementNotification(NotificationCategory.checkIn.id);
       } catch (e) {
         debugPrint('CheckInState: Failed to cancel notification: $e');
       }
+
+      // 6. Report the completed check-in so OneSignal Journeys can advance.
+      onCheckInCompleted?.call();
     } catch (e) {
       debugPrint('CheckInState.submitCheckIn error: $e');
       rethrow;

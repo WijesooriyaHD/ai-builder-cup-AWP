@@ -18,6 +18,7 @@ import '../models/wellness_enums.dart';
 import '../models/journal_entry.dart';
 import '../models/wellness_method.dart';
 import '../providers/app_state.dart';
+import '../services/engagement_service.dart';
 import '../providers/wellness_plan_state.dart';
 import '../providers/check_in_state.dart';
 import 'add_journal_entry_screen.dart';
@@ -132,6 +133,15 @@ class _HomeScreenState extends State<HomeScreen>
     // Load the states behind any enabled Home tool cards so they show real
     // data even if the user hasn't opened those tool screens this session.
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadEnabledToolData());
+    // Reaching Home means the plan is on screen, so disarm the "you never saw
+    // your plan" reminder. Without this it would announce something the user
+    // is already looking at.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (context.read<WellnessPlanState>().todaysPlan != null) {
+        context.read<EngagementService>().markPlanViewed();
+      }
+    });
   }
 
   /// Loads the provider state behind each enabled wellness-tool Home card, so

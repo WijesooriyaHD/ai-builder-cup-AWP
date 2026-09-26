@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,7 +10,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../providers/app_state.dart';
-import '../services/onesignal_service.dart';
 import '../providers/check_in_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../services/auth_service.dart';
@@ -20,6 +20,9 @@ import '../screens/customer_center_screen.dart';
 import '../screens/faq_screen.dart';
 import '../services/revenue_cat_service.dart';
 import '../utils/pro_modal_utils.dart';
+import '../services/notification_preferences_store.dart';
+import 'notification_preferences_screen.dart';
+import 'developer_test_panel_screen.dart';
 import '../utils/wellnesspal_snackbar.dart';
 import '../widgets/frosted_container.dart';
 import '../theme/wellness_themes.dart';
@@ -34,16 +37,10 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isDeletingAccount = false;
-  // Push notification opt-in state (defaults to true; read live from OneSignal
-  // so the toggle reflects reality even if changed outside the app).
-  bool _pushNotificationsEnabled = true;
-
-  @override
-  void initState() {
-    super.initState();
-    // Read the live OneSignal opt-in state so the toggle matches reality.
-    _pushNotificationsEnabled = OneSignalService().optedIn;
-  }
+  // NOTE: the push master switch no longer keeps local state here. It reads
+  // and writes NotificationPreferencesStore, which is also what the
+  // Notification Preferences screen and the eligibility checks use — one
+  // source of truth, reconciled against OneSignal's real opt-in state on load.
 
   @override
   void dispose() {
@@ -438,8 +435,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            // Push notifications toggle.
-            Row(
+            // Push notifications master toggle.
+            //
+            // Reads and writes NotificationPreferencesStore — the SAME source
+            // of truth as the Notification Preferences screen. Both must go
+            // through the store's enable/disableMaster, which moves the
+            // OneSignal subscription AND the stored preference together;
+            // setting only one would stop dashboard campaigns while leaving
+            // on-device reminders running (or vice versa).
+            Consumer<NotificationPreferencesStore>(
+              builder: (context, notifPrefs, _) {
+              final pushEnabled = notifPrefs.preferences.masterEnabled;
+              return Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
@@ -454,7 +461,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _pushNotificationsEnabled
+                        pushEnabled
                             ? 'Wellness nudges, streak reminders, and plan updates.'
                             : 'Push notifications are turned off.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -468,50 +475,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(width: 12),
                 Switch.adaptive(
-                  value: _pushNotificationsEnabled,
+                  value: pushEnabled,
                   onChanged: (enabled) async {
-                    if (enabled) {
-                      // Request OS permission first (no-op if already granted).
-                      final granted =
-                          await OneSignalService().requestPermission();
-                      if (granted) {
-                        OneSignalService().optIn();
-                        if (mounted) {
-                          setState(() => _pushNotificationsEnabled = true);
-                        }
-                      } else {
-                        // OS permission denied — guide them to iPhone Settings.
-                        if (mounted) {
-                          showDialog<void>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Enable notifications'),
-                              content: const Text(
-                                'Notifications are blocked for this app. '
-                                'To re-enable them, open iPhone Settings → '
-                                'AI Wellness Pal → Notifications, and turn '
-                                'on Allow Notifications.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('OK'),
-                                ),
-                              ],
-                            ),
-                          );
-                        }
-                      }
-                    } else {
-                      // Opt out — keeps the OS permission but stops delivery.
-                      OneSignalService().optOut();
-                      if (mounted) {
-                        setState(() => _pushNotificationsEnabled = false);
-                      }
+                    if (!enabled) {
+                      // Opts out of OneSignal AND stores the preference, so
+                      // campaigns and on-device reminders both stop.
+                      await notifPrefs.disableMaster();
+                      return;
                     }
+                    // Asks for OS permission, opts in, then stores — all or
+                    // nothing, so the switch can't claim to be on while the
+                    // OS refuses to deliver.
+                    final granted = await notifPrefs.enableMaster();
+                    if (granted || !context.mounted) return;
+                    // OS permission denied — guide them to iPhone Settings.
+                    showDialog<void>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Enable notifications'),
+                        content: const Text(
+                          'Notifications are blocked for this app. '
+                          'To re-enable them, open iPhone Settings → '
+                          'AI Wellness Pal → Notifications, and turn '
+                          'on Allow Notifications.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
                   },
                 ),
               ],
+              );
+              },
+            ),
+            const SizedBox(height: 8),
+            // Per-category preferences. Long-pressing this row opens the
+            // developer test panel in debug builds only — invisible to users,
+            // and compiled out of release entirely by the kDebugMode check.
+            InkWell(
+              onTap: () => NotificationPreferencesScreen.open(context),
+              onLongPress: kDebugMode
+                  ? () => DeveloperTestPanelScreen.open(context)
+                  : null,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Notification Preferences',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Choose which reminders you want to receive.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.grey.shade600,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded, size: 20),
+                  ],
+                ),
+              ),
             ),
             const Divider(height: 24),
           ],

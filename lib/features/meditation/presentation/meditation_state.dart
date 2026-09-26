@@ -187,8 +187,15 @@ class MeditationState extends ChangeNotifier {
     }
 
     notifyListeners();
+    onSessionCompleted?.call();
     return newly;
   }
+
+  /// Fires when a meditation session is completed.
+  ///
+  /// Wired in `main.dart` to the engagement system. A plain callback so this
+  /// feature keeps no dependency on notifications.
+  void Function()? onSessionCompleted;
 
   // ---------------------------------------------------------------------------
   // AI recommendation

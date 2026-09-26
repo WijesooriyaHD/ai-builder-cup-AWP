@@ -14,6 +14,7 @@ import '../models/wellness_intention.dart';
 import '../models/wellness_method.dart';
 import '../models/check_in.dart';
 import '../providers/app_state.dart';
+import '../services/engagement_service.dart';
 import '../providers/wellness_plan_state.dart';
 import '../widgets/frosted_container.dart';
 import '../theme/app_theme.dart';
@@ -261,6 +262,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           intentions: createdIntentions,
           preferredMethods: preferredMethods,
         );
+      }
+
+      // Onboarding is genuinely finished here — profile saved, intentions
+      // created, first plan generated. Reported so a OneSignal Journey can
+      // branch between "installed but never started" and "properly onboarded",
+      // which are very different users to message.
+      if (mounted) {
+        context.read<EngagementService>().trackEvent(
+              EngagementEvent.onboardingCompleted,
+            );
       }
 
       // Navigate away - the AuthWrapper will handle routing to HomeScreen

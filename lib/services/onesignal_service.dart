@@ -121,4 +121,59 @@ class OneSignalService {
       void Function(OSNotificationWillDisplayEvent) handler) {
     OneSignal.Notifications.addForegroundWillDisplayListener(handler);
   }
+
+  // ---------------------------------------------------------------------------
+  // In-App Messages
+  //
+  // The MESSAGE ITSELF is authored in the OneSignal dashboard, not in code.
+  // The app's job is only to set a trigger; the dashboard decides which
+  // message (if any) that trigger shows. That split is the point — copy and
+  // design can change without an app release.
+  // ---------------------------------------------------------------------------
+
+  /// Sets a trigger that may cause a dashboard-authored In-App Message to show.
+  ///
+  /// Nothing appears unless a message in the dashboard is configured to listen
+  /// for this key/value, so calling it is always safe.
+  Future<void> addInAppTrigger(String key, String value) async {
+    try {
+      await OneSignal.InAppMessages.addTrigger(key, value);
+    } catch (e) {
+      debugPrint('⚠️ OneSignal addInAppTrigger failed: $e');
+    }
+  }
+
+  /// Clears a trigger, so its message can fire again next time.
+  Future<void> removeInAppTrigger(String key) async {
+    try {
+      await OneSignal.InAppMessages.removeTrigger(key);
+    } catch (e) {
+      debugPrint('⚠️ OneSignal removeInAppTrigger failed: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Outcomes (Journey / campaign events)
+  // ---------------------------------------------------------------------------
+
+  /// Records a named event, which OneSignal Journeys and analytics can act on.
+  ///
+  /// Use for things that can happen repeatedly (`checkin_completed`).
+  Future<void> trackOutcome(String name) async {
+    try {
+      await OneSignal.Session.addOutcome(name);
+    } catch (e) {
+      debugPrint('⚠️ OneSignal trackOutcome("$name") failed: $e');
+    }
+  }
+
+  /// Records an event that should only ever count once per user, such as
+  /// `onboarding_completed` or a first-time achievement.
+  Future<void> trackUniqueOutcome(String name) async {
+    try {
+      await OneSignal.Session.addUniqueOutcome(name);
+    } catch (e) {
+      debugPrint('⚠️ OneSignal trackUniqueOutcome("$name") failed: $e');
+    }
+  }
 }

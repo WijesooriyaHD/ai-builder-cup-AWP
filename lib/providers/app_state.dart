@@ -2101,10 +2101,31 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     notifyListeners();
-    
+
+    // Report the recalculated streak to the engagement system, which decides
+    // whether it is a milestone worth celebrating. Hooked here because this is
+    // the one place the streak value changes.
+    onStreakUpdated?.call(_currentStreak);
+
     // Check for streak achievements
     return await _checkAchievements();
   }
+
+  /// Invoked with the new streak length whenever it is recalculated.
+  ///
+  /// Wired in `main.dart` to the engagement system. A callback rather than a
+  /// direct import so AppState keeps no dependency on notifications.
+  void Function(int streak)? onStreakUpdated;
+
+  /// Whether pro status has been resolved at least once this launch. Used to
+  /// tell "we just learned they are Pro" apart from "they just upgraded".
+  bool _proStatusResolved = false;
+
+  /// Fires only on a genuine upgrade (free → Pro after the initial read).
+  void Function()? onPremiumUpgraded;
+
+  /// Fires on every resolution with the current tier, for segment targeting.
+  void Function(bool isPro)? onProStatusKnown;
 
   Future<void> updateProStatus({bool forceRefresh = false}) async {
     try {
@@ -2118,6 +2139,18 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         _lapseDetectedThisSession = true;
         debugPrint('⚠️ Subscription lapse detected: was Pro, now free tier');
       }
+
+      // --- Upgrade detection ---
+      // The FIRST resolution only tells us what the user already was — an
+      // existing subscriber reads false→true on every launch, which is not an
+      // upgrade. Only a transition after that is a genuine purchase.
+      if (!_proStatusResolved) {
+        _proStatusResolved = true;
+      } else if (!previousIsPro && _isPro) {
+        onPremiumUpgraded?.call();
+      }
+      // Always report the current tier, so segments can target it.
+      onProStatusKnown?.call(_isPro);
 
       notifyListeners();
     } catch (e) {

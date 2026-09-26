@@ -140,6 +140,19 @@ class WellnessPlanState extends ChangeNotifier {
   /// If the AI returns null (timeout/error), falls back to a curated
   /// pre-built plan selected by energy tier and time range, and shows
   /// a fallback banner. (Requirements 3.1, 3.10)
+  /// Plan id whose first action has already been reported as "started", so
+  /// the event fires once per plan rather than per tick.
+  String? _startedPlanId;
+
+  /// Plan lifecycle hooks, wired in `main.dart` to the engagement system.
+  ///
+  /// Plain callbacks rather than a direct import, so this provider keeps no
+  /// dependency on notifications — matching how the achievement, streak and
+  /// check-in hooks are done.
+  void Function()? onPlanGenerated;
+  void Function()? onPlanStarted;
+  void Function()? onPlanCompleted;
+
   Future<void> generatePlan(
     String userId,
     CheckIn checkIn, {
@@ -203,6 +216,10 @@ class WellnessPlanState extends ChangeNotifier {
     } finally {
       _isGenerating = false;
       notifyListeners();
+      // A plan exists now, whether it came from the AI or the fallback pool —
+      // either way the user has something to open, which is what the event
+      // means to a Journey.
+      if (_todaysPlan != null) onPlanGenerated?.call();
     }
   }
 
@@ -264,6 +281,14 @@ class WellnessPlanState extends ChangeNotifier {
     await _cachePlan(_todaysPlan!);
     notifyListeners();
 
+    // "Started" fires on the FIRST action ticked for a given plan — ticking a
+    // second one is the same plan still in progress, and unticking is not a
+    // start at all. Keyed by plan id so a new day's plan can start again.
+    if (completed && _startedPlanId != planId) {
+      _startedPlanId = planId;
+      onPlanStarted?.call();
+    }
+
     // Push the updated plan to the home-screen widget immediately so the
     // checkbox state stays in sync (bypasses the 30-minute refresh cap).
     await _pushToWidget(_todaysPlan!, force: true);
@@ -302,6 +327,7 @@ class WellnessPlanState extends ChangeNotifier {
     _todaysPlan = _todaysPlan!.copyWith(isCompleted: true);
     await _cachePlan(_todaysPlan!);
     notifyListeners();
+    onPlanCompleted?.call();
 
     // Reflect completion on the home-screen widget immediately.
     await _pushToWidget(_todaysPlan!, force: true);

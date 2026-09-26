@@ -108,6 +108,10 @@ class _PalWakeWordCoordinatorState extends State<PalWakeWordCoordinator>
     final shouldListen = eligible &&
         _appIsResumed &&
         !_sheetOpen &&
+        // Also covers a sheet opened from the Pal button, which this
+        // coordinator's own _sheetOpen flag knows nothing about — otherwise
+        // "Hey Pal" would stack a second window on top of it.
+        !VoiceAssistantSheet.isOpen &&
         // Don't fight the Wellness Reads narration for the audio session: while
         // TTS is speaking, iOS holds the output/route and the wake recognizer
         // gets starved (so "Hey Pal" is missed). Pause the listener during
@@ -129,7 +133,10 @@ class _PalWakeWordCoordinatorState extends State<PalWakeWordCoordinator>
   }
 
   Future<void> _openLivePal() async {
-    if (_sheetOpen) return;
+    // Re-checked here as well as in _reconcile: the wake phrase can land in the
+    // gap between the recognizer being armed and a sheet opening from the Pal
+    // button, and this is the last point before a second one would be pushed.
+    if (_sheetOpen || VoiceAssistantSheet.isOpen) return;
     final navigator = globalNavigatorKey.currentState;
     if (navigator == null) return;
     _sheetOpen = true;

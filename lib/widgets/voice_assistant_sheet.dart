@@ -51,6 +51,21 @@ import 'conversation_transcript_sheet.dart';
 class VoiceAssistantSheet extends StatefulWidget {
   const VoiceAssistantSheet({super.key, this.autoStartLive = true});
 
+  /// How many of these sheets are currently mounted.
+  ///
+  /// A counter rather than a bool so a brief overlap during a route transition
+  /// can't leave the flag stuck on.
+  static int _mountedCount = 0;
+
+  /// Whether a Wellness Pal sheet is already on screen.
+  ///
+  /// The single source of truth every entry point must consult before opening
+  /// one. There are two ways in — the Pal button in [MainWrapper] and the
+  /// "Hey Pal" wake word in [PalWakeWordCoordinator] — and each used to track
+  /// only its own sheet, so saying "Hey Pal" while the window was already open
+  /// from the button stacked a second copy on top of the first.
+  static bool get isOpen => _mountedCount > 0;
+
   /// When true (a normal mic TAP), the Live pal conversation starts
   /// automatically as the sheet opens. When false (a mic LONG-PRESS), the sheet
   /// opens idle — the Wellness Pal window with Recent Conversations visible —
@@ -98,6 +113,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
   @override
   void initState() {
     super.initState();
+    VoiceAssistantSheet._mountedCount++;
     _voiceService = Provider.of<VoiceCommandService>(context, listen: false);
     final appState = Provider.of<AppState>(context, listen: false);
     // Live pal only when the setting is on AND the feature is available.
@@ -153,6 +169,7 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
 
   @override
   void dispose() {
+    VoiceAssistantSheet._mountedCount--;
     if (_isLivePal) {
       // Stop any still-running Live session and hand the mic back to the
       // tap-to-speak assistant (suspended by shutdownForHandoff above).

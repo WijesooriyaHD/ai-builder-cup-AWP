@@ -228,8 +228,22 @@ class AchievementService extends ChangeNotifier {
       notifyListeners();
     }
 
+    // Hooked here rather than at the ~19 call sites: this is the single place
+    // an achievement can transition to unlocked, so celebrating here means no
+    // caller can forget to, and none can double-celebrate.
+    for (final achievement in newlyUnlocked) {
+      onAchievementUnlocked?.call(achievement);
+    }
+
     return newlyUnlocked;
   }
+
+  /// Invoked once per newly-unlocked achievement.
+  ///
+  /// Wired in `main.dart` to the engagement system, which decides whether that
+  /// becomes an in-app celebration or a notification. A callback rather than a
+  /// direct import so this service keeps no dependency on notifications.
+  void Function(Achievement achievement)? onAchievementUnlocked;
 
   /// Manually unlock a special achievement (e.g. 'customizer', meditation
   /// badges). No-op if already unlocked.
