@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -442,10 +443,13 @@ class StorageService {
   Future<Map<String, dynamic>> loadSettings({Map<String, dynamic>? cloudProfile}) async {
     final prefs = await _getPrefs;
     final settings = <String, dynamic>{
-      'themeMode': prefs.getInt(_themeModeKey) ?? 0,
-      'themeColor': prefs.getInt(_themeColorKey) ?? 0xFFFF7F50,
+      // Defaults for a brand-new install: dark mode, the Clear Sky brand
+      // colour, and winter season. Each `??` only applies when the user has
+      // never made a choice, so nobody's existing preference is overwritten.
+      'themeMode': prefs.getInt(_themeModeKey) ?? ThemeMode.dark.index,
+      'themeColor': prefs.getInt(_themeColorKey) ?? 0xFF4A7FFC,
       'textScale': prefs.getDouble(_textScaleKey) ?? 1.0,
-      'isWinterMode': prefs.getBool(_isWinterModeKey) ?? false,
+      'isWinterMode': prefs.getBool(_isWinterModeKey) ?? true,
       'showMotivation': prefs.getBool(_showDailyMotivationKey) ?? true,
       'showAchievements': prefs.getBool(_showAchievementsKey) ?? true,
       'showMap': prefs.getBool(_showMapKey) ?? true,

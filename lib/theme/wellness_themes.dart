@@ -23,6 +23,16 @@ class WellnessThemeConfig {
 /// All available wellness themes. Free themes are accessible to all users;
 /// premium themes require an active subscription.
 const List<WellnessThemeConfig> wellnessThemes = [
+  // The app's default. Listed first so it reads as the starting point rather
+  // than one option among many, and it carries the brand blue from the logo.
+  WellnessThemeConfig(
+    id: 'clear_sky',
+    name: 'Clear Sky',
+    seedColor: Color(0xFF4A7FFC),
+    lightBackground: Color(0xFFEEF3FF),
+    darkBackground: Color(0xFF151C33),
+    isPremium: false,
+  ),
   WellnessThemeConfig(
     id: 'serenity',
     name: 'Serenity',
@@ -37,7 +47,7 @@ const List<WellnessThemeConfig> wellnessThemes = [
     seedColor: Color(0xFF9B89C4),
     lightBackground: Color(0xFFF5F0FB),
     darkBackground: Color(0xFF201A33),
-    isPremium: true,
+    isPremium: false,
   ),
   WellnessThemeConfig(
     id: 'soft_sand',
@@ -53,7 +63,7 @@ const List<WellnessThemeConfig> wellnessThemes = [
     seedColor: Color(0xFFE8A84C),
     lightBackground: Color(0xFFFCF5E8),
     darkBackground: Color(0xFF332B1A),
-    isPremium: true,
+    isPremium: false,
   ),
   WellnessThemeConfig(
     id: 'pilates_studio',
@@ -61,7 +71,7 @@ const List<WellnessThemeConfig> wellnessThemes = [
     seedColor: Color(0xFF7AAE8B),
     lightBackground: Color(0xFFF0F7F2),
     darkBackground: Color(0xFF1A2B1F),
-    isPremium: true,
+    isPremium: false,
   ),
 
   // Classic accent colors (previously the "Accent Color" swatches). Kept free

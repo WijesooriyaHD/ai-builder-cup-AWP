@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../services/pro_access.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -400,6 +401,9 @@ class HydrationState extends ChangeNotifier {
   // AI analysis
   // ---------------------------------------------------------------------------
   Future<void> refreshAnalysis() async {
+    // Premium-only AI coaching. Called on screen load as well as from the
+    // refresh control, so the gate belongs here rather than on the button.
+    if (!ProAccess.isPro) return;
     _isAnalyzing = true;
     notifyListeners();
     try {

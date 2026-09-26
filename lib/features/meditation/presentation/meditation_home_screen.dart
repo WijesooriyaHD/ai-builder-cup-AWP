@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../services/pro_access.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
@@ -55,6 +56,9 @@ class _MeditationHomeScreenState extends State<MeditationHomeScreen> {
       hydrationPercent = null;
     }
 
+    // Premium-only AI recommendation. Runs on load, so gate before calling
+    // rather than at a button — there isn't one.
+    if (!ProAccess.isPro) return;
     await state.refreshRecommendation(hydrationPercent: hydrationPercent);
   }
 

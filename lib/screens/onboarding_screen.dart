@@ -122,6 +122,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goToNextStep() {
+    // Put the keyboard away before changing step. Only the name step takes
+    // text, so leaving it up steals height from the steps that follow — which
+    // is what hid the youngest and oldest age ranges.
+    FocusScope.of(context).unfocus();
     if (_currentStep < 5) {
       final nextStep = _currentStep + 1;
       _pageController.animateToPage(
@@ -137,6 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _goToPreviousStep() {
+    FocusScope.of(context).unfocus();
     if (_currentStep > 0) {
       final prevStep = _currentStep - 1;
       _pageController.animateToPage(
@@ -562,11 +567,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           const SizedBox(height: 32),
           Expanded(
             child: FrostedContainer(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: _ageRanges.map((range) {
+              // Scrollable, and only centred when the options actually fit.
+              //
+              // A plain centred Column clipped BOTH ends once the five options
+              // were taller than the space available, so the youngest and
+              // oldest ranges silently disappeared and only the middle ones
+              // could be picked. LayoutBuilder + minHeight keeps the centred
+              // look on roomy screens while letting shorter ones scroll.
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: _ageRanges.map((range) {
                     final isSelected = _selectedAgeRange == range;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -606,8 +623,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ),
                       ),
-                    );
-                  }).toList(),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

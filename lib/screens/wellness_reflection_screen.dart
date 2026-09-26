@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/pro_modal_utils.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1546,6 +1547,17 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
   }
 
   void _openAiDiscussion(BuildContext context, JournalEntry entry) {
+    // Discuss is a live AI conversation about the entry, so it is Premium.
+    if (!ProModalUtils.requirePro(
+      context,
+      title: 'Discuss is Premium',
+      message:
+          'Upgrade to talk through your reflections with your wellness pal '
+          'and save the insights that come out of it.',
+      icon: Icons.forum_rounded,
+    )) {
+      return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(

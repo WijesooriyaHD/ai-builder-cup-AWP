@@ -68,14 +68,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _buildSubscriptionSection(context),
               const SizedBox(height: 16),
 
-              // Home Screen Widget — moved here from the profile sheet.
-              _buildCard(
-                context,
-                title: "Home Screen Widget",
-                child: _buildWidgetsSection(context),
-              ),
-              const SizedBox(height: 16),
-
               _buildCard(
                 context,
                 title: "AI Voice",
@@ -89,6 +81,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // "Mode" labels the light/dark toggle the same way "Season"
+                    // labels the one below it — without it the first control
+                    // was the only unlabelled thing in the card.
+                    Text("Mode", style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
                     _buildThemeToggle(context, appState),
                     const SizedBox(height: 24),
                     Text("Season", style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold)),
@@ -185,236 +182,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Home Screen Widget (moved here from the profile sheet)
   // ---------------------------------------------------------------------------
 
-  /// Tappable row that opens the Today's Plan home-screen widget sheet.
-  Widget _buildWidgetsSection(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: () => _showHomeWidgetsBottomSheet(context),
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.dashboard_rounded,
-                size: 20, color: Theme.of(context).primaryColor),
-          ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Today's Plan Widget",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  "Add Today's Plan to your home screen",
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.chevron_right_rounded,
-            color: isDark ? Colors.white24 : Colors.grey.shade400,
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showHomeWidgetsBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final isDark = Theme.of(sheetContext).brightness == Brightness.dark;
-        final primary = Theme.of(sheetContext).primaryColor;
-        final plan =
-            Provider.of<WellnessPlanState>(sheetContext, listen: false)
-                .todaysPlan;
-
-        return Container(
-          margin: const EdgeInsets.all(16),
-          // Cap the sheet so it never exceeds the screen; the content scrolls
-          // if it's taller than the available space.
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(sheetContext).size.height * 0.85,
-          ),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? Theme.of(sheetContext).cardColor : Colors.white,
-            borderRadius: BorderRadius.circular(32),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.today_rounded,
-                          color: primary, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Text(
-                        "Today's Plan Widget",
-                        style: TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  "Add the Today's Plan widget to your phone's home screen to "
-                  "see your daily wellness actions and tick them off — right "
-                  "from your home screen. It stays in sync with the app "
-                  "automatically.",
-                  style: TextStyle(
-                      color: Colors.grey.shade600, fontSize: 14, height: 1.45),
-                ),
-                const SizedBox(height: 20),
-                // Live preview of what the widget currently shows.
-                _buildWidgetPreview(sheetContext, plan, primary, isDark),
-                const SizedBox(height: 20),
-                // How-to hint.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.info_outline_rounded,
-                        size: 16, color: Colors.grey.shade500),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Long-press your home screen, tap Widgets, and add "
-                        "\"AI Wellness\" to place it.",
-                        style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
-                            height: 1.4),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// A compact preview mirroring what the native Today's Plan widget shows.
-  Widget _buildWidgetPreview(
-      BuildContext context, dynamic plan, Color primary, bool isDark) {
-    final hasPlan = plan != null && (plan.actions as List).isNotEmpty;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.04) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: isDark ? Colors.white10 : Colors.grey.shade200),
-      ),
-      child: hasPlan
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  plan.todaysFocus as String,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: primary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                ...(plan.actions as List).take(3).map((a) {
-                  final done = a.isCompleted as bool;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        Icon(
-                          done
-                              ? Icons.check_box_rounded
-                              : Icons.check_box_outline_blank_rounded,
-                          size: 18,
-                          color: done ? primary : Colors.grey.shade400,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            a.title as String,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              decoration:
-                                  done ? TextDecoration.lineThrough : null,
-                              color: done
-                                  ? Colors.grey
-                                  : Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.color,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-            )
-          : Row(
-              children: [
-                Icon(Icons.today_rounded,
-                    color: Colors.grey.shade400, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Complete your check-in to see your plan on the widget.',
-                    style: TextStyle(
-                        color: Colors.grey.shade500, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
 
   Widget _buildDisableNotificationSection(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -558,7 +325,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
-            const Divider(height: 24),
           ],
         ),
       ),
@@ -894,20 +660,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
         const SizedBox(height: 8),
         _buildHighQualityReadingToggle(context, appState),
-        const SizedBox(height: 8),
-        Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
-        const SizedBox(height: 8),
-        _buildLiveChatPalToggle(context, appState),
+        // This divider introduces the Live Chat Pal group. When the Live
+        // feature is unavailable that group renders nothing, so the divider
+        // has to go too — otherwise the card ends on a rule with empty space
+        // beneath it.
+        if (LiveConversationService.isAvailable) ...[
+          const SizedBox(height: 8),
+          Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
+          const SizedBox(height: 8),
+          _buildLiveChatPalToggle(context, appState),
+        ],
+        // Everything below belongs to the Live pal and does nothing without
+        // it — forceEnglishVoice is read only by live_pal_session.dart — so
+        // the whole group, dividers included, appears and disappears together
+        // with the Live Chat Pal switch.
         if (LiveConversationService.isAvailable && appState.liveChatPal) ...[
           const SizedBox(height: 12), // Reduced from 18
           _buildLivePalVoiceSelector(context, appState),
           const SizedBox(height: 12),
           _buildAlwaysListenForPalToggle(context, appState),
+          const SizedBox(height: 16),
+          Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
+          const SizedBox(height: 8),
+          _buildForceEnglishToggle(context, appState),
         ],
-        const SizedBox(height: 16),
-        Divider(color: isDark ? Colors.white12 : Colors.grey.shade200),
-        const SizedBox(height: 8),
-        _buildForceEnglishToggle(context, appState),
       ],
     );
   }
@@ -1119,7 +895,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             Switch.adaptive(
               value: enabled,
-              onChanged: (value) => appState.setLiveChatPal(value),
+              onChanged: (value) {
+                // Premium only to turn ON. Turning off stays available so a
+                // lapsed subscriber is never left stuck on a pal they can no
+                // longer use.
+                if (value &&
+                    !ProModalUtils.requirePro(
+                      context,
+                      title: 'Live Chat Pal is Premium',
+                      message:
+                          'Upgrade for real-time voice conversations — talk '
+                          'naturally and your pal responds as you speak.',
+                      icon: Icons.graphic_eq_rounded,
+                    )) {
+                  return;
+                }
+                appState.setLiveChatPal(value);
+              },
             ),
           ],
         ),

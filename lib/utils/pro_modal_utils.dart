@@ -363,6 +363,34 @@ class ProModalUtils {
   /// Generic premium-feature upsell with customizable [title] and [message].
   ///
   /// Use to gate any Premium-only action (e.g. regenerating today's plan).
+  /// The single gate every Premium-only AI feature should call.
+  ///
+  /// Returns true when the user may proceed. Otherwise it shows the upsell and
+  /// returns false, so a caller reads as one line:
+  ///
+  /// ```dart
+  /// if (!ProModalUtils.requirePro(context, title: ..., message: ...)) return;
+  /// ```
+  ///
+  /// Having one gate matters: the AI features were previously guarded in
+  /// several different ways (and in a few places not at all), so what counted
+  /// as Premium depended on which screen you were standing in.
+  static bool requirePro(
+    BuildContext context, {
+    required String title,
+    required String message,
+    IconData icon = Icons.auto_awesome_rounded,
+  }) {
+    if (context.read<AppState>().isPro) return true;
+    showFeatureUpsellModal(
+      context,
+      title: title,
+      message: message,
+      icon: icon,
+    );
+    return false;
+  }
+
   static void showFeatureUpsellModal(
     BuildContext context, {
     required String title,

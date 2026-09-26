@@ -10,6 +10,8 @@ import '../services/ai_service.dart';
 import '../services/auth_service.dart';
 import '../services/conversation_store.dart';
 import '../services/wellness_chat_guard.dart';
+import '../utils/pro_modal_utils.dart';
+import '../services/chat_quota.dart';
 import '../utils/wellnesspal_snackbar.dart';
 
 /// Typed chat with the Wellness Pal, opened from the "Chat" button on the
@@ -157,6 +159,16 @@ class _WellnessPalChatScreenState extends State<WellnessPalChatScreen> {
     final text = raw.trim();
     if (text.isEmpty || _isSending) return;
 
+    // Free tier: three messages a day. Checked BEFORE the message is added to
+    // the transcript, so a blocked attempt leaves no half-sent turn behind.
+    if (!await ChatQuota.canSend()) {
+      if (!mounted) return;
+      _showQuotaReached();
+      return;
+    }
+    await ChatQuota.recordSend();
+    if (!mounted) return;
+
     setState(() {
       _turns.add(_ChatTurn(text: text, isUser: true));
       _messageController.clear();
@@ -213,6 +225,82 @@ class _WellnessPalChatScreenState extends State<WellnessPalChatScreen> {
     }
 
     await _persist();
+  }
+
+  /// Shown once a free user has used their three messages for the day.
+  ///
+  /// States plainly what happened, when it resets, and offers the upgrade —
+  /// rather than silently refusing to send, which reads as the app being
+  /// broken.
+  void _showQuotaReached() {
+    final theme = Theme.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        padding: const EdgeInsets.all(28),
+        decoration: BoxDecoration(
+          color: theme.brightness == Brightness.dark
+              ? theme.cardColor
+              : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.forum_rounded,
+                  size: 32, color: theme.colorScheme.primary),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              "That's your ${ChatQuota.freeDailyMessages} messages for today",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.outfit(
+                  fontSize: 20, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your free chat resets tomorrow. Upgrade to Premium for '
+              'unlimited conversations with your pal.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.65),
+              ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(sheetContext);
+                  ProModalUtils.openUpgrade(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Upgrade to Premium',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => Navigator.pop(sheetContext),
+              child: const Text('Maybe later'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Saves the conversation into the shared "Recent Conversations" list.

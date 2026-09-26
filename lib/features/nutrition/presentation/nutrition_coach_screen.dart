@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../../utils/pro_modal_utils.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -344,6 +345,13 @@ class _NutritionCoachScreenState extends State<NutritionCoachScreen> {
       final file = File(picked.path);
       if (!context.mounted) return;
       _showAnalyzingDialog(context);
+      if (!ProModalUtils.requirePro(context,
+          title: 'AI food analysis is Premium',
+          message: 'Upgrade to let your pal read meals from a photo, a '
+              'description, or a barcode.',
+          icon: Icons.restaurant_rounded)) {
+        return;
+      }
       final result = await state.analyzePhoto(file);
       if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
       if (result != null && context.mounted) {
@@ -403,6 +411,13 @@ class _NutritionCoachScreenState extends State<NutritionCoachScreen> {
                   Navigator.pop(ctx);
                   if (!context.mounted) return;
                   _showAnalyzingDialog(context);
+                  if (!ProModalUtils.requirePro(context,
+          title: 'AI food analysis is Premium',
+          message: 'Upgrade to let your pal read meals from a photo, a '
+              'description, or a barcode.',
+          icon: Icons.restaurant_rounded)) {
+        return;
+      }
                   final result = await state.analyzeText(text);
                   if (context.mounted) {
                     Navigator.of(context, rootNavigator: true).pop();
@@ -445,6 +460,13 @@ class _NutritionCoachScreenState extends State<NutritionCoachScreen> {
       String code, MealType? presetType) async {
     _showAnalyzingDialog(context);
     try {
+      if (!ProModalUtils.requirePro(context,
+          title: 'AI food analysis is Premium',
+          message: 'Upgrade to let your pal read meals from a photo, a '
+              'description, or a barcode.',
+          icon: Icons.restaurant_rounded)) {
+        return;
+      }
       final result = await state.analyzeBarcode(code);
       if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
       if (result != null && context.mounted) {

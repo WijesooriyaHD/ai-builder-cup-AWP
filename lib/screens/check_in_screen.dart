@@ -10,6 +10,7 @@ import '../providers/check_in_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../services/toolkit_context_builder.dart';
 import '../theme/app_theme.dart';
+import '../widgets/ai_wellness_loader.dart';
 import '../widgets/frosted_container.dart';
 
 /// A 3-step PageView modal for the daily wellness check-in.
@@ -46,6 +47,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
   final List<String> _skippedFields = [];
 
   bool _isSubmitted = false;
+
+  /// True from the instant Done is pressed until the screen closes.
+  ///
+  /// Separate from [_isSubmitted], which only guards against double
+  /// submission. This one drives the UI: without it the button sat there
+  /// looking pressable while the Firestore write ran, so the app read as
+  /// frozen for the couple of seconds before anything appeared.
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -104,6 +113,9 @@ class _CheckInScreenState extends State<CheckInScreen> {
   Future<void> _submitCheckIn() async {
     if (_isSubmitted) return;
     _isSubmitted = true;
+    // Repaint BEFORE any await, so the loader is on screen while the Firestore
+    // write happens rather than after it.
+    setState(() => _isSubmitting = true);
 
     final checkIn = CheckIn(
       id: const Uuid().v4(),
@@ -141,6 +153,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
     } catch (e) {
       _isSubmitted = false;
       if (mounted) {
+        setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Unable to save check-in. Please try again.'),
@@ -210,23 +223,66 @@ class _CheckInScreenState extends State<CheckInScreen> {
         backgroundColor: isDark
             ? theme.scaffoldBackgroundColor
             : AppTheme.backgroundColor,
-        body: SafeArea(
+        body: Stack(
+          children: [
+            SafeArea(
+              child: Column(
+                children: [
+                  _buildHeader(theme),
+                  _buildProgressIndicator(theme),
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        _buildEnergyStep(theme, isDark),
+                        _buildMoodStep(theme, isDark),
+                        _buildRecoveryTimeStep(theme, isDark),
+                      ],
+                    ),
+                  ),
+                  _buildBottomButtons(theme),
+                ],
+              ),
+            ),
+            // Covers the form the moment Done is pressed, so the seconds spent
+            // saving read as progress rather than a frozen screen. Absorbs
+            // taps too, so nothing underneath can be pressed meanwhile.
+            if (_isSubmitting) _buildSavingOverlay(theme, isDark),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Full-screen "saving" state shown while the check-in is written and the
+  /// plan starts generating.
+  Widget _buildSavingOverlay(ThemeData theme, bool isDark) {
+    return Positioned.fill(
+      child: AbsorbPointer(
+        child: Container(
+          color: (isDark
+                  ? theme.scaffoldBackgroundColor
+                  : AppTheme.backgroundColor)
+              .withOpacity(0.96),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildHeader(theme),
-              _buildProgressIndicator(theme),
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildEnergyStep(theme, isDark),
-                    _buildMoodStep(theme, isDark),
-                    _buildRecoveryTimeStep(theme, isDark),
-                  ],
+              AiWellnessLoader(color: theme.colorScheme.primary, size: 170),
+              const SizedBox(height: 24),
+              Text(
+                'Saving your check-in',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Building today\'s plan around how you feel.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
-              _buildBottomButtons(theme),
             ],
           ),
         ),
@@ -287,7 +343,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
       child: Row(
         children: [
           TextButton(
-            onPressed: _skipCurrentStep,
+            onPressed: _isSubmitting ? null : _skipCurrentStep,
             child: Text(
               'Skip',
               style: TextStyle(
@@ -298,8 +354,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
           ),
           const Spacer(),
           ElevatedButton(
-            onPressed: _canAdvance() ? _nextPage : null,
-            child: Text(_currentPage == 2 ? 'Done' : 'Next'),
+            onPressed: (_canAdvance() && !_isSubmitting) ? _nextPage : null,
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(_currentPage == 2 ? 'Done' : 'Next'),
           ),
         ],
       ),

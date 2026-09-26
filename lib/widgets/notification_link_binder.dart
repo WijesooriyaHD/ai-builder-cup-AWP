@@ -13,6 +13,7 @@ import '../services/notification_category.dart';
 import '../services/notification_router.dart';
 import '../services/notification_service.dart';
 import '../services/onesignal_service.dart';
+import '../services/pro_access.dart';
 
 /// Connects incoming notifications to in-app navigation, once.
 ///
@@ -106,8 +107,12 @@ class _NotificationLinkBinderState extends State<NotificationLinkBinder> {
     //    reported separately every time so segments stay accurate.
     appState.onPremiumUpgraded =
         () => engagement.trackEvent(EngagementEvent.premiumUpgraded);
-    appState.onProStatusKnown =
-        (isPro) => engagement.setUserProperty('is_pro', isPro.toString());
+    appState.onProStatusKnown = (isPro) {
+      engagement.setUserProperty('is_pro', isPro.toString());
+      // Mirror it somewhere the toolkit states can read without a context —
+      // their AI runs on load, before any widget could gate it.
+      ProAccess.update(isPro);
+    };
 
     // 9. Session start, so OneSignal Journeys have an entry point.
     engagement.trackEvent(EngagementEvent.appOpened);

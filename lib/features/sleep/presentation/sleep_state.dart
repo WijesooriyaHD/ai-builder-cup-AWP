@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../../../services/pro_access.dart';
 
 import '../data/demo_sleep_data_provider.dart';
 import '../data/gemini_sleep_ai_service.dart';
@@ -212,6 +213,13 @@ class SleepState extends ChangeNotifier {
     final session = _session;
     final score = _score;
     if (session == null || score == null) return;
+    // Premium-only. This runs automatically on load rather than from a button,
+    // so the gate has to live here — the UI never gets a chance to ask.
+    if (!ProAccess.isPro) {
+      _insight = null;
+      notifyListeners();
+      return;
+    }
     _isAnalyzing = true;
     _aiFailed = false;
     notifyListeners();

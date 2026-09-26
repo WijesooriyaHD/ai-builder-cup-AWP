@@ -238,10 +238,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // Settings
-  ThemeMode _themeMode = ThemeMode.light;
-  Color _themeColor = const Color(0xFFFF7F50); // Coral Orange default
+  // Match the new-install defaults in StorageService, so the very first frame
+  // is already the right theme rather than flashing light-and-coral before the
+  // stored settings load.
+  ThemeMode _themeMode = ThemeMode.dark;
+  Color _themeColor = const Color(0xFF4A7FFC); // Clear Sky (brand blue)
   double _textScaleFactor = 1.0;
-  bool _isWinterMode = false;
+  bool _isWinterMode = true;
   bool _showMotivation = true;
   bool _showAchievements = true;
   bool _showMap = true;

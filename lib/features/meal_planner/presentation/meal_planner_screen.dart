@@ -661,7 +661,13 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _SwapSheet(
         original: meal,
-        onFetch: () => state.fetchAlternatives(meal),
+        onFetch: () => ProModalUtils.requirePro(context,
+                title: 'AI alternatives are Premium',
+                message: 'Upgrade to swap any meal for a suggestion that fits '
+                    'the same day.',
+                icon: Icons.restaurant_menu_rounded)
+            ? state.fetchAlternatives(meal)
+            : Future.value(null),
         onPick: (alt) async {
           await state.replaceMealInPlan(meal, alt);
           if (ctx.mounted) Navigator.pop(ctx);

@@ -471,6 +471,18 @@ class _AddDreamScreenState extends State<AddDreamScreen> {
           SwitchListTile(
             value: _generateWithAi,
             onChanged: (val) {
+              // Turning it ON is the Premium action; turning it off is always
+              // allowed, so a user who lapses is never stuck with it enabled.
+              if (val &&
+                  !ProModalUtils.requirePro(
+                    context,
+                    title: 'AI plans are Premium',
+                    message:
+                        'Upgrade to have your pal break this intention into '
+                        'gentle daily wellness steps.',
+                  )) {
+                return;
+              }
               setState(() {
                 _generateWithAi = val;
                 if (val) _selectedDate = null;
