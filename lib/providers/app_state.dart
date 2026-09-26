@@ -18,6 +18,7 @@ import '../models/daily_plan.dart';
 import '../models/period_data.dart';
 import '../models/weight_data.dart';
 import '../services/storage_service.dart';
+import '../services/journal_discussion_store.dart';
 import '../services/achievement_service.dart';
 import '../services/revenue_cat_service.dart';
 import '../services/connectivity_service.dart';
@@ -2342,6 +2343,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     // Clean up any Home pin for this entry so the Home tab doesn't
     // try to render a card for a deleted entry.
     _pinnedJournalToHomeIds.remove(id);
+    // Drop the stored "Discuss" conversation too, so it doesn't linger in
+    // Firestore as an orphan pointing at a reflection that no longer exists.
+    unawaited(JournalDiscussionStore().delete(id));
     await _save();
     notifyListeners();
     await _checkAchievements();
