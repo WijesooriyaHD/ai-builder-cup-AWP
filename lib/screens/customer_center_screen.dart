@@ -425,9 +425,12 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
           if (!mounted) return;
         }
         ProModalUtils.showWelcomeProModal(context);
-      } else {
+      } else if (!Platform.isIOS) {
         // Expected on Android, where the code is redeemed in the Play Store
-        // and the entitlement may not have propagated yet.
+        // and the entitlement may not have propagated yet. On iOS Apple's
+        // redemption sheet returns before the code is entered, and the
+        // entitlement arrives later through RevenueCat's update listener,
+        // so a "nothing found" message there would always be premature.
         WellnessPalSnackBar.show(
           context,
           message:

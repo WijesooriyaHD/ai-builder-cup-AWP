@@ -1104,10 +1104,15 @@ class _SuggestionsTabState extends State<_SuggestionsTab> {
                     if (!context.mounted) return;
                     final newAchievements =
                         await habitState.checkHabitAchievements();
-                    if (context.mounted) Navigator.pop(context);
                     if (!context.mounted) return;
+                    // Capture the navigator BEFORE closing the sheet: once the
+                    // sheet pops, its context is deactivated, and pushing the
+                    // achievement page from it left navigation stuck after
+                    // "On to the Next One!".
+                    final navigator = Navigator.of(context);
+                    navigator.pop();
                     for (final achievement in newAchievements) {
-                      await Navigator.of(context).push(MaterialPageRoute(
+                      await navigator.push(MaterialPageRoute(
                         builder: (_) =>
                             AchievementCompletionPage(achievement: achievement),
                         fullscreenDialog: true,
@@ -1311,9 +1316,13 @@ class _CustomHabitFormState extends State<_CustomHabitForm> {
         final newAchievements = await state.checkHabitAchievements();
         if (mounted) {
           setState(() => _saving = false);
-          Navigator.pop(context);
+          // Capture the navigator BEFORE closing the sheet: once the sheet
+          // pops, this context is deactivated, and pushing the achievement
+          // page from it left navigation stuck after "On to the Next One!".
+          final navigator = Navigator.of(context);
+          navigator.pop();
           for (final achievement in newAchievements) {
-            await Navigator.of(context).push(MaterialPageRoute(
+            await navigator.push(MaterialPageRoute(
               builder: (_) =>
                   AchievementCompletionPage(achievement: achievement),
               fullscreenDialog: true,

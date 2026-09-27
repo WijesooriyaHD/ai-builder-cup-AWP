@@ -1966,6 +1966,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _aiVoice = settings['aiVoice'] as String? ?? 'default';
     _forceEnglishVoice = settings['forceEnglishVoice'] as bool? ?? false;
     _liveChatPal = settings['liveChatPal'] as bool? ?? false;
+    // Saved settings can load after Premium status is known; never restore
+    // Live Chat Pal for a user who is no longer Premium.
+    if (_proStatusResolved && !_isPro) _liveChatPal = false;
     _alwaysListenForPal =
         settings['alwaysListenForPal'] as bool? ?? false;
     _livePalVoice =
@@ -2140,6 +2143,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         // User was Pro but is now free → lapse detected
         _lapseDetectedThisSession = true;
         debugPrint('⚠️ Subscription lapse detected: was Pro, now free tier');
+      }
+
+      // Live Chat Pal is Premium-only: switch it off as soon as the user is
+      // no longer Premium (lapse, refund, or sign-in as a free user), so the
+      // mic button falls back to the default pal. Offline checks fall back to
+      // the cached entitlement, so a network blip won't turn it off.
+      if (!_isPro && _liveChatPal) {
+        _liveChatPal = false;
+        _saveSettings();
+        debugPrint('🔒 Live Chat Pal turned off: user is not Premium');
       }
 
       // --- Upgrade detection ---

@@ -626,16 +626,20 @@ class _AddDreamScreenState extends State<AddDreamScreen> {
         );
         
         if (mounted) {
+          // Capture the navigator BEFORE popping: once this screen pops its
+          // context is deactivated, and pushing achievement pages from it
+          // left navigation stuck after "On to the Next One!".
+          final navigator = Navigator.of(context);
           // If loading sheet was shown, pop it
           if (_generateWithAi) {
-            Navigator.pop(context);
+            navigator.pop();
           }
           
-          Navigator.pop(context);
+          navigator.pop();
           
           if (newAchievements.isNotEmpty) {
              for (final achievement in newAchievements) {
-                 Navigator.of(context).push(
+                 navigator.push(
                    MaterialPageRoute(
                      builder: (context) => AchievementCompletionPage(achievement: achievement),
                      fullscreenDialog: true,

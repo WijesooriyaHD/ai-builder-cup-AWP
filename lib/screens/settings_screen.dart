@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kDebugMode;
 
 import 'package:flutter/material.dart';
@@ -1834,9 +1835,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Rebuild the subscription card so it flips to "Manage Subscription".
       setState(() {});
       ProModalUtils.showWelcomeProModal(context);
-    } else {
+    } else if (!Platform.isIOS) {
       // Expected on Android, where the code is redeemed in the Play Store and
-      // the entitlement may not have propagated back yet.
+      // the entitlement may not have propagated back yet. On iOS Apple's
+      // redemption sheet returns before the code is entered, and the
+      // entitlement arrives later through RevenueCat's update listener.
       WellnessPalSnackBar.show(
         context,
         message: 'No new subscription found yet. If you just redeemed a code, '
