@@ -101,6 +101,7 @@ class FakeAIService implements AIService {
   Future<String?> generateVoiceReply(
     String question, {
     List<Map<String, String>> history = const [],
+    String? appKnowledge,
   }) async {
     return null;
   }

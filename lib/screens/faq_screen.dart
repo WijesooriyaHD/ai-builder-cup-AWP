@@ -57,6 +57,20 @@ class FaqScreen extends StatelessWidget {
                 "Reflection — your journal, AI reflections and saved "
                 "conversations.\n\nSettings — everything you can tune.",
           ),
+          FaqCard(
+            question: "Is AI Wellness Pal medical advice? 🩺",
+            answer:
+                "No. AI Wellness Pal offers general wellness information and "
+                "encouragement — it isn't a medical device and doesn't "
+                "diagnose, treat or replace a doctor, therapist or other "
+                "qualified professional. AI responses, calorie estimates and "
+                "cycle predictions can be wrong, so talk to a healthcare "
+                "provider about any health concern.\n\nIf you're in crisis "
+                "or thinking about harming yourself, contact your local "
+                "emergency number right away. In the US, call or text 988. "
+                "In the UK, call 111 or Samaritans on 116 123. Elsewhere, "
+                "find a helpline at findahelpline.com.",
+          ),
 
           // ── Daily use ──────────────────────────────────────────────────
           _FaqSection("Your day"),
@@ -84,7 +98,7 @@ class FaqScreen extends StatelessWidget {
                 "A habit is something you're building into your routine, with "
                 "its own schedule and optional reminder.\n\nA Challenge is a "
                 "multi-day commitment with an end point — hydration, walking, "
-                "meditation, sugar detox, a sleep routine. You join one, log "
+                "meditation, cutting back on sugar, a sleep routine. You join one, log "
                 "each day, and finishing it unlocks an achievement.",
           ),
           FaqCard(

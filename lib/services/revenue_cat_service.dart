@@ -36,10 +36,11 @@ class RevenueCatService {
   /// an active plan, so every Premium gate in the app is open. This exists so
   /// Premium features can be tested on a device without RevenueCat/store setup.
   ///
-  /// SAFETY: it's off unless the flag is explicitly passed, so a normal
-  /// production build (which never passes it) is completely unaffected.
+  /// SAFETY: it's off unless the flag is explicitly passed, and it is only
+  /// honoured in debug builds — a release/profile build ignores the flag even
+  /// if it's passed by mistake.
   static const bool _forcePro =
-      bool.fromEnvironment('FORCE_PRO', defaultValue: false);
+      kDebugMode && bool.fromEnvironment('FORCE_PRO', defaultValue: false);
 
   /// Whether the test-only force-Pro override is active.
   static bool get isForcedPro => _forcePro;
@@ -82,7 +83,11 @@ class RevenueCatService {
       // Mark as initialized (so callers don't retry) but NOT configured, so
       // every SDK-touching method short-circuits and never calls native code.
       if (!kDebugMode && apiKey.startsWith('test_')) {
-        debugPrint('⚠️ RevenueCat: Skipping init — test key in release build');
+        debugPrint(
+            '⚠️ RevenueCat: Skipping init — test_ API key in a release build. '
+            'Purchases, restore and Premium are DISABLED. Build with '
+            '--dart-define=REVENUECAT_IOS_KEY / REVENUECAT_ANDROID_KEY '
+            'set to production (appl_/goog_) keys.');
         _isInitialized = true;
         _isConfigured = false;
         return;
@@ -200,7 +205,7 @@ class RevenueCatService {
 
       if (productId.contains('monthly')) {
         return SubscriptionStatus.monthly;
-      } else if (productId.contains('annual')) {
+      } else if (productId.contains('yearly') || productId.contains('annual')) {
         return SubscriptionStatus.yearly;
       }
 
@@ -543,8 +548,11 @@ class RevenueCatService {
     _updateListener = callback;
   }
 
-  /// Manage subscriptions by opening the appropriate store URL
-  Future<void> manageSubscriptions() async {
+  /// Manage subscriptions by opening the appropriate store URL.
+  ///
+  /// Returns false if the store page couldn't be opened, so the caller can
+  /// tell the user how to get there themselves.
+  Future<bool> manageSubscriptions() async {
     try {
       final customerInfo = await getCustomerInfo();
       String? url = customerInfo.managementURL;
@@ -559,15 +567,16 @@ class RevenueCatService {
 
       if (url != null) {
         final uri = Uri.parse(url);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } else {
-          debugPrint('❌ Could not launch subscription management URL: $url');
+        if (await canLaunchUrl(uri) &&
+            await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          return true;
         }
+        debugPrint('❌ Could not launch subscription management URL: $url');
       }
     } catch (e) {
       debugPrint('❌ Error managing subscriptions: $e');
     }
+    return false;
   }
 
   /// Clear cached customer info (useful for testing)

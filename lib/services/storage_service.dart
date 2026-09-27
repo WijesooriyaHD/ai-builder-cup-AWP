@@ -15,6 +15,7 @@ import '../models/journal_entry.dart';
 import '../models/sync_operation.dart';
 import '../models/period_data.dart';
 import '../models/weight_data.dart';
+import 'auth_service.dart' show AuthService;
 
 class StorageService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -248,36 +249,6 @@ class StorageService {
     }
   }
 
-  Future<List<TravelMemory>> fetchPublicMemories() async {
-    try {
-      final snapshot = await _db
-          .collectionGroup('travel_memories')
-          .where('public', isEqualTo: true)
-          .orderBy('visited_date', descending: true)
-          .limit(100)
-          .get();
-
-      return snapshot.docs.map((doc) {
-        final m = doc.data();
-        return TravelMemory(
-          id: m['id'],
-          place: m['place'],
-          latitude: (m['latitude'] as num).toDouble(),
-          longitude: (m['longitude'] as num).toDouble(),
-          visitedDate: DateTime.parse(m['visited_date']),
-          memory: m['memory'] ?? '',
-          note: m['note'],
-          photos: List<String>.from(m['photos'] ?? []),
-          isPublic: true,
-          userId: m['user_id'],
-        );
-      }).toList();
-    } catch (e) {
-      debugPrint('Firestore Public Fetch Error: $e');
-      return [];
-    }
-  }
-
   // --- JOURNAL (local only) ---
 
   Future<void> saveJournalEntries(List<JournalEntry> entries) async {
@@ -368,7 +339,7 @@ class StorageService {
           'theme_color': themeColorValue,
           'text_scale': textScale,
           'display_name': user.displayName,
-          'avatar_url': user.photoURL,
+          'avatar_url': AuthService.usablePhotoUrl(user.photoURL),
           'instagram': instagram,
           'ai_voice': aiVoice,
           'updated_at': FieldValue.serverTimestamp(),
@@ -407,7 +378,7 @@ class StorageService {
       try {
         await _db.collection('users').doc(user.uid).set({
           'display_name': user.displayName,
-          'avatar_url': user.photoURL,
+          'avatar_url': AuthService.usablePhotoUrl(user.photoURL),
           'email': user.email,
           'updated_at': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));

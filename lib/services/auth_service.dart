@@ -42,9 +42,13 @@ class AuthService {
 
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
-        await RevenueCatService().logIn(currentUser.uid);
+        await RevenueCatService()
+            .logIn(currentUser.uid)
+            .timeout(const Duration(seconds: 5));
         if (currentUser.email != null) {
-          await RevenueCatService().setEmail(currentUser.email!);
+          await RevenueCatService()
+              .setEmail(currentUser.email!)
+              .timeout(const Duration(seconds: 5));
         }
       }
       debugPrint('✅ AuthService initialized successfully');
@@ -169,6 +173,57 @@ class AuthService {
     }
   }
 
+  /// Sign in with Apple (works for both login and sign-up).
+  ///
+  /// Uses Firebase's native Apple provider, which presents the system
+  /// Sign in with Apple sheet on iOS. Returns the [UserCredential] on
+  /// success, or `null` if the user cancelled.
+  Future<UserCredential?> signInWithApple() async {
+    try {
+      final provider = AppleAuthProvider()
+        ..addScope('email')
+        ..addScope('name');
+
+      final userCredential = await _auth.signInWithProvider(provider);
+
+      // Sync to RevenueCat
+      if (userCredential.user != null) {
+        await RevenueCatService().logIn(userCredential.user!.uid);
+        if (userCredential.user!.email != null) {
+          await RevenueCatService().setEmail(userCredential.user!.email!);
+        }
+      }
+
+      // Persist login state for silent sign-in on next launch
+      await setLoggedIn(true);
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'canceled' || e.code == 'web-context-canceled') {
+        return null; // User cancelled
+      }
+      debugPrint('❌ Apple sign in Firebase error: ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('❌ Apple sign in error: $e');
+      rethrow;
+    }
+  }
+
+  /// Re-authenticates an Apple user and revokes their Apple tokens.
+  ///
+  /// Apple requires apps that offer Sign in with Apple to revoke the
+  /// user's tokens when they delete their account. Call this right before
+  /// `user.delete()`.
+  Future<void> reauthenticateAndRevokeApple(User user) async {
+    final provider = AppleAuthProvider()..addScope('email');
+    final credential = await user.reauthenticateWithProvider(provider);
+    final authCode = credential.additionalUserInfo?.authorizationCode;
+    if (authCode != null) {
+      await _auth.revokeTokenWithAuthorizationCode(authCode);
+    }
+  }
+
   /// Sign out
   Future<void> signOut() async {
     try {
@@ -193,6 +248,27 @@ class AuthService {
     } catch (e) {
       debugPrint('❌ Sign out error: $e');
     }
+  }
+
+  /// Returns [url] if it can be shown as the user's avatar, otherwise null.
+  ///
+  /// Older builds offered preset avatars hotlinked from a stock-image site we
+  /// are not licensed to ship. Accounts that saved one of those still carry
+  /// the URL in photoURL, so it is ignored here and the UI falls back to the
+  /// initials/icon avatar instead.
+  static String? usablePhotoUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return null;
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    if (host == 'freepik.com' || host.endsWith('.freepik.com')) return null;
+    return url;
+  }
+
+  /// Clears the user's photo URL so the initials avatar is shown.
+  Future<void> clearUserPhoto() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    await user.updatePhotoURL(null);
+    await user.reload();
   }
 
   /// Update user display name and/or photo URL

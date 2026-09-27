@@ -1,0 +1,5 @@
+// Base configuration for the OneSignalNotificationServiceExtension extension (Debug).
+// Includes Flutter's Generated.xcconfig so the extension's version and build
+// number follow pubspec.yaml, matching the Runner app as Apple requires.
+#include? "Pods/Target Support Files/Pods-OneSignalNotificationServiceExtension/Pods-OneSignalNotificationServiceExtension.debug.xcconfig"
+#include "Generated.xcconfig"

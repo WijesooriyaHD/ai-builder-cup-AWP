@@ -6,7 +6,6 @@ void main() {
     group('detects base banned words', () {
       final baseWords = [
         'diagnose',
-        'treat',
         'therapy',
         'therapist',
         'disorder',
@@ -31,7 +30,6 @@ void main() {
         'diagnosing',
         'treatment',
         'treating',
-        'treated',
         'therapeutic',
         'therapists',
         'disorders',
@@ -55,6 +53,11 @@ void main() {
       expect(ContentSafetyFilter.containsBannedContent('Clinical Review'), isTrue);
       expect(ContentSafetyFilter.containsBannedContent('Diagnose early'), isTrue);
       expect(ContentSafetyFilter.containsBannedContent('DISORDER found'), isTrue);
+    });
+
+    test('allows "treat yourself" phrasing', () {
+      expect(ContentSafetyFilter.containsBannedContent('Treat yourself to a walk'), isFalse);
+      expect(ContentSafetyFilter.containsBannedContent('You treated yourself well'), isFalse);
     });
 
     test('uses word boundaries — does not match partial words', () {
@@ -137,6 +140,22 @@ void main() {
       expect(
         ContentSafetyFilter.containsBannedContent(ContentSafetyFilter.fallbackMessage),
         isFalse,
+      );
+    });
+  });
+
+  group('ContentSafetyFilter.sanitize referrals', () {
+    test('keeps replies that refer the user to professional help', () {
+      const reply = "It might help to talk to a therapist about how you're feeling.";
+      expect(ContentSafetyFilter.sanitize(reply), reply);
+      const crisis = 'Please call 988 or reach out to a crisis line right now.';
+      expect(ContentSafetyFilter.sanitize(crisis), crisis);
+    });
+
+    test('still replaces replies that give clinical advice', () {
+      expect(
+        ContentSafetyFilter.sanitize('This sounds like an anxiety disorder that needs treatment.'),
+        ContentSafetyFilter.fallbackMessage,
       );
     });
   });

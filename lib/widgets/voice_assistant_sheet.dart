@@ -43,6 +43,7 @@ import '../screens/weight_tracker_screen.dart';
 import '../screens/travel_screen.dart';
 import '../models/live_conversation_record.dart';
 import '../services/conversation_store.dart';
+import 'ai_response_safety.dart';
 import 'ai_wellness_loader.dart';
 import 'conversation_transcript_sheet.dart';
 
@@ -1019,6 +1020,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
                   : _buildLiveOrbIdle(theme, service),
             ),
 
+            const AiDisclaimerNote(padding: EdgeInsets.fromLTRB(24, 4, 24, 0)),
+
             // Interrupt + End, side by side, towards the bottom.
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
@@ -1502,6 +1505,8 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
               color: theme.colorScheme.onSurface.withOpacity(0.4),
             ),
           ),
+          if (!compact)
+            const AiDisclaimerNote(padding: EdgeInsets.fromLTRB(8, 10, 8, 0)),
         ],
       ),
     );

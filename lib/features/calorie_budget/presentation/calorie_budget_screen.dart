@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../widgets/add_to_home_wrapper.dart';
+import '../../../widgets/ai_response_safety.dart';
 import '../../../services/home_tool_cards_service.dart';
 import '../../meal_planner/presentation/meal_planner_state.dart';
 import '../../nutrition/presentation/nutrition_state.dart';
@@ -106,6 +107,12 @@ class _CalorieBudgetScreenState extends State<CalorieBudgetScreen> {
                           insights: state.insights,
                           isAnalyzing: state.isAnalyzing,
                         ),
+                      ),
+                      const AiDisclaimerNote(
+                        text: 'Calories and nutrients are AI estimates and may '
+                            "be inaccurate. This isn't medical or dietary "
+                            'advice.',
+                        padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
                       ),
                       const SizedBox(height: 16),
                       AddToHomeWrapper(
@@ -510,7 +517,9 @@ class _CalorieBudgetScreenState extends State<CalorieBudgetScreen> {
                     labelText: 'Daily budget',
                     suffixText: 'kcal',
                     helperText:
-                        'Leave as-is to derive from your Meal Planner profile.',
+                        'Leave as-is to derive from your Meal Planner profile. '
+                        'Minimum ${CalorieBudgetState.minDailyBudget} kcal.',
+                    helperMaxLines: 2,
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
@@ -529,9 +538,23 @@ class _CalorieBudgetScreenState extends State<CalorieBudgetScreen> {
                     onPressed: () async {
                       await state.setGoalMode(mode);
                       final b = int.tryParse(budgetC.text) ?? 0;
+                      final wasClamped = b > 0 &&
+                          CalorieBudgetState.clampBudget(b) != b;
                       // Only treat as an override if it differs from derived.
                       await state.setBudgetOverride(b);
                       if (ctx.mounted) Navigator.pop(ctx);
+                      if (wasClamped && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Daily budget set to ${state.dailyBudget} kcal '
+                                '— budgets are kept between '
+                                '${CalorieBudgetState.minDailyBudget} and '
+                                '${CalorieBudgetState.maxDailyBudget} kcal for safety.'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
                     },
                     child: const Text('Save'),
                   ),

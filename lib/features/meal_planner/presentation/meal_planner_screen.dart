@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
 import '../../../utils/pro_modal_utils.dart';
+import '../../../widgets/ai_response_safety.dart';
 import '../../../widgets/ai_wellness_loader.dart';
 import '../../../widgets/add_to_home_wrapper.dart';
 import '../../../services/home_tool_cards_service.dart';
@@ -183,6 +184,11 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
               onGenerate: () => state.buildGroceryList(),
               onToggle: (name) => state.toggleGroceryItem(name),
             ),
+          ),
+          const SizedBox(height: 12),
+          const AiDisclaimerNote(
+            text: 'Calories and nutrients are AI estimates and may be '
+                "inaccurate. This isn't medical or dietary advice.",
           ),
         ],
       ],
@@ -865,6 +871,13 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
                 }),
                 const SizedBox(height: 16),
                 _numField(calC, 'Daily calorie target', 'kcal'),
+                const SizedBox(height: 6),
+                Text(
+                  'Minimum $_minDailyCalories kcal. Check with a healthcare '
+                  'professional before making big changes to your diet.',
+                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
@@ -877,6 +890,14 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
                           borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: () {
+                      // Keep any typed calorie target within a safe range
+                      // (never below 1200 kcal); 0/blank still fails the
+                      // completeness check below.
+                      final typedCal = int.tryParse(calC.text) ?? 2000;
+                      final safeCal = typedCal > 0
+                          ? typedCal.clamp(_minDailyCalories, _maxDailyCalories)
+                              .toInt()
+                          : typedCal;
                       final profile = UserProfile(
                         age: int.tryParse(ageC.text),
                         gender: gender,
@@ -885,8 +906,7 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
                         goalWeightKg: double.tryParse(goalWeightC.text),
                         activityLevel: activity,
                         goal: goal,
-                        dailyCalories:
-                            int.tryParse(calC.text) ?? 2000,
+                        dailyCalories: safeCal,
                         nationality: nationalityC.text.trim().isEmpty
                             ? 'United States'
                             : nationalityC.text.trim(),
@@ -911,6 +931,13 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
                       state.saveProfile(profile);
                       setState(() {});
                       Navigator.pop(ctx);
+                      if (safeCal != typedCal) {
+                        _snack(
+                            context,
+                            'Daily calorie target set to $safeCal kcal — '
+                            'targets are kept between $_minDailyCalories and '
+                            '$_maxDailyCalories kcal for safety.');
+                      }
                     },
                     child: const Text('Save profile'),
                   ),
@@ -997,6 +1024,10 @@ class _MealPlannerScreenState extends State<MealPlannerScreen> {
     nutrition.logMeal(result, mealType: m.type);
     _snack(context, 'Logged "${m.name}" to your food diary.');
   }
+
+  /// Safe bounds for a user-entered daily calorie target (Guideline 1.4.1).
+  static const int _minDailyCalories = 1200;
+  static const int _maxDailyCalories = 5000;
 
   void _snack(BuildContext context, String msg) {
     ScaffoldMessenger.of(context).showSnackBar(

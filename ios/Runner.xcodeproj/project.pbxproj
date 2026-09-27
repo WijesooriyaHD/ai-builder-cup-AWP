@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B7C0000000000000000001A1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B7C0000000000000000001F1 /* PrivacyInfo.xcprivacy */; };
+		B7C0000000000000000002A2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B7C0000000000000000002F2 /* PrivacyInfo.xcprivacy */; };
 		001FB0942D3825E797978ADB /* Pods_AIWellnessWidget.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 05BEE5946741FD9D59BE547A /* Pods_AIWellnessWidget.framework */; };
 		05BC15AAF5C6CD954D1790D5 /* BackgroundIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A5E4988C31BB39C17127FA /* BackgroundIntent.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
@@ -94,6 +96,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B7C0000000000000000001C0 /* AIWellnessWidget-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "AIWellnessWidget-Debug.xcconfig"; path = "Flutter/AIWellnessWidget-Debug.xcconfig"; sourceTree = "<group>"; };
+		B7C0000000000000000002C0 /* AIWellnessWidget-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "AIWellnessWidget-Release.xcconfig"; path = "Flutter/AIWellnessWidget-Release.xcconfig"; sourceTree = "<group>"; };
+		B7C0000000000000000003C0 /* AIWellnessWidget-Profile.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "AIWellnessWidget-Profile.xcconfig"; path = "Flutter/AIWellnessWidget-Profile.xcconfig"; sourceTree = "<group>"; };
+		B7C0000000000000000004C0 /* OneSignalNotificationServiceExtension-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "OneSignalNotificationServiceExtension-Debug.xcconfig"; path = "Flutter/OneSignalNotificationServiceExtension-Debug.xcconfig"; sourceTree = "<group>"; };
+		B7C0000000000000000005C0 /* OneSignalNotificationServiceExtension-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "OneSignalNotificationServiceExtension-Release.xcconfig"; path = "Flutter/OneSignalNotificationServiceExtension-Release.xcconfig"; sourceTree = "<group>"; };
+		B7C0000000000000000006C0 /* OneSignalNotificationServiceExtension-Profile.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "OneSignalNotificationServiceExtension-Profile.xcconfig"; path = "Flutter/OneSignalNotificationServiceExtension-Profile.xcconfig"; sourceTree = "<group>"; };
+		B7C0000000000000000001F1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B7C0000000000000000002F2 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		014495A6A762F93BC3837A96 /* Pods-AIWellnessWidget.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-AIWellnessWidget.release.xcconfig"; path = "Target Support Files/Pods-AIWellnessWidget/Pods-AIWellnessWidget.release.xcconfig"; sourceTree = "<group>"; };
 		05BEE5946741FD9D59BE547A /* Pods_AIWellnessWidget.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_AIWellnessWidget.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0A2966EF20618AF1007EFE24 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
@@ -195,6 +205,7 @@
 				A20BFB53CC10D3C41D5B7159 /* AIWellnessWidget.swift */,
 				6736D4F175342645A3E4B9B4 /* Assets.xcassets */,
 				7F2AE201DB2DA3CBE290D9E7 /* Info.plist */,
+				B7C0000000000000000002F2 /* PrivacyInfo.xcprivacy */,
 				42ADFA698D16DFD7BFC52CC1 /* AIWellnessWidget.entitlements */,
 				F5B2332C9A29B793CD3A2E5D /* IntentionWidget.swift */,
 				C003F00430551FBC003DA8CB /* HabitWidget.swift */,
@@ -250,6 +261,12 @@
 				9740EEB21CF90195004384FC /* Debug.xcconfig */,
 				7AFA3C8E1D35360C0083082E /* Release.xcconfig */,
 				9740EEB31CF90195004384FC /* Generated.xcconfig */,
+				B7C0000000000000000001C0 /* AIWellnessWidget-Debug.xcconfig */,
+				B7C0000000000000000002C0 /* AIWellnessWidget-Release.xcconfig */,
+				B7C0000000000000000003C0 /* AIWellnessWidget-Profile.xcconfig */,
+				B7C0000000000000000004C0 /* OneSignalNotificationServiceExtension-Debug.xcconfig */,
+				B7C0000000000000000005C0 /* OneSignalNotificationServiceExtension-Release.xcconfig */,
+				B7C0000000000000000006C0 /* OneSignalNotificationServiceExtension-Profile.xcconfig */,
 			);
 			name = Flutter;
 			sourceTree = "<group>";
@@ -287,6 +304,7 @@
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
 				97C147021CF9000F007C117D /* Info.plist */,
+				B7C0000000000000000001F1 /* PrivacyInfo.xcprivacy */,
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
 				74858FAE1ED2DC5600515810 /* AppDelegate.swift */,
@@ -473,6 +491,7 @@
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 				ACA279E15DAACB3954C4A7D4 /* GoogleService-Info.plist in Resources */,
+				B7C0000000000000000001A1 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -488,6 +507,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				754B0CE85DC6AD20CD1CE7AA /* Assets.xcassets in Resources */,
+				B7C0000000000000000002A2 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -734,13 +754,13 @@
 /* Begin XCBuildConfiguration section */
 		06AF7FAA3B8D85682E8DED91 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = A7BAC923DC3517B81CCD38A5 /* Pods-AIWellnessWidget.debug.xcconfig */;
+			baseConfigurationReference = B7C0000000000000000001C0 /* AIWellnessWidget-Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = AIWellnessWidget/AIWellnessWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = QX8747W93H;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AIWellnessWidget/Info.plist;
@@ -750,13 +770,13 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiwellnesspal.app.AIWellnessWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -809,7 +829,7 @@
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Profile;
@@ -822,6 +842,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = QX8747W93H;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -889,13 +910,13 @@
 		};
 		3A555539B76892F603655382 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 014495A6A762F93BC3837A96 /* Pods-AIWellnessWidget.release.xcconfig */;
+			baseConfigurationReference = B7C0000000000000000002C0 /* AIWellnessWidget-Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = AIWellnessWidget/AIWellnessWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = QX8747W93H;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AIWellnessWidget/Info.plist;
@@ -905,13 +926,13 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiwellnesspal.app.AIWellnessWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -971,7 +992,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -1026,7 +1047,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -1039,6 +1060,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = QX8747W93H;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -1063,6 +1085,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = QX8747W93H;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
@@ -1080,13 +1103,13 @@
 		};
 		9A05AEE8AA1F51EB699CBFA0 /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 526ED40C8C94044CBFEF7113 /* Pods-AIWellnessWidget.profile.xcconfig */;
+			baseConfigurationReference = B7C0000000000000000003C0 /* AIWellnessWidget-Profile.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = AIWellnessWidget/AIWellnessWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = QX8747W93H;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AIWellnessWidget/Info.plist;
@@ -1096,24 +1119,24 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiwellnesspal.app.AIWellnessWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Profile;
 		};
 		A5E0000000000000000010 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = CE34CD9D75FD22F636565A7C /* Pods-OneSignalNotificationServiceExtension.debug.xcconfig */;
+			baseConfigurationReference = B7C0000000000000000004C0 /* OneSignalNotificationServiceExtension-Debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = OneSignalNotificationServiceExtension/OneSignalNotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = QX8747W93H;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OneSignalNotificationServiceExtension/Info.plist;
@@ -1123,24 +1146,24 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiwellnesspal.app.OneSignalNotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
 		A5E0000000000000000011 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F49939D9C586BC8EB530AAB7 /* Pods-OneSignalNotificationServiceExtension.release.xcconfig */;
+			baseConfigurationReference = B7C0000000000000000005C0 /* OneSignalNotificationServiceExtension-Release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = OneSignalNotificationServiceExtension/OneSignalNotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = QX8747W93H;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OneSignalNotificationServiceExtension/Info.plist;
@@ -1150,24 +1173,24 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiwellnesspal.app.OneSignalNotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
 		A5E0000000000000000012 /* Profile */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 38DF1696069DB360ABCDF50F /* Pods-OneSignalNotificationServiceExtension.profile.xcconfig */;
+			baseConfigurationReference = B7C0000000000000000006C0 /* OneSignalNotificationServiceExtension-Profile.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = OneSignalNotificationServiceExtension/OneSignalNotificationServiceExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				DEVELOPMENT_TEAM = QX8747W93H;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OneSignalNotificationServiceExtension/Info.plist;
@@ -1177,14 +1200,14 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.aiwellnesspal.app.OneSignalNotificationServiceExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Profile;
 		};

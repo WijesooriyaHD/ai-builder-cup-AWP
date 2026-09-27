@@ -1,7 +1,10 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
+import '../../../widgets/ai_response_safety.dart';
 import '../../calorie_budget/presentation/calorie_budget_state.dart';
 import '../../hydration/presentation/hydration_state.dart';
 import '../../nutrition/domain/nutrition_models.dart';
@@ -120,7 +123,9 @@ class _SleepCoachScreenState extends State<SleepCoachScreen> {
             actions: [
               if (!state.healthConnected)
                 IconButton(
-                  tooltip: 'Connect Apple Health / Health Connect',
+                  tooltip: Platform.isIOS
+                      ? 'Connect Apple Health'
+                      : 'Connect Health Connect',
                   icon: const Icon(Icons.favorite_border_rounded),
                   onPressed: () => _connectHealth(context, state),
                 ),
@@ -201,6 +206,11 @@ class _SleepCoachScreenState extends State<SleepCoachScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
+          if (!state.healthConnected) ...[
+            _SampleDataBanner(
+                onConnect: () => _connectHealth(context, state)),
+            const SizedBox(height: 12),
+          ],
           SleepScoreCard(
               greeting: state.greeting, session: session, score: score),
           const SizedBox(height: 16),
@@ -234,6 +244,12 @@ class _SleepCoachScreenState extends State<SleepCoachScreen> {
           ),
           const SizedBox(height: 16),
           SleepHistoryChart(points: state.history),
+          const SizedBox(height: 16),
+          const AiDisclaimerNote(
+            text: 'Sleep insights are AI-generated and may be inaccurate. '
+                "They aren't medical advice. If you have ongoing sleep "
+                'problems, talk to a healthcare professional.',
+          ),
         ],
       ),
     );
@@ -369,6 +385,45 @@ class _SleepCoachScreenState extends State<SleepCoachScreen> {
     final m = t.minute.toString().padLeft(2, '0');
     final ap = t.hour < 12 ? 'AM' : 'PM';
     return '$h:$m $ap';
+  }
+}
+
+/// Persistent label shown above the scores while the demo source is active,
+/// so sample numbers are never mistaken for the user's own sleep.
+class _SampleDataBanner extends StatelessWidget {
+  final VoidCallback onConnect;
+
+  const _SampleDataBanner({required this.onConnect});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final source = Platform.isIOS ? 'Apple Health' : 'Health Connect';
+    return Material(
+      color: kSleepAccent.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onConnect,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline_rounded,
+                  size: 18, color: kSleepAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Sample data — connect $source to see your own',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

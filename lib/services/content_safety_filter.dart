@@ -12,10 +12,10 @@ class ContentSafetyFilter {
     'diagnose',
     'diagnoses',
     'diagnosing',
-    'treat',
+    // "treat" / "treated" are deliberately absent: they are overwhelmingly
+    // used as "treat yourself", and blocking them wiped out harmless replies.
     'treatment',
     'treating',
-    'treated',
     'therapy',
     'therapeutic',
     'therapist',
@@ -49,8 +49,23 @@ class ContentSafetyFilter {
     );
   }
 
+  /// Encouraging someone to get professional or crisis help is exactly what
+  /// the AI should do, so replies that refer the user onward are never
+  /// replaced — even though they naturally mention "therapist" or "therapy".
+  static final RegExp _referral = RegExp(
+    r'\b(talk|talking|speak|speaking|reach(ing)? out|consider|see|seeing|'
+    r'contact|call|visit|find|ask)\b[^.?!]{0,60}\b(therapist|therapists|'
+    r'therapy|counsel+or|counsel+ing|doctor|gp|professional|helpline|'
+    r'hotline|crisis line|support line|988|samaritans)\b',
+    caseSensitive: false,
+  );
+
+  /// True when [text] points the user towards professional or crisis help.
+  static bool isReferral(String text) => _referral.hasMatch(text);
+
   /// Returns the original [text] if it passes the safety filter,
   /// or the static fallback message if banned content is detected.
+  /// Replies that refer the user to professional help always pass.
   static String sanitize(String text) =>
-      containsBannedContent(text) ? _fallbackMessage : text;
+      containsBannedContent(text) && !isReferral(text) ? _fallbackMessage : text;
 }

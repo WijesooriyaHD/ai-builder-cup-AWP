@@ -45,7 +45,8 @@ class BlogAudioHandler extends BaseAudioHandler {
       title: blog.title,
       artist: 'AI Wellness Pal Narration',
       duration: Duration(seconds: (blog.content.length / 10).toInt()),
-      artUri: Uri.parse('https://images.unsplash.com/photo-1490730141103-6cac27aaab94?auto=format&fit=crop&q=80&w=200'), // Placeholder for now
+      // No artwork rather than a hotlinked third-party image.
+      artUri: null,
     ));
   }
 

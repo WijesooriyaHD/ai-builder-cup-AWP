@@ -29,6 +29,15 @@ class CalorieBudgetState extends ChangeNotifier {
   // --- inputs from other tools ---
   int _consumed = 0; // from Nutrition Coach today's meals
   List<CalorieEvent> _foodEvents = const []; // today's meals as timeline events
+  /// Safe floor/ceiling for any daily budget we show or plan against
+  /// (App Store Review Guideline 1.4.1: no unsafe calorie targets).
+  static const int minDailyBudget = 1200;
+  static const int maxDailyBudget = 5000;
+
+  /// Clamps [kcal] into the safe daily-budget range.
+  static int clampBudget(int kcal) =>
+      kcal.clamp(minDailyBudget, maxDailyBudget).toInt();
+
   int _budgetOverride = 0; // 0 = derive from profile
   int _profileBudget = 2000; // from Meal Planner UserProfile
 
@@ -57,7 +66,8 @@ class CalorieBudgetState extends ChangeNotifier {
   int get consumed => _consumed;
   int get burned => _exercises.fold(0, (s, e) => s + e.calories);
 
-  int get dailyBudget => _budgetOverride > 0 ? _budgetOverride : _profileBudget;
+  int get dailyBudget =>
+      clampBudget(_budgetOverride > 0 ? _budgetOverride : _profileBudget);
 
   CalorieSummary get summary => CalorieSummary(
         dailyBudget: dailyBudget,
@@ -187,8 +197,8 @@ class CalorieBudgetState extends ChangeNotifier {
     // The Meal Planner already stores a daily calorie target; use it as the
     // maintenance baseline and apply the goal-mode adjustment.
     final baseline = p.dailyCalories;
-    if (_goalMode == GoalMode.custom) return baseline;
-    return (baseline + _goalMode.calorieAdjustment).clamp(1200, 5000);
+    if (_goalMode == GoalMode.custom) return clampBudget(baseline);
+    return clampBudget(baseline + _goalMode.calorieAdjustment);
   }
 
   // ---------------------------------------------------------------------------
@@ -265,6 +275,9 @@ class CalorieBudgetState extends ChangeNotifier {
   }
 
   Future<void> setBudgetOverride(int budget) async {
+    // 0 (or less) clears the override; anything else is kept within the safe
+    // range so a typed value can never set an unsafe target.
+    budget = budget > 0 ? clampBudget(budget) : 0;
     _budgetOverride = budget;
     notifyListeners();
     await _repo.saveBudgetOverride(budget);

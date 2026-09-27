@@ -49,7 +49,7 @@ void main() {
   /// All banned words from ContentSafetyFilter.
   const bannedWords = [
     'diagnose', 'diagnoses', 'diagnosing',
-    'treat', 'treatment', 'treating', 'treated',
+    'treatment', 'treating',
     'therapy', 'therapeutic',
     'therapist', 'therapists',
     'disorder', 'disorders',

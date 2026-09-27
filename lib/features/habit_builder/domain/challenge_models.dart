@@ -25,7 +25,7 @@ extension ChallengeCategoryInfo on ChallengeCategory {
       case ChallengeCategory.sleep:
         return 'Sleep';
       case ChallengeCategory.detox:
-        return 'Detox';
+        return 'Sugar reset';
       case ChallengeCategory.general:
         return 'Wellness';
     }
@@ -344,7 +344,7 @@ class ChallengeCatalog {
     ),
     ChallengeTemplate(
       id: 'sugar_detox_7',
-      title: 'Sugar Detox Challenge',
+      title: 'Cut Back on Sugar Challenge',
       description:
           'Reset your relationship with sugar — cutting back a little each day.',
       goalDescription:

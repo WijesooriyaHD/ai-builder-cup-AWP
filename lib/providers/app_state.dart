@@ -2019,7 +2019,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _cloudSettingsLoaded = true;
 
     // 3. Other network tasks
-    fetchPublicMemories();
     // Force a fresh RevenueCat fetch so isPro reflects the true subscription
     // state (a cached/early call can otherwise leave isPro=false even when the
     // user is subscribed, which the Settings screen's live check would show).
@@ -2344,9 +2343,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     return await _checkAchievements();
   }
 
+  /// The cross-user public travel-memories feed has been removed (no
+  /// report/block moderation for other users' content, and it exposed other
+  /// users' memories). Kept as a no-op so existing callers still compile;
+  /// [publicMemories] always stays empty.
   Future<void> fetchPublicMemories() async {
-    _publicMemories = await _storage.fetchPublicMemories();
-    notifyListeners();
+    _publicMemories = [];
   }
 
   Future<void> deleteTravelMemory(String id) async {

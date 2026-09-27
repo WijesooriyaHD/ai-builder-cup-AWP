@@ -1029,7 +1029,7 @@ class _HomeScreenState extends State<HomeScreen>
                     stream: AuthService().authStateChanges,
                     builder: (context, snapshot) {
                       final user = AuthService().currentUser;
-                      final avatarUrl = user?.photoURL;
+                      final avatarUrl = AuthService.usablePhotoUrl(user?.photoURL);
 
                       return Container(
                         padding: const EdgeInsets.all(2),
@@ -2077,7 +2077,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
   void _loadUserData() {
     final user = AuthService().currentUser;
     final metadataName = user?.displayName;
-    final avatarUrl = user?.photoURL;
+    final avatarUrl = AuthService.usablePhotoUrl(user?.photoURL);
 
     _nameController.text = (metadataName != null && metadataName.trim().isNotEmpty)
         ? metadataName
@@ -2424,7 +2424,7 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
         _nameController.text = newName;
       }
 
-      final newAvatar = refreshedUser?.photoURL;
+      final newAvatar = AuthService.usablePhotoUrl(refreshedUser?.photoURL);
       if (newAvatar != null) {
         _currentAvatarUrl = newAvatar;
         if (specificAvatarUrl != null) {
@@ -2462,13 +2462,6 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
     }
   }
 
-
-  final List<String> _avatarOptions = [
-    'https://img.freepik.com/premium-vector/portrait-beautiful-women-round-frame-avatar-female-character-isolated-white-background_559729-213.jpg',
-    'https://img.freepik.com/premium-vector/portrait-beautiful-women-round-frame-avatar-female-character-isolated-white-background_559729-216.jpg',
-    'https://img.freepik.com/premium-vector/portrait-beautiful-women-round-frame-avatar-female-character-isolated-white-background_559729-215.jpg',
-    'https://img.freepik.com/premium-vector/portrait-beautiful-women-round-frame-avatar-female-character-isolated-white-background_559729-211.jpg',
-  ];
 
   Future<void> _showAvatarSelectionBottomSheet() async {
     await showModalBottomSheet(
@@ -2511,45 +2504,25 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
               ],
             ),
             const SizedBox(height: 16),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: _avatarOptions.length,
-              itemBuilder: (context, index) {
-                final url = _avatarOptions[index];
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    _handleAvatarSelection(url);
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white24
-                              : Colors.grey.shade200
-                      ),
-                    ),
-                    child: ClipOval(
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (ctx, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(child: Icon(Icons.person, color: Colors.grey));
-                        },
-                        errorBuilder: (ctx, error, stackTrace) =>
-                        const Center(child: Icon(Icons.error_outline, size: 20, color: Colors.grey)),
-                      ),
-                    ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                radius: 24,
+                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                child: Text(
+                  _nameController.text.isNotEmpty ? _nameController.text.characters.first.toUpperCase() : '?',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).primaryColor,
                   ),
-                );
+                ),
+              ),
+              title: const Text('Use my initials'),
+              subtitle: const Text('Remove your photo and show your initial'),
+              onTap: () {
+                Navigator.pop(context);
+                _handleUseInitialsAvatar();
               },
             ),
             const SizedBox(height: 16),
@@ -2559,12 +2532,32 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
     );
   }
 
-  Future<void> _handleAvatarSelection(String url) async {
-    setState(() {
-      _selectedImage = null; // Clear local file if any
-      _currentAvatarUrl = url;
-    });
-    await _saveProfileChanges(updateImage: true, specificAvatarUrl: url);
+  Future<void> _handleUseInitialsAvatar() async {
+    setState(() => _isLoading = true);
+    try {
+      await AuthService().clearUserPhoto();
+      await StorageService().syncProfile();
+      if (mounted) {
+        setState(() {
+          _selectedImage = null; // Clear local file if any
+          _currentAvatarUrl = null;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error clearing avatar: $e');
+      if (mounted) {
+        WellnessPalSnackBar.show(
+          context,
+          message: 'Failed to update profile photo. Please try again.',
+          icon: Icons.error_outline_rounded,
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override

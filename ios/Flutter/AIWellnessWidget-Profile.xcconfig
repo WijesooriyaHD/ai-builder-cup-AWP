@@ -1,0 +1,5 @@
+// Base configuration for the AIWellnessWidget extension (Profile).
+// Includes Flutter's Generated.xcconfig so the extension's version and build
+// number follow pubspec.yaml, matching the Runner app as Apple requires.
+#include? "Pods/Target Support Files/Pods-AIWellnessWidget/Pods-AIWellnessWidget.profile.xcconfig"
+#include "Generated.xcconfig"

@@ -1469,6 +1469,8 @@ PODS:
     - Flutter
   - image_picker_ios (0.0.1):
     - Flutter
+  - integration_test (0.0.1):
+    - Flutter
   - leveldb-library (1.22.6)
   - mapbox_maps_flutter (2.31.0):
     - Flutter
@@ -1598,6 +1600,7 @@ DEPENDENCIES:
   - health (from `.symlinks/plugins/health/ios`)
   - home_widget (from `.symlinks/plugins/home_widget/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - mapbox_maps_flutter (from `.symlinks/plugins/mapbox_maps_flutter/ios`)
   - mobile_scanner (from `.symlinks/plugins/mobile_scanner/darwin`)
   - onesignal_flutter (from `.symlinks/plugins/onesignal_flutter/ios`)
@@ -1696,6 +1699,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/home_widget/ios"
   image_picker_ios:
     :path: ".symlinks/plugins/image_picker_ios/ios"
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
   mapbox_maps_flutter:
     :path: ".symlinks/plugins/mapbox_maps_flutter/ios"
   mobile_scanner:
@@ -1768,6 +1773,7 @@ SPEC CHECKSUMS:
   health: 4decf5d74e8f54c58a8c07a385fc72f629a831d9
   home_widget: 54b4f6b36ed8d64cfee594a476225c35c3e45091
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
+  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   leveldb-library: cc8b8f8e013647a295ad3f8cd2ddf49a6f19be19
   mapbox_maps_flutter: 2a19d197b2f06d55857af92f04d0a0a5a3bb0576
   MapboxCommon: cc28b41df14f1de999550bc5040b4c33756f31ca
@@ -1795,6 +1801,6 @@ SPEC CHECKSUMS:
   Turf: c9eb11a65d96af58cac523460fd40fec5061b081
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
-PODFILE CHECKSUM: 520ec7a95702e7eeacfdf7b2ad6d885a7bb0cf85
+PODFILE CHECKSUM: f5c649cba1cb83c8f2deac1b0bf8c6c17304cc43
 
 COCOAPODS: 1.16.2

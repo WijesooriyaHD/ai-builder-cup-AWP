@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:purchases_flutter/purchases_flutter.dart'; // Add for CustomerInfo
@@ -93,7 +95,7 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Unlock premium features and achieve your dreams faster.',
+              'Unlock Premium to get more from your wellness routine.',
               style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
               textAlign: TextAlign.center,
             ),
@@ -161,8 +163,17 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
     final entitlement = _customerInfo?.entitlements.active[RevenueCatService.proEntitlementId];
     if (entitlement == null) return const SizedBox.shrink();
 
-    final isMonthly = entitlement.productIdentifier.contains('monthly');
-    final planName = isMonthly ? 'Premium Monthly' : 'Premium Yearly';
+    final productId = entitlement.productIdentifier.toLowerCase();
+    final isYearly = productId.contains('year') ||
+        productId.contains('annual') ||
+        productId.endsWith('1y') ||
+        productId.contains('p1y');
+    final isMonthly = productId.contains('month') ||
+        productId.endsWith('1m') ||
+        productId.contains('p1m');
+    final planName = isYearly
+        ? 'Premium Yearly'
+        : (isMonthly ? 'Premium Monthly' : 'Premium');
     final expiryDate = entitlement.expirationDate;
     final formattedDate = expiryDate != null ? DateFormat.yMMMd().format(DateTime.parse(expiryDate)) : 'Unknown';
 
@@ -218,14 +229,30 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Renews on $formattedDate", style: TextStyle(
+              Text(
+                  entitlement.willRenew
+                      ? "Renews on $formattedDate"
+                      : "Expires on $formattedDate",
+                  style: TextStyle(
                 fontSize: 14, 
                 color: Theme.of(context).brightness == Brightness.dark 
                     ? Colors.white70 
                     : Colors.grey.shade600
               )),
               TextButton(
-                onPressed: () => _revenueCatService.manageSubscriptions(),
+                onPressed: () async {
+                  final opened = await _revenueCatService.manageSubscriptions();
+                  if (!opened && context.mounted) {
+                    WellnessPalSnackBar.show(
+                      context,
+                      message: Platform.isIOS
+                          ? 'Open Settings → your name → Subscriptions to manage or cancel your plan.'
+                          : 'Open Google Play → Payments & subscriptions → Subscriptions to manage or cancel your plan.',
+                      icon: Icons.info_outline_rounded,
+                      duration: const Duration(seconds: 5),
+                    );
+                  }
+                },
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.red.shade400,
                   padding: EdgeInsets.zero,
@@ -290,10 +317,11 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
         }
       }
     } catch (e) {
+      debugPrint('❌ CustomerCenter: paywall failed: $e');
       if (mounted) {
         WellnessPalSnackBar.show(
           context,
-          message: 'Error: $e',
+          message: 'Something went wrong. Please try again.',
           icon: Icons.error_outline_rounded,
           isError: true,
         );
@@ -342,11 +370,12 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
         }
       }
     } catch (e) {
+      debugPrint('❌ CustomerCenter: restore failed: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         WellnessPalSnackBar.show(
           context,
-          message: 'Restore failed: $e',
+          message: "Couldn't restore purchases. Please check your connection and try again.",
           icon: Icons.error_outline_rounded,
           isError: true,
         );
@@ -409,10 +438,13 @@ class _CustomerCenterScreenState extends State<CustomerCenterScreen> {
         );
       }
     } catch (e) {
+      debugPrint('❌ CustomerCenter: redemption check failed: $e');
       if (mounted) {
         WellnessPalSnackBar.show(
           context,
-          message: 'Could not confirm redemption: $e',
+          message:
+              "We couldn't confirm your redemption. Please try again in a "
+              'moment.',
           icon: Icons.error_outline_rounded,
           isError: true,
         );

@@ -18,7 +18,9 @@ import '../services/voice_command_service.dart';
 import '../data/ai_voices.dart';
 import '../screens/customer_center_screen.dart';
 import '../screens/faq_screen.dart';
+import '../config/legal_links.dart';
 import '../services/revenue_cat_service.dart';
+import '../services/onesignal_service.dart';
 import '../utils/pro_modal_utils.dart';
 import '../services/notification_preferences_store.dart';
 import 'notification_preferences_screen.dart';
@@ -156,6 +158,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           MaterialPageRoute(builder: (context) => const FaqScreen()),
                         );
                       },
+                    ),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.support_agent_rounded,
+                      title: "Contact Support",
+                      subtitle: "Get help or report a problem",
+                      onTap: () => _openLink(context, LegalLinks.support),
+                    ),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.privacy_tip_outlined,
+                      title: "Privacy Policy",
+                      subtitle: "How we handle your data",
+                      onTap: () => _openLink(context, LegalLinks.privacyPolicy),
+                    ),
+                    _buildSettingsTile(
+                      context,
+                      icon: Icons.description_outlined,
+                      title: "Terms of Use",
+                      subtitle: "Terms, subscriptions and disclaimers",
+                      onTap: () => _openLink(context, LegalLinks.termsOfUse),
                     ),
                   ],
                 ),
@@ -1694,26 +1717,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
               // to the Customer Center), so the redeem entry point has to live
               // here to be reachable at all.
               if (status == SubscriptionStatus.none)
-                Center(
-                  child: TextButton(
-                    onPressed: () => _redeemPromoCode(context),
-                    child: Text(
-                      'Have a promo code?',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white70
-                            : Colors.grey.shade600,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () => _restorePurchases(context),
+                      child: Text(
+                        'Restore Purchases',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white70
+                              : Colors.grey.shade600,
+                        ),
                       ),
                     ),
-                  ),
+                    TextButton(
+                      onPressed: () => _redeemPromoCode(context),
+                      child: Text(
+                        'Have a promo code?',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white70
+                              : Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
             ],
           ),
         );
       },
     );
+  }
+
+  Future<void> _openLink(BuildContext context, String url) async {
+    final opened = await LegalLinks.open(url);
+    if (!opened && context.mounted) {
+      WellnessPalSnackBar.show(
+        context,
+        message: 'Could not open the page. Please try again.',
+        icon: Icons.error_outline_rounded,
+        isError: true,
+      );
+    }
+  }
+
+  /// Restores previous App Store / Play purchases (Guideline 3.1.1), then
+  /// re-checks entitlements so the card flips to "Manage Subscription".
+  Future<void> _restorePurchases(BuildContext context) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    try {
+      await RevenueCatService().restorePurchases();
+      await appState.updateProStatus(forceRefresh: true);
+    } catch (e) {
+      debugPrint('❌ Restore purchases failed: $e');
+      if (!context.mounted) return;
+      WellnessPalSnackBar.show(
+        context,
+        message: 'Could not restore purchases. Please try again later.',
+        icon: Icons.error_outline_rounded,
+        isError: true,
+      );
+      return;
+    }
+    if (!context.mounted) return;
+
+    if (appState.isPro) {
+      setState(() {});
+      WellnessPalSnackBar.show(
+        context,
+        message: 'Premium restored.',
+        icon: Icons.check_circle_rounded,
+      );
+    } else {
+      WellnessPalSnackBar.show(
+        context,
+        message: 'No previous purchases found.',
+        icon: Icons.info_outline_rounded,
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   /// Opens the platform promo-code redemption flow, then re-checks entitlements.
@@ -1925,11 +2013,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Check if user signed in with Google
+    // Check if user signed in with Google or Apple
     final isGoogleUser = user.providerData.any((p) => p.providerId == 'google.com');
+    final isAppleUser = user.providerData.any((p) => p.providerId == 'apple.com');
 
-    if (isGoogleUser) {
-      // Google user — simple confirmation, no password needed
+    if (isGoogleUser || isAppleUser) {
+      // Google/Apple user — simple confirmation, no password needed
       final confirmed = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -1947,11 +2036,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-            content: const Text(
+            content: Text(
               'This action is permanent and cannot be undone. '
               'All your data will be deleted, including your wellness plans, '
               'check-in history, journal entries, intentions, and uploaded files.\n\n'
-              'You will be asked to verify your Google account.',
+              'You will be asked to verify your ${isAppleUser ? 'Apple ID' : 'Google account'}.',
             ),
             actions: [
               TextButton(
@@ -1972,7 +2061,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 
       if (confirmed == true && mounted) {
-        await _performAccountDeletionGoogle(context);
+        await _performAccountDeletionSocial(context, isApple: isAppleUser);
       }
     } else {
       // Email/password user — ask for password
@@ -2040,7 +2129,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _performAccountDeletionGoogle(BuildContext context) async {
+  Future<void> _performAccountDeletionSocial(BuildContext context, {required bool isApple}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -2053,11 +2142,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final wellnessPlanState = Provider.of<WellnessPlanState>(context, listen: false);
 
     try {
-      // Re-authenticate with Google
-      final googleUser = await GoogleSignIn.instance.authenticate();
-      final idToken = googleUser.authentication.idToken;
-      final credential = GoogleAuthProvider.credential(idToken: idToken);
-      await user.reauthenticateWithCredential(credential);
+      if (isApple) {
+        // Re-authenticate with Apple and revoke Apple tokens (required by
+        // App Store Review Guideline 5.1.1(v) for Sign in with Apple)
+        await AuthService().reauthenticateAndRevokeApple(user);
+      } else {
+        // Re-authenticate with Google
+        final googleUser = await GoogleSignIn.instance.authenticate();
+        final idToken = googleUser.authentication.idToken;
+        final credential = GoogleAuthProvider.credential(idToken: idToken);
+        await user.reauthenticateWithCredential(credential);
+      }
 
       // Delete Firestore data and Firebase Auth user
       await Future.any([
@@ -2069,6 +2164,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           throw TimeoutException('Account deletion exceeded 30 seconds.');
         }),
       ]);
+
+      // Detach third-party identities from the deleted account
+      // (non-critical — never block deletion on these).
+      try {
+        OneSignalService().logout();
+      } catch (e) {
+        debugPrint('OneSignal logout after deletion failed: $e');
+      }
+      try {
+        await RevenueCatService().logOut().timeout(const Duration(seconds: 5));
+      } catch (e) {
+        debugPrint('RevenueCat logOut after deletion failed: $e');
+      }
 
       // Clean up local state
       final prefs = await SharedPreferences.getInstance();
@@ -2141,6 +2249,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }),
       ]);
 
+      // Detach third-party identities from the deleted account
+      // (non-critical — never block deletion on these).
+      try {
+        OneSignalService().logout();
+      } catch (e) {
+        debugPrint('OneSignal logout after deletion failed: $e');
+      }
+      try {
+        await RevenueCatService().logOut().timeout(const Duration(seconds: 5));
+      } catch (e) {
+        debugPrint('RevenueCat logOut after deletion failed: $e');
+      }
+
       // Clear SharedPreferences and reset providers AFTER successful deletion.
       // user.delete() already triggered sign-out, but we still clean up
       // local state so the next user session starts fresh.
@@ -2210,6 +2331,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'travel_memories',
       'behavior_profile',
       'weekly_summaries',
+      'ai_reports',
+      'challenges',
+      'hydration',
+      'journal_discussions',
+      'live_conversations',
+      'meals',
+      'sleep',
+      'wellness_library_bookmarks',
+      'wellness_library_completions',
+      'wellness_studio_sessions',
     ];
 
     // Batch delete all subcollection documents
@@ -2246,15 +2377,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     // Delete all Firebase Storage files for the user
-    try {
-      final storageRef = storage.ref('travel-photos/$uid');
-      final listResult = await storageRef.listAll();
-      for (final item in listResult.items) {
-        await item.delete();
+    for (final folder in ['travel-photos/$uid', 'meal-photos/$uid']) {
+      try {
+        final listResult = await storage.ref(folder).listAll();
+        for (final item in listResult.items) {
+          await item.delete();
+        }
+      } catch (e) {
+        // Storage folder may not exist — that's fine
+        debugPrint('Storage cleanup note ($folder): $e');
       }
-    } catch (e) {
-      // Storage folder may not exist — that's fine
-      debugPrint('Storage cleanup note: $e');
     }
   }
 }

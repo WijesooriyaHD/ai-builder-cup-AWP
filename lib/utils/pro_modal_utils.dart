@@ -4,6 +4,7 @@ import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 
 import '../providers/app_state.dart';
 import '../screens/customer_center_screen.dart';
+import '../services/live_conversation_service.dart';
 import '../services/revenue_cat_service.dart';
 
 class ProModalUtils {
@@ -35,6 +36,8 @@ class ProModalUtils {
   }
 
   static void showProStatusModal(BuildContext context, bool isPro) {
+    // The sheet's own context is gone once it pops, so navigate from the host.
+    final hostContext = context;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -102,9 +105,17 @@ class ProModalUtils {
               ),
             ),
             const SizedBox(height: 32),
-            _buildFeatureRow(Icons.auto_awesome_rounded, 'AI-Powered Dream Analysis'),
-            _buildFeatureRow(Icons.history_rounded, 'Unlimited Dream History'),
-            _buildFeatureRow(Icons.insights_rounded, 'Personalized Journey Trends'),
+            _buildFeatureRow(Icons.forum_rounded, 'Unlimited Wellness Pal chat'),
+            // Only advertise the Live pal in builds that include it.
+            if (LiveConversationService.isAvailable)
+              _buildFeatureRow(Icons.graphic_eq_rounded, 'Live Chat Pal voice conversations'),
+            _buildFeatureRow(Icons.restaurant_menu_rounded, 'AI meal planner & food analysis'),
+            _buildFeatureRow(Icons.insights_rounded, 'AI sleep, hydration & mindfulness insights'),
+            _buildFeatureRow(
+                Icons.palette_rounded,
+                LiveConversationService.isAvailable
+                    ? 'Premium themes & voices'
+                    : 'Premium themes'),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
@@ -112,10 +123,16 @@ class ProModalUtils {
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
+                  if (!isPro) {
+                    // Free users go straight to the paywall.
+                    openUpgrade(hostContext);
+                    return;
+                  }
                   // Only push if not already there
-                  if (ModalRoute.of(context)?.settings.name != 'CustomerCenterScreen') {
+                  if (hostContext.mounted &&
+                      ModalRoute.of(hostContext)?.settings.name != 'CustomerCenterScreen') {
                      Navigator.push(
-                      context,
+                      hostContext,
                       MaterialPageRoute(builder: (context) => const CustomerCenterScreen()),
                     );
                   }
@@ -151,11 +168,13 @@ class ProModalUtils {
         children: [
           Icon(icon, size: 20, color: const Color(0xFFFF6B9D)),
           const SizedBox(width: 16),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -303,7 +322,7 @@ class ProModalUtils {
             ),
             const SizedBox(height: 24),
             const Text(
-              "Dream Limit Reached",
+              "Intention Limit Reached",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 24,
@@ -312,7 +331,7 @@ class ProModalUtils {
             ),
             const SizedBox(height: 12),
             Text(
-              "AI Wellness Pal Free accounts can have up to 3 active dreams at once. Upgrade to Premium to unlock unlimited visions!",
+              "Free accounts can have up to 3 active wellness intentions at once. Upgrade to Premium for unlimited intentions.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,

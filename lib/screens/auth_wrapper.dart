@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../providers/app_state.dart';
 import '../providers/wellness_plan_state.dart';
+import 'ai_consent_screen.dart';
 import 'auth_gateway_screen.dart';
 import 'main_wrapper.dart';
 import 'onboarding_screen.dart';
@@ -119,8 +120,15 @@ class _AuthWrapperState extends State<AuthWrapper> {
         final docSnapshot = snapshot.data;
         final data = docSnapshot?.data() as Map<String, dynamic>?;
         final onboardingCompleted = data?['onboarding_completed'] == true;
+        // containsKey, not a null check: a just-written serverTimestamp reads
+        // as null in the local snapshot until the server confirms it.
+        final hasAiConsent =
+            data?.containsKey(AiConsentScreen.consentField) == true;
 
         if (onboardingCompleted) {
+          // Existing users who onboarded before the consent screen existed
+          // see it once, before any AI call (Guideline 5.1.2(i)).
+          if (!hasAiConsent) return const AiConsentScreen();
           _wasOnboardingCompleted = true;
           // Only sync data once per user session, and only after we've
           // confirmed the user has a valid Firestore document.
@@ -153,7 +161,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
           );
         }
 
-        // Document doesn't exist or onboarding not completed (new user)
+        // Document doesn't exist or onboarding not completed (new user).
+        // Onboarding generates the first AI plan, so consent comes first.
+        if (!hasAiConsent) return const AiConsentScreen();
         return const OnboardingScreen();
       },
     );

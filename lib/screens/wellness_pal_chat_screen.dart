@@ -13,6 +13,7 @@ import '../services/wellness_chat_guard.dart';
 import '../utils/pro_modal_utils.dart';
 import '../services/chat_quota.dart';
 import '../utils/wellnesspal_snackbar.dart';
+import '../widgets/ai_response_safety.dart';
 
 /// Typed chat with the Wellness Pal, opened from the "Chat" button on the
 /// Wellness Pal screen.
@@ -81,6 +82,9 @@ class _WellnessPalChatScreenState extends State<WellnessPalChatScreen> {
             // Older chats (and spoken turns) have no stored time; fall back to
             // the conversation's own start so the bubbles still read sensibly.
             timestamp: t.timestamp ?? existing.createdAt,
+            // Chats saved before this flag existed can't tell the greeting
+            // apart from AI replies, so keep Report on every Pal turn there.
+            isAiGenerated: t.isAiGenerated ?? !t.isUser,
           )));
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _scrollToBottom(animate: false));
@@ -159,6 +163,20 @@ class _WellnessPalChatScreenState extends State<WellnessPalChatScreen> {
     final text = raw.trim();
     if (text.isEmpty || _isSending) return;
 
+    // Crisis first, before the free-tier quota: someone at risk always gets
+    // real emergency resources, never a paywall or a model reply.
+    if (WellnessChatGuard.isCrisis(text)) {
+      setState(() {
+        _turns.add(_ChatTurn(text: text, isUser: true));
+        _turns.add(_ChatTurn(
+            text: WellnessChatGuard.crisisMessage, isUser: false));
+        _messageController.clear();
+      });
+      _scrollToBottom();
+      await _persist();
+      return;
+    }
+
     // Free tier: three messages a day. Checked BEFORE the message is added to
     // the transcript, so a blocked attempt leaves no half-sent turn behind.
     if (!await ChatQuota.canSend()) {
@@ -209,6 +227,7 @@ class _WellnessPalChatScreenState extends State<WellnessPalChatScreen> {
               "I'm having trouble responding right now. Could you try again, "
                   "or check your connection?",
           isUser: false,
+          isAiGenerated: reply != null,
         ));
         _isSending = false;
       });
@@ -318,6 +337,7 @@ class _WellnessPalChatScreenState extends State<WellnessPalChatScreen> {
               isUser: t.isUser,
               text: t.text,
               timestamp: t.timestamp,
+              isAiGenerated: t.isAiGenerated,
             ))
         .toList();
 
@@ -381,6 +401,7 @@ class _WellnessPalChatScreenState extends State<WellnessPalChatScreen> {
         children: [
           Expanded(child: _buildTranscript(isDark)),
           if (showStarters) _buildStarters(theme),
+          const AiDisclaimerNote(),
           _buildInputArea(theme, isDark),
         ],
       ),
@@ -494,8 +515,16 @@ class _ChatTurn {
   final bool isUser;
   final DateTime timestamp;
 
-  _ChatTurn({required this.text, required this.isUser, DateTime? timestamp})
-      : timestamp = timestamp ?? DateTime.now();
+  /// True only for replies from the AI model; fixed app text (greeting,
+  /// off-topic redirect, errors) is false, so it doesn't offer Report.
+  final bool isAiGenerated;
+
+  _ChatTurn({
+    required this.text,
+    required this.isUser,
+    DateTime? timestamp,
+    this.isAiGenerated = false,
+  }) : timestamp = timestamp ?? DateTime.now();
 }
 
 class _Bubble extends StatelessWidget {
@@ -544,9 +573,39 @@ class _Bubble extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(top: 4, left: 6, right: 6),
-            child: Text(
-              DateFormat('h:mm a').format(turn.timestamp),
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('h:mm a').format(turn.timestamp),
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                ),
+                if (turn.isAiGenerated) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => AiResponseReporter.showReportSheet(
+                      context,
+                      responseText: turn.text,
+                      source: 'pal_chat',
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.flag_outlined,
+                              size: 12, color: Colors.grey.shade500),
+                          const SizedBox(width: 2),
+                          Text('Report',
+                              style: TextStyle(
+                                  fontSize: 10, color: Colors.grey.shade500)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

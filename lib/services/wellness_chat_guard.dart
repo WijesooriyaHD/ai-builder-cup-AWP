@@ -77,6 +77,63 @@ class WellnessChatGuard {
       "That's a bit outside what I can help with — I'm here for your wellbeing. "
       "How are you doing today?";
 
+  /// Clear signs that the user may be at risk of harming themselves.
+  ///
+  /// When one matches, the app answers with [crisisMessage] instead of calling
+  /// the model, so the user always gets real emergency resources — never a
+  /// model reply that could miss the moment or be filtered away (App Store
+  /// Review Guideline 1.4.1).
+  static final List<RegExp> _crisisPatterns = [
+    RegExp(
+      r'\b(kill(ing)?|hurt(ing)?|harm(ing)?|cut(ting)?|end(ing)?) (myself|my life|it all)\b',
+      caseSensitive: false,
+    ),
+    RegExp(r'\bsuicid\w*', caseSensitive: false),
+    RegExp(r'\bself[- ]?harm\w*', caseSensitive: false),
+    RegExp(
+      r"\b(want|wanna|going|plan(ning)?|ready) to (die|end it)\b",
+      caseSensitive: false,
+    ),
+    RegExp(
+      r"\b(don'?t|do not) want to (live|be alive|be here|wake up)( anymore)?\b",
+      caseSensitive: false,
+    ),
+    RegExp(r'\b(no reason|not worth) (to )?(go on )?(living|live|going on)\b',
+        caseSensitive: false),
+    RegExp(r"\b(is ?n'?t|is not|not) worth living\b", caseSensitive: false),
+    RegExp(r'\bbetter off (dead|without me)\b', caseSensitive: false),
+    RegExp(r'\boverdos\w*', caseSensitive: false),
+  ];
+
+  /// Shown instead of a model reply when [isCrisis] matches.
+  static const String crisisMessage =
+      "I'm really glad you told me, and I'm sorry you're going through this. "
+      "You deserve support from a real person right now.\n\n"
+      "If you're in immediate danger, please call your local emergency number "
+      "(911 in the US, 999 in the UK, 112 in the EU).\n\n"
+      "You can talk to someone any time, for free:\n"
+      "• US: call or text 988 (Suicide & Crisis Lifeline)\n"
+      "• UK & Ireland: call Samaritans on 116 123\n"
+      "• Elsewhere: find a helpline at findahelpline.com\n\n"
+      "I'm an AI and can't provide crisis support, but reaching out to one of "
+      "these services or someone you trust can really help.";
+
+  /// Spoken form of [crisisMessage] for voice replies (no bullet points).
+  static const String crisisSpokenMessage =
+      "I'm really glad you told me, and I'm sorry you're going through this. "
+      "Please reach out to a real person right now. If you're in immediate "
+      "danger, call your local emergency number. In the US you can call or "
+      "text 988, and in the UK and Ireland you can call Samaritans on "
+      "116 123. Anywhere else, findahelpline.com lists free helplines. "
+      "I'm an AI and can't provide crisis support, but they can help.";
+
+  /// True when [message] contains clear signs of crisis or self-harm.
+  static bool isCrisis(String message) {
+    final text = message.trim();
+    if (text.isEmpty) return false;
+    return _crisisPatterns.any((p) => p.hasMatch(text));
+  }
+
   /// True when [message] is a clear off-topic task request with no wellbeing
   /// angle, and should be redirected without calling the model.
   static bool isOffTopic(String message) {

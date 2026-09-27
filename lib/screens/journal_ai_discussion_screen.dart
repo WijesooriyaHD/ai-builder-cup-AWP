@@ -8,6 +8,7 @@ import '../providers/app_state.dart';
 import '../services/ai_service.dart';
 import '../services/journal_discussion_store.dart';
 import '../utils/wellnesspal_snackbar.dart';
+import '../widgets/ai_response_safety.dart';
 
 class JournalAiDiscussionScreen extends StatefulWidget {
   final JournalEntry entry;
@@ -176,6 +177,7 @@ class _JournalAiDiscussionScreenState extends State<JournalAiDiscussionScreen> {
                 ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
                 : _buildTranscript(),
           ),
+          const AiDisclaimerNote(),
           _buildInputArea(),
         ],
       ),
@@ -491,9 +493,39 @@ class _ChatBubble extends StatelessWidget {
           // Timestamp under each bubble, aligned to its side.
           Padding(
             padding: const EdgeInsets.only(top: 4, left: 6, right: 6),
-            child: Text(
-              DateFormat('h:mm a').format(message.timestamp),
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('h:mm a').format(message.timestamp),
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                ),
+                if (isAi) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => AiResponseReporter.showReportSheet(
+                      context,
+                      responseText: message.text,
+                      source: 'journal_discussion',
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.flag_outlined,
+                              size: 12, color: Colors.grey.shade500),
+                          const SizedBox(width: 2),
+                          Text('Report',
+                              style: TextStyle(
+                                  fontSize: 10, color: Colors.grey.shade500)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],

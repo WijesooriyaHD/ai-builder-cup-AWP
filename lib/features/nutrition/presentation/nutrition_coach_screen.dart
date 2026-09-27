@@ -5,6 +5,7 @@ import '../../../utils/pro_modal_utils.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../../widgets/ai_response_safety.dart';
 import '../../../widgets/ai_wellness_loader.dart';
 import '../../../widgets/add_to_home_wrapper.dart';
 import '../../../services/home_tool_cards_service.dart';
@@ -90,6 +91,12 @@ class _NutritionCoachScreenState extends State<NutritionCoachScreen> {
                   const SizedBox(height: 16),
                 ],
                 _buildDiary(context, state),
+                const SizedBox(height: 16),
+                const AiDisclaimerNote(
+                  text: 'Calories and nutrients are AI estimates and may be '
+                      "inaccurate. This isn't medical or dietary advice. For "
+                      'health concerns, talk to a qualified professional.',
+                ),
               ],
             ),
           ),

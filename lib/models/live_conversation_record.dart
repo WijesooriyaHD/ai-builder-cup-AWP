@@ -112,16 +112,23 @@ class ConversationTurn {
   /// writing exactly what it wrote before.
   final DateTime? timestamp;
 
+  /// Whether the text came from the AI model, as opposed to fixed app text
+  /// (the greeting, off-topic redirect, error messages). Only AI turns can be
+  /// reported. Null for turns saved before this was recorded.
+  final bool? isAiGenerated;
+
   const ConversationTurn({
     required this.isUser,
     required this.text,
     this.timestamp,
+    this.isAiGenerated,
   });
 
   Map<String, dynamic> toMap() => {
         'isUser': isUser,
         'text': text,
         if (timestamp != null) 'timestamp': timestamp!.toIso8601String(),
+        if (isAiGenerated != null) 'isAiGenerated': isAiGenerated,
       };
 
   factory ConversationTurn.fromMap(Map<String, dynamic> map) => ConversationTurn(
@@ -130,5 +137,7 @@ class ConversationTurn {
         timestamp: map['timestamp'] is String
             ? DateTime.tryParse(map['timestamp'] as String)
             : null,
+        isAiGenerated:
+            map['isAiGenerated'] is bool ? map['isAiGenerated'] as bool : null,
       );
 }

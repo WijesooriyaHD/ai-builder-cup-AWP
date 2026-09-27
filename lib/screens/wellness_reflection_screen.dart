@@ -11,6 +11,7 @@ import '../services/auth_service.dart';
 import '../services/content_safety_filter.dart';
 import 'add_journal_entry_screen.dart';
 import '../utils/wellnesspal_snackbar.dart';
+import '../widgets/ai_response_safety.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'journal_ai_discussion_screen.dart';
@@ -647,6 +648,7 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
                 height: 1.5,
               ),
             ),
+            const AiDisclaimerNote(padding: EdgeInsets.only(top: 10)),
           ],
         ),
       ),
@@ -1307,6 +1309,7 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
               color: isDark ? Colors.white70 : Colors.black87,
             ),
           ),
+          const AiDisclaimerNote(padding: EdgeInsets.only(top: 10)),
         ],
       ),
     );
@@ -1776,7 +1779,10 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
                           }
                           
                           if (snapshot.hasError) {
-                            return Center(child: Text("Error: ${snapshot.error}"));
+                            debugPrint('❌ journalInsight failed: ${snapshot.error}');
+                            return const Center(
+                                child: Text(
+                                    "Couldn't load insights right now. Please try again later."));
                           }
                           
                           final response = snapshot.data;
@@ -1819,6 +1825,8 @@ class _WellnessReflectionScreenState extends State<WellnessReflectionScreen>
                         },
                       ),
                     ),
+                    const AiDisclaimerNote(
+                        padding: EdgeInsets.fromLTRB(24, 4, 24, 16)),
                   ],
                 ),
               );

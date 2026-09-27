@@ -14,6 +14,7 @@ import '../models/wellness_intention.dart';
 import '../models/wellness_method.dart';
 import 'ai_models.dart';
 import 'content_safety_filter.dart';
+import 'wellness_chat_guard.dart';
 
 /// Structured result of summarizing a Live voice conversation into a saveable
 /// reflection (title + summary + two topic tags + a mood emoji).
@@ -560,6 +561,10 @@ Respond ONLY with valid JSON in this exact format:
     required List<Map<String, String>> history,
     required String userMessage,
   }) async {
+    if (WellnessChatGuard.isCrisis(userMessage) ||
+        WellnessChatGuard.isCrisis(entryContent)) {
+      return WellnessChatGuard.crisisMessage;
+    }
     final buffer = StringBuffer();
     buffer.writeln("The user wrote this journal entry:");
     buffer.writeln('Title: ${entryTitle.isEmpty ? "(untitled)" : entryTitle}');
@@ -626,6 +631,13 @@ Respond ONLY with valid JSON in this exact format:
             'crisis, self-harm, or serious/persistent distress, respond with '
             'compassion and gently encourage reaching out to a trusted person or '
             'a qualified professional / local support line.\n'
+            '- SAFETY: if the user mentions suicide, self-harm, wanting to die, or '
+            'being in danger, respond with compassion, tell them they deserve '
+            'support from a real person, and give emergency resources: their '
+            'local emergency number, 988 (US call or text), Samaritans 116 123 '
+            '(UK and Ireland), or findahelpline.com elsewhere. Never discourage '
+            'seeking help. Never produce sexual content. If the user appears to '
+            'be under 18, keep the conversation age-appropriate.\n'
             'FORMAT:\n'
             '- Plain text, no markdown headers or code fences, 2–5 short '
             'sentences. Usually end with one gentle, forward-moving question.',
@@ -674,6 +686,9 @@ Respond ONLY with valid JSON in this exact format:
     String? userName,
     String? wellnessContext,
   }) async {
+    if (WellnessChatGuard.isCrisis(userMessage)) {
+      return WellnessChatGuard.crisisMessage;
+    }
     final buffer = StringBuffer();
 
     if (userName != null && userName.trim().isNotEmpty) {
@@ -756,6 +771,13 @@ Respond ONLY with valid JSON in this exact format:
             'of crisis, self-harm, or serious/persistent distress, respond with '
             'compassion and gently encourage reaching out to a trusted person '
             'or a qualified professional / local support line.\n'
+            '- SAFETY: if the user mentions suicide, self-harm, wanting to die, or '
+            'being in danger, respond with compassion, tell them they deserve '
+            'support from a real person, and give emergency resources: their '
+            'local emergency number, 988 (US call or text), Samaritans 116 123 '
+            '(UK and Ireland), or findahelpline.com elsewhere. Never discourage '
+            'seeking help. Never produce sexual content. If the user appears to '
+            'be under 18, keep the conversation age-appropriate.\n'
             'FORMAT:\n'
             '- Plain text, no markdown headers and never code fences, 2–5 short '
             'sentences. Usually end with one gentle, forward-moving question.',
@@ -1626,6 +1648,9 @@ Respond ONLY with the summary text (no JSON, no labels).''';
     String? appKnowledge,
   }) async {
     if (question.trim().isEmpty) return null;
+    if (WellnessChatGuard.isCrisis(question)) {
+      return WellnessChatGuard.crisisSpokenMessage;
+    }
     try {
       final transcript = _formatVoiceHistory(history);
       // The app-feature knowledge block is injected by the UI layer (which owns
@@ -1659,6 +1684,13 @@ Respond ONLY with the summary text (no JSON, no labels).''';
             'financial advice, and avoid clinical language. For signs of '
             'crisis, respond with compassion and gently encourage reaching out '
             'to a trusted person or professional.\n'
+            '- SAFETY: if the user mentions suicide, self-harm, wanting to die, or '
+            'being in danger, respond with compassion, tell them they deserve '
+            'support from a real person, and give emergency resources: their '
+            'local emergency number, 988 (US call or text), Samaritans 116 123 '
+            '(UK and Ireland), or findahelpline.com elsewhere. Never discourage '
+            'seeking help. Never produce sexual content. If the user appears to '
+            'be under 18, keep the conversation age-appropriate.\n'
             '\n'
             'IDENTITY: if the user asks who or what you are, who made you, or '
             'what model/technology powers you, say you are the AI Wellness '

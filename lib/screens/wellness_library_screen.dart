@@ -921,7 +921,7 @@ class _WellnessLibraryScreenState extends State<WellnessLibraryScreen>
           durationMinutes: 7,
           isFree: false,
           description:
-              'A guided breathing session to lower cortisol and restore calm.',
+              'A guided breathing session to help you feel calm and centred.',
           relatedCategories: [WellnessCategory.stress, WellnessCategory.mindfulness],
         ),
         const WellnessLibraryItem(

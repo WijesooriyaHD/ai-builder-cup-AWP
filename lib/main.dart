@@ -94,31 +94,24 @@ void main() async {
   // enforced, otherwise calls fail with "Firebase AI Logic has been
   // deactivated in this project".
   //
-  // In debug builds we use the debug providers so development works on
-  // simulators/emulators (register the printed debug token in the Firebase
-  // console → App Check). Release builds use platform attestation:
-  // Play Integrity on Android and App Attest / Device Check on Apple.
-  // Dev-only override: force the App Check *debug* provider even in release
-  // builds. This is needed on free/personal Apple teams, which cannot use
-  // App Attest (a paid Apple Developer Program capability). Enable it by
-  // building with `--dart-define=APPCHECK_DEBUG=true`, then register the
-  // printed debug token in the Firebase console. It is OFF by default, so
-  // production/App Store builds are unaffected and keep using App Attest.
-  const bool forceAppCheckDebug =
-      bool.fromEnvironment('APPCHECK_DEBUG', defaultValue: false);
-
+  // Release builds use real platform attestation: App Attest on Apple and
+  // Play Integrity on Android. There is no override to weaken this — a
+  // shipped build always attests for real.
+  //
+  // Debug builds use the debug providers, because App Attest is unavailable on
+  // the iOS Simulator and Play Integrity is unavailable on emulators. Each
+  // debug run prints a fresh token that has to be registered under Firebase
+  // console → App Check → Apps → Manage debug tokens before AI calls
+  // succeed on that install.
   try {
     // Enable automatic token refresh so the SDK keeps a valid App Check token
     // available for downstream services (including Firebase AI Logic).
     await FirebaseAppCheck.instance.setTokenAutoRefreshEnabled(true);
 
-    final bool useDebugProvider = kDebugMode || forceAppCheckDebug;
-
     await FirebaseAppCheck.instance.activate(
       androidProvider:
-          useDebugProvider ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-      appleProvider:
-          useDebugProvider ? AppleProvider.debug : AppleProvider.appAttest,
+          kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+      appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
     );
 
     // Prime an App Check token BEFORE any AI Logic call. Firebase AI Logic
@@ -126,7 +119,9 @@ void main() async {
     // been fetched, the backend rejects them with "App Check token is
     // invalid". Forcing a fetch here (and awaiting it) guarantees a valid
     // token is cached before the app makes its first AI request.
-    final acToken = await FirebaseAppCheck.instance.getToken(true);
+    final acToken = await FirebaseAppCheck.instance
+        .getToken(true)
+        .timeout(const Duration(seconds: 5));
     debugPrint(
         '🔐 App Check token primed: ${acToken != null && acToken.isNotEmpty ? "OK (len=${acToken.length})" : "NULL/EMPTY"}');
   } catch (e) {
@@ -145,14 +140,16 @@ void main() async {
 
   // Initialize RevenueCat
   try {
-    await RevenueCatService().initialize();
+    await RevenueCatService()
+        .initialize()
+        .timeout(const Duration(seconds: 5));
   } catch (e) {
     debugPrint('Failed to initialize RevenueCat: $e');
   }
 
   // Initialize AuthService (syncs current Firebase user with RevenueCat)
   try {
-    await AuthService.initialize();
+    await AuthService.initialize().timeout(const Duration(seconds: 5));
   } catch (e) {
     debugPrint('Failed to initialize AuthService: $e');
   }

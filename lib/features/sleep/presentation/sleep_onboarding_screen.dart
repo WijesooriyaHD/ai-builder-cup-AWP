@@ -41,8 +41,9 @@ class _SleepOnboardingScreenState extends State<SleepOnboardingScreen> {
       body:
           'You\'ll get one specific, realistic suggestion you can add to your '
           'routine — and build better sleep, one night at a time.\n\n'
-          'Your sleep data helps personalize your recommendations and is never '
-          'shared with identifying details.',
+          'Your sleep data is stored securely in your account and summaries '
+          'are processed by Google Gemini to generate your insights. It\'s '
+          'never used for advertising.',
     ),
   ];
 
@@ -52,12 +53,13 @@ class _SleepOnboardingScreenState extends State<SleepOnboardingScreen> {
     super.dispose();
   }
 
-  Future<void> _finish() async {
+  Future<void> _finish({bool connectHealth = true}) async {
     final state = context.read<SleepState>();
     await state.completeOnboarding();
     // Offer to connect real health data now (permission prompt shown here,
     // after we've explained why). Denial simply falls back to sample data.
-    await state.connectHealth();
+    // Skipping never asks for Health access.
+    if (connectHealth) await state.connectHealth();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const SleepCoachScreen()),
@@ -77,7 +79,7 @@ class _SleepOnboardingScreenState extends State<SleepOnboardingScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: _finish,
+                onPressed: () => _finish(connectHealth: false),
                 child: const Text('Skip'),
               ),
             ),

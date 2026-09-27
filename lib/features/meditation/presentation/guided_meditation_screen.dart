@@ -19,7 +19,12 @@ class _GuidedMeditationScreenState extends State<GuidedMeditationScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final categories = MeditationCatalog.categories;
+    // Only offer categories that actually have sessions.
+    final categories = MeditationCatalog.categories
+        .where((c) => MeditationCatalog.guidedFor(c).isNotEmpty)
+        .toList();
+    if (categories.isEmpty) categories.add(MeditationCatalog.categories.first);
+    if (_selected >= categories.length) _selected = 0;
     final category = categories[_selected];
     final items = MeditationCatalog.guidedFor(category);
 
@@ -62,8 +67,8 @@ class _GuidedMeditationScreenState extends State<GuidedMeditationScreen> {
             child: items.isEmpty
                 ? const MeditationEmptyState(
                     emoji: '🧘',
-                    title: 'Nothing here yet',
-                    message: 'More sessions in this category are coming soon.',
+                    title: 'No sessions here',
+                    message: 'Try another category to find a session.',
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),

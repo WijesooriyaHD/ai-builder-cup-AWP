@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/app_state.dart';
 import '../../../utils/pro_modal_utils.dart';
+import '../../../widgets/ai_response_safety.dart';
 import '../../hydration/presentation/hydration_state.dart';
 import '../domain/meditation_catalog.dart';
 import '../domain/meditation_models.dart';
@@ -100,6 +101,12 @@ class _MeditationHomeScreenState extends State<MeditationHomeScreen> {
             _sectionTitle(theme, 'Insights'),
             const SizedBox(height: 12),
             _buildInsightRow(context, state),
+            const SizedBox(height: 16),
+            const AiDisclaimerNote(
+              text: 'Recommendations are AI-generated and may be inaccurate. '
+                  "Mindfulness practice isn't a substitute for medical or "
+                  'mental health care.',
+            ),
           ],
         ),
       ),

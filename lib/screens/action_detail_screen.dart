@@ -12,6 +12,7 @@ import '../services/ai_service.dart';
 import '../services/storage_service.dart';
 import '../utils/pro_modal_utils.dart';
 import '../utils/wellnesspal_snackbar.dart';
+import '../widgets/ai_response_safety.dart';
 import '../widgets/frosted_container.dart';
 import 'habit_builder_screen.dart';
 
@@ -247,11 +248,13 @@ class _ActionDetailScreenState extends State<ActionDetailScreen> {
             const SizedBox(height: 16),
 
             // Generated lesson (once available).
-            if (_lesson != null)
+            if (_lesson != null) ...[
               MarkdownBody(
                 data: _lesson!,
                 styleSheet: MarkdownStyleSheet.fromTheme(theme),
               ),
+              const AiDisclaimerNote(padding: EdgeInsets.fromLTRB(8, 12, 8, 12)),
+            ],
 
             // Inline error (e.g. timeout / App Check).
             if (_lessonError != null) ...[

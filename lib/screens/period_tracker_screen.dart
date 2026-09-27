@@ -63,6 +63,8 @@ class _PeriodTrackerScreenState extends State<PeriodTrackerScreen> {
                 toolCardId: HomeToolCard.periodPrediction,
                 child: _buildPredictionRow(context, data),
               ),
+              const SizedBox(height: 10),
+              _buildPredictionDisclaimer(context),
               const SizedBox(height: 16),
               AddToHomeWrapper(
                 toolCardId: HomeToolCard.periodPhase,
@@ -198,6 +200,30 @@ class _PeriodTrackerScreenState extends State<PeriodTrackerScreen> {
             label: 'Ovulation',
             value: ov == null ? '—' : _formatShort(ov),
             sub: ov == null ? 'Log a period' : 'Est. fertile window',
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Always-visible note that cycle predictions are estimates only.
+  Widget _buildPredictionDisclaimer(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.info_outline_rounded,
+            size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            "Predictions are estimates only and aren't suitable for "
+            'contraception or conception planning. Talk to a healthcare '
+            'provider about your cycle.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.35,
+            ),
           ),
         ),
       ],
@@ -558,7 +584,7 @@ class _PeriodTrackerScreenState extends State<PeriodTrackerScreen> {
       children: [
         dot(_periodColor, 'Period'),
         dot(_predictedColor, 'Predicted', outline: true),
-        dot(_fertileColor.withOpacity(0.6), 'Fertile'),
+        dot(_fertileColor.withOpacity(0.6), 'Est. fertile'),
         dot(_ovulationColor, 'Ovulation'),
       ],
     );

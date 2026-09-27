@@ -11,6 +11,7 @@ import '../providers/check_in_state.dart';
 import '../providers/wellness_plan_state.dart';
 import '../services/ai_service.dart';
 import '../utils/pro_modal_utils.dart';
+import '../widgets/ai_response_safety.dart';
 import '../widgets/frosted_container.dart';
 import 'breathing_exercise_screen.dart';
 import 'wellness_quiz_screen.dart';
@@ -852,6 +853,11 @@ class _WellnessStudioScreenState extends State<WellnessStudioScreen>
               ),
               const SizedBox(height: 10),
               ..._aiRecommendations.map((rec) => _buildRecCard(context, rec)),
+              const AiDisclaimerNote(
+                text: "Picks are AI-generated and aren't medical advice. "
+                    'Listen to your body and stop if anything feels wrong.',
+                padding: EdgeInsets.fromLTRB(8, 4, 8, 0),
+              ),
             ],
           ),
         );

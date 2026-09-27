@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/app_state.dart';
 import '../../../utils/pro_modal_utils.dart';
 import '../../../widgets/add_to_home_wrapper.dart';
+import '../../../widgets/ai_response_safety.dart';
 import '../../../services/home_tool_cards_service.dart';
 import '../../meal_planner/presentation/meal_planner_state.dart';
 import '../../nutrition/presentation/widgets/nutrition_cards.dart'
@@ -89,6 +90,13 @@ class _HydrationCoachScreenState extends State<HydrationCoachScreen> {
                           reminders: state.reminders,
                           isAnalyzing: state.isAnalyzing,
                         ),
+                      ),
+                      const AiDisclaimerNote(
+                        text: 'Hydration targets and insights are AI '
+                            "estimates. They aren't medical advice — follow "
+                            "your doctor's guidance if you have a fluid "
+                            'restriction or health condition.',
+                        padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
                       ),
                       const SizedBox(height: 16),
                       AddToHomeWrapper(

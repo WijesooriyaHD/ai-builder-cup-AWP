@@ -1,7 +1,11 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../config/legal_links.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import 'package:lottie/lottie.dart';
@@ -268,8 +272,26 @@ mainAxisAlignment: MainAxisAlignment.start,
               // Footer Terms
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: Text(
-                  'By clicking "Continue" you acknowledge that you have read and agree to AI Wellness Pal Terms of Service and Privacy Policy.',
+                child: Text.rich(
+                  TextSpan(
+                    text: 'By tapping "Continue" you acknowledge that you have read and agree to the AI Wellness Pal ',
+                    children: [
+                      TextSpan(
+                        text: 'Terms of Use',
+                        style: const TextStyle(decoration: TextDecoration.underline),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () => LegalLinks.open(LegalLinks.termsOfUse),
+                      ),
+                      const TextSpan(text: ' and '),
+                      TextSpan(
+                        text: 'Privacy Policy',
+                        style: const TextStyle(decoration: TextDecoration.underline),
+                        recognizer: TapGestureRecognizer()
+                          ..onTap = () => LegalLinks.open(LegalLinks.privacyPolicy),
+                      ),
+                      const TextSpan(text: '.'),
+                    ],
+                  ),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.dmSans(
                     fontSize: 12,
@@ -603,6 +625,33 @@ class _LoginCardState extends State<_LoginCard> {
     }
   }
 
+  Future<void> _signInWithApple() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final userCredential = await AuthService().signInWithApple();
+      if (userCredential == null) {
+        // User cancelled the Apple sign-in flow
+        return;
+      }
+
+      // Close modal — AuthWrapper handles routing
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      // Sync metadata (non-blocking)
+      StorageService().syncProfile();
+    } on FirebaseAuthException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } catch (e) {
+      setState(() => _errorMessage = 'Apple sign-in failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -670,6 +719,10 @@ class _LoginCardState extends State<_LoginCard> {
               ],
             ),
             const SizedBox(height: 16),
+            if (Platform.isIOS) ...[
+              _AppleSignInButton(onPressed: _isLoading ? null : _signInWithApple),
+              const SizedBox(height: 12),
+            ],
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -800,6 +853,33 @@ class _SignupCardState extends State<_SignupCard> {
     }
   }
 
+  Future<void> _signUpWithApple() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final userCredential = await AuthService().signInWithApple();
+      if (userCredential == null) {
+        // User cancelled the Apple sign-in flow
+        return;
+      }
+
+      // Sync metadata
+      await StorageService().syncProfile();
+
+      // Close modal — AuthWrapper handles routing
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    } on FirebaseAuthException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } catch (e) {
+      setState(() => _errorMessage = 'Apple sign-up failed. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -865,6 +945,10 @@ class _SignupCardState extends State<_SignupCard> {
               ],
             ),
             const SizedBox(height: 16),
+            if (Platform.isIOS) ...[
+              _AppleSignInButton(onPressed: _isLoading ? null : _signUpWithApple),
+              const SizedBox(height: 12),
+            ],
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -914,6 +998,41 @@ class _SignupCardState extends State<_SignupCard> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
       validator: (value) => value != null && value.isNotEmpty ? null : 'Required',
+    );
+  }
+}
+
+/// Sign in with Apple button following Apple's Human Interface Guidelines
+/// (black in light mode, white in dark mode, Apple logo + standard title).
+class _AppleSignInButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+
+  const _AppleSignInButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final background = isDark ? Colors.white : Colors.black;
+    final foreground = isDark ? Colors.black : Colors.white;
+
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(Icons.apple, size: 22, color: foreground),
+        label: Text(
+          'Continue with Apple',
+          style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: background,
+          foregroundColor: foreground,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
     );
   }
 }
