@@ -11,10 +11,25 @@ plugins {
 import java.util.Properties
 import java.io.FileInputStream
 
+// Release signing is driven by android/key.properties, which is deliberately
+// NOT in version control (it holds the upload keystore's passwords). When it's
+// absent — a fresh clone, or CI without secrets — fall back to the debug
+// signing config instead of leaving the release config half-initialised: with
+// null keyAlias/storeFile the :app:signReleaseBundle task dies on an opaque
+// NullPointerException that says nothing about the real cause.
+//
+// A debug-signed release build is fine for local size/perf checks but CANNOT be
+// uploaded to Play. See README for generating the upload keystore.
 val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseSigning = keystorePropertiesFile.exists()
 val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
+if (hasReleaseSigning) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+} else {
+    logger.warn(
+        "⚠️  android/key.properties not found — release builds will be signed " +
+        "with the DEBUG key and cannot be uploaded to Google Play."
+    )
 }
 
 android {
@@ -33,11 +48,13 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
-            storePassword = keystoreProperties["storePassword"] as String?
+        if (hasReleaseSigning) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String?
+                keyPassword = keystoreProperties["keyPassword"] as String?
+                storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+                storePassword = keystoreProperties["storePassword"] as String?
+            }
         }
     }
 
@@ -52,7 +69,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName(
+                if (hasReleaseSigning) "release" else "debug"
+            )
         }
     }
 }
