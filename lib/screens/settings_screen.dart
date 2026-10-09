@@ -4,15 +4,8 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import '../providers/app_state.dart';
-import '../providers/check_in_state.dart';
-import '../providers/wellness_plan_state.dart';
 import '../services/auth_service.dart';
 import '../services/live_conversation_service.dart';
 import '../services/voice_command_service.dart';
@@ -21,7 +14,7 @@ import '../screens/customer_center_screen.dart';
 import '../screens/faq_screen.dart';
 import '../config/legal_links.dart';
 import '../services/revenue_cat_service.dart';
-import '../services/onesignal_service.dart';
+import '../utils/account_deletion.dart';
 import '../utils/pro_modal_utils.dart';
 import '../services/notification_preferences_store.dart';
 import 'notification_preferences_screen.dart';
@@ -65,9 +58,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: Consumer<AppState>(
         builder: (context, appState, child) {
-          return ListView(
+          // SingleChildScrollView + Column, NOT ListView.
+          //
+          // ListView builds lazily and ESTIMATES the height of off-screen
+          // children from the average built so far. These cards vary wildly in
+          // height — the AI Voice card alone grows by three controls when Live
+          // Chat Pal is on — so scrolling back up produced a badly wrong
+          // estimate, Flutter corrected the offset once the real card was
+          // built, and the list visibly bounced back at that card.
+          //
+          // A settings page is ~10 cards, so there is nothing to gain from
+          // lazy building. Laying every child out up front makes all extents
+          // exact and removes the correction entirely.
+          return SingleChildScrollView(
             padding: const EdgeInsets.all(16), // Tighter padding for card layout
-            children: [
+            child: Column(
+              // ListView stretched children to full width by default; Column
+              // does not, so this preserves the existing card layout.
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               _buildSubscriptionSection(context),
               const SizedBox(height: 16),
 
@@ -195,7 +204,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               _buildDangerZoneSection(context),
               const SizedBox(height: 100),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -1979,7 +1989,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(
             width: double.infinity,
             child: TextButton.icon(
-              onPressed: _isDeletingAccount ? null : () => _showDeleteAccountDialog(context),
+              onPressed: _isDeletingAccount
+                  ? null
+                  : () => AccountDeletion.start(
+                        context,
+                        onBusyStart: () =>
+                            setState(() => _isDeletingAccount = true),
+                        onBusyEnd: () => mounted
+                            ? setState(() => _isDeletingAccount = false)
+                            : null,
+                      ),
               icon: _isDeletingAccount
                   ? const SizedBox(
                       width: 18,
@@ -2012,386 +2031,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _showDeleteAccountDialog(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    // Check if user signed in with Google or Apple
-    final isGoogleUser = user.providerData.any((p) => p.providerId == 'google.com');
-    final isAppleUser = user.providerData.any((p) => p.providerId == 'apple.com');
-
-    if (isGoogleUser || isAppleUser) {
-      // Google/Apple user — simple confirmation, no password needed
-      final confirmed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Delete Account',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            content: Text(
-              'This action is permanent and cannot be undone. '
-              'All your data will be deleted, including your wellness plans, '
-              'check-in history, journal entries, intentions, and uploaded files.\n\n'
-              'You will be asked to verify your ${isAppleUser ? 'Apple ID' : 'Google account'}.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-                child: const Text(
-                  'Delete My Account',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (confirmed == true && mounted) {
-        await _performAccountDeletionSocial(context, isApple: isAppleUser);
-      }
-    } else {
-      // Email/password user — ask for password
-      final passwordController = TextEditingController();
-      final password = await showDialog<String?>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Delete Account',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'This action is permanent and cannot be undone. '
-                    'All your data will be deleted, including your wellness plans, '
-                    'check-in history, journal entries, intentions, and uploaded files.',
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Enter your password to confirm',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(null),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(passwordController.text),
-                style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-                child: const Text(
-                  'Delete My Account',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (password != null && password.isNotEmpty && mounted) {
-        await _performAccountDeletionEmail(context, password);
-      }
-    }
-  }
-
-  Future<void> _performAccountDeletionSocial(BuildContext context, {required bool isApple}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() {
-      _isDeletingAccount = true;
-    });
-
-    final uid = user.uid;
-    final checkInState = Provider.of<CheckInState>(context, listen: false);
-    final wellnessPlanState = Provider.of<WellnessPlanState>(context, listen: false);
-
-    try {
-      if (isApple) {
-        // Re-authenticate with Apple and revoke Apple tokens (required by
-        // App Store Review Guideline 5.1.1(v) for Sign in with Apple)
-        await AuthService().reauthenticateAndRevokeApple(user);
-      } else {
-        // Re-authenticate with Google
-        final googleUser = await GoogleSignIn.instance.authenticate();
-        final idToken = googleUser.authentication.idToken;
-        final credential = GoogleAuthProvider.credential(idToken: idToken);
-        await user.reauthenticateWithCredential(credential);
-      }
-
-      // Delete Firestore data and Firebase Auth user
-      await Future.any([
-        () async {
-          await _deleteAllUserData(uid);
-          await user.delete();
-        }(),
-        Future.delayed(const Duration(seconds: 30)).then((_) {
-          throw TimeoutException('Account deletion exceeded 30 seconds.');
-        }),
-      ]);
-
-      // Detach third-party identities from the deleted account
-      // (non-critical — never block deletion on these).
-      try {
-        OneSignalService().logout();
-      } catch (e) {
-        debugPrint('OneSignal logout after deletion failed: $e');
-      }
-      try {
-        await RevenueCatService().logOut().timeout(const Duration(seconds: 5));
-      } catch (e) {
-        debugPrint('RevenueCat logOut after deletion failed: $e');
-      }
-
-      // Clean up local state
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      checkInState.reset();
-      wellnessPlanState.reset();
-
-      if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-      }
-    } on TimeoutException catch (_) {
-      if (!mounted) return;
-      setState(() => _isDeletingAccount = false);
-      WellnessPalSnackBar.show(context,
-        message: 'Deletion timed out. Please try again.',
-        icon: Icons.timer_off_rounded, isError: true,
-        duration: const Duration(seconds: 4));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isDeletingAccount = false);
-      WellnessPalSnackBar.show(context,
-        message: 'Failed to delete account. Please try again.',
-        icon: Icons.error_outline_rounded, isError: true,
-        duration: const Duration(seconds: 4));
-    }
-  }
-
-  Future<void> _performAccountDeletionEmail(BuildContext context, String password) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      WellnessPalSnackBar.show(
-        context,
-        message: 'No user signed in. Please sign in and try again.',
-        icon: Icons.error_outline_rounded,
-        isError: true,
-      );
-      return;
-    }
-
-    setState(() {
-      _isDeletingAccount = true;
-    });
-
-    final uid = user.uid;
-    // Capture provider references before async operations that may unmount us
-    final checkInState = Provider.of<CheckInState>(context, listen: false);
-    final wellnessPlanState = Provider.of<WellnessPlanState>(context, listen: false);
-
-    try {
-      // Re-authenticate the user so user.delete() won't fail with
-      // 'requires-recent-login'.
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: password,
-      );
-      await user.reauthenticateWithCredential(credential);
-      // Delete Firestore data and Firebase Auth user together.
-      // user.delete() must happen while the user is still authenticated.
-      await Future.any([
-        () async {
-          await _deleteAllUserData(uid);
-
-          // Delete the Firebase Auth user IMMEDIATELY after Firestore data,
-          // while the auth session is still fully valid.
-          // This triggers sign-out on the auth stream automatically.
-          await user.delete();
-        }(),
-        Future.delayed(const Duration(seconds: 30)).then((_) {
-          throw TimeoutException('Account deletion exceeded 30 seconds.');
-        }),
-      ]);
-
-      // Detach third-party identities from the deleted account
-      // (non-critical — never block deletion on these).
-      try {
-        OneSignalService().logout();
-      } catch (e) {
-        debugPrint('OneSignal logout after deletion failed: $e');
-      }
-      try {
-        await RevenueCatService().logOut().timeout(const Duration(seconds: 5));
-      } catch (e) {
-        debugPrint('RevenueCat logOut after deletion failed: $e');
-      }
-
-      // Clear SharedPreferences and reset providers AFTER successful deletion.
-      // user.delete() already triggered sign-out, but we still clean up
-      // local state so the next user session starts fresh.
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      checkInState.reset();
-      wellnessPlanState.reset();
-
-      if (mounted) {
-        // Navigate to the auth screen, clearing navigation stack.
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-      }
-    } on TimeoutException catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isDeletingAccount = false;
-      });
-      WellnessPalSnackBar.show(
-        context,
-        message: 'Deletion timed out. Please try again.',
-        icon: Icons.timer_off_rounded,
-        isError: true,
-        duration: const Duration(seconds: 4),
-      );
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isDeletingAccount = false;
-      });
-      final message = e.code == 'wrong-password' || e.code == 'invalid-credential'
-          ? 'Incorrect password. Please try again.'
-          : 'Authentication failed. Please try again.';
-      WellnessPalSnackBar.show(
-        context,
-        message: message,
-        icon: Icons.error_outline_rounded,
-        isError: true,
-        duration: const Duration(seconds: 4),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isDeletingAccount = false;
-      });
-      WellnessPalSnackBar.show(
-        context,
-        message: 'Failed to delete account. Please try again.',
-        icon: Icons.error_outline_rounded,
-        isError: true,
-        duration: const Duration(seconds: 4),
-      );
-    }
-  }
-
-  /// Deletes all Firestore documents under `users/{uid}/` and
-  /// all Firebase Storage files belonging to the user.
-  Future<void> _deleteAllUserData(String uid) async {
-    final firestore = FirebaseFirestore.instance;
-    final storage = FirebaseStorage.instance;
-
-    // Define all subcollections to delete
-    final subcollections = [
-      'wellness_intentions',
-      'daily_plans',
-      'check_ins',
-      'journal_entries',
-      'travel_memories',
-      'behavior_profile',
-      'weekly_summaries',
-      'ai_reports',
-      'challenges',
-      'hydration',
-      'journal_discussions',
-      'live_conversations',
-      'meals',
-      'sleep',
-      'wellness_library_bookmarks',
-      'wellness_library_completions',
-      'wellness_studio_sessions',
-    ];
-
-    // Batch delete all subcollection documents
-    WriteBatch batch = firestore.batch();
-    int operationCount = 0;
-    const batchLimit = 400; // Firestore batch max is 500; leave room
-
-    for (final subcollection in subcollections) {
-      final snapshot = await firestore
-          .collection('users')
-          .doc(uid)
-          .collection(subcollection)
-          .get();
-
-      for (final doc in snapshot.docs) {
-        batch.delete(doc.reference);
-        operationCount++;
-
-        // Commit in chunks if approaching batch limit
-        if (operationCount >= batchLimit) {
-          await batch.commit();
-          batch = firestore.batch();
-          operationCount = 0;
-        }
-      }
-    }
-
-    // Delete the user's root document
-    batch.delete(firestore.collection('users').doc(uid));
-    operationCount++;
-
-    if (operationCount > 0) {
-      await batch.commit();
-    }
-
-    // Delete all Firebase Storage files for the user
-    for (final folder in ['travel-photos/$uid', 'meal-photos/$uid']) {
-      try {
-        final listResult = await storage.ref(folder).listAll();
-        for (final item in listResult.items) {
-          await item.delete();
-        }
-      } catch (e) {
-        // Storage folder may not exist — that's fine
-        debugPrint('Storage cleanup note ($folder): $e');
-      }
-    }
-  }
 }
 
 

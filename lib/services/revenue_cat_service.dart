@@ -19,9 +19,13 @@ class RevenueCatService {
   //               --dart-define=REVENUECAT_ANDROID_KEY=goog_xxx
   // The `test_` fallbacks only work in debug (RevenueCat preview mode) and
   // CANNOT fetch real store products or show a real paywall on a device.
+  // iOS defaults to the production public key so a release build can't ship
+  // with purchases disabled just because the dart-define was forgotten (that
+  // is what got build 9 rejected under guideline 2.1(b)). Public SDK keys are
+  // designed to ship inside the app binary.
   static const String _iosApiKey = String.fromEnvironment(
     'REVENUECAT_IOS_KEY',
-    defaultValue: 'test_XblNGHDinPqDqxmWppeJYlbJIwy',
+    defaultValue: 'appl_GXZTvgobYoeGIhNiiQvwhwjBxVn',
   );
   static const String _androidApiKey = String.fromEnvironment(
     'REVENUECAT_ANDROID_KEY',
@@ -58,6 +62,28 @@ class RevenueCatService {
   /// short-circuit to avoid a native crash (calling the SDK before configure
   /// throws an uncatchable NSException on iOS).
   bool _isConfigured = false;
+
+  /// Whether [Purchases.configure] actually ran, i.e. whether this build can
+  /// sell anything at all.
+  ///
+  /// Exposed so the UI can distinguish "the store is misconfigured" from
+  /// "the purchase failed", which look identical to a user and cost us an App
+  /// Store rejection (guideline 2.1(b)) when a release build shipped with the
+  /// `test_` placeholder key and every purchase path fell through to a generic
+  /// "Something went wrong".
+  bool get isConfigured => _isConfigured;
+
+  /// True when this build cannot sell anything because it was compiled without
+  /// a real API key — i.e. someone built without
+  /// `--dart-define=REVENUECAT_IOS_KEY=appl_…`.
+  ///
+  /// Always false in debug, where the `test_` key is the expected setup.
+  bool get isMisconfiguredRelease =>
+      !kDebugMode && !_isConfigured && _activeApiKey.startsWith('test_');
+
+  /// The key this platform would use, for diagnostics.
+  static String get _activeApiKey =>
+      Platform.isIOS ? _iosApiKey : _androidApiKey;
 
   CustomerInfo? _cachedCustomerInfo;
   Function(CustomerInfo)? _updateListener;

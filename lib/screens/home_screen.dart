@@ -28,6 +28,8 @@ import '../services/connectivity_service.dart';
 import '../services/storage_service.dart';
 import '../services/toolkit_context_builder.dart';
 import '../widgets/ai_wellness_insight_card.dart';
+import '../utils/account_deletion.dart';
+import '../main.dart' show globalNavigatorKey;
 import '../widgets/custom_tab_switcher.dart';
 import '../widgets/daily_plan_card.dart';
 import '../widgets/frosted_container.dart';
@@ -2791,6 +2793,11 @@ class _UserProfileSheetState extends State<UserProfileSheet> {
                 ),
               ),
             ),
+
+            // Account deletion, offered here as well as in Settings so it is
+            // easy to find wherever the user manages their account (Apple's
+            // account-deletion guidance).
+            const _DeleteAccountButton(),
           ],
         ),
           ),
@@ -3186,6 +3193,110 @@ class _WellnessMethodsSelectorState extends State<_WellnessMethodsSelector> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// "Delete Account" action for the profile sheet.
+///
+/// A widget of its own purely so it can hold the pressed state: the sheet is a
+/// modal route built from the HomeScreen's build method, so a setState there
+/// would not rebuild it. Without local state the button stays live while the
+/// flow runs, and a second tap stacks a second confirmation dialog on top of
+/// the first.
+///
+/// Deliberately a plain text button rather than a filled one, so it reads as
+/// quieter than Log Out above it — it is the destructive, irreversible action
+/// of the two.
+class _DeleteAccountButton extends StatefulWidget {
+  const _DeleteAccountButton();
+
+  @override
+  State<_DeleteAccountButton> createState() => _DeleteAccountButtonState();
+}
+
+class _DeleteAccountButtonState extends State<_DeleteAccountButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    // Unlike Settings there is no inline button spinner here, so progress is a
+    // blocking overlay. It is anchored to the ROOT navigator, not this sheet:
+    // deleting the auth user unmounts this subtree mid-flight, and an overlay
+    // tied to a dead context could neither be shown nor dismissed.
+    var progressShown = false;
+
+    // NOTE: the sheet is deliberately not popped first. Popping unmounts this
+    // context, and the flow needs it to read AppState and show its dialogs. On
+    // success the flow tears this sheet down along with everything else; on
+    // cancel the user is returned here, which is where they were.
+    await AccountDeletion.start(
+      context,
+      onBusyStart: () {
+        // Disable the button here, not on tap — matching Settings, which also
+        // only goes busy once the user has confirmed. Cancelling the
+        // confirmation leaves the button live, as it should.
+        if (mounted) setState(() => _busy = true);
+        final navigator = globalNavigatorKey.currentState;
+        if (navigator == null) return;
+        progressShown = true;
+        showDialog<void>(
+          context: navigator.context,
+          barrierDismissible: false,
+          builder: (_) => const PopScope(
+            canPop: false,
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(strokeWidth: 3),
+                      SizedBox(height: 16),
+                      Text('Deleting account\u2026'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      onBusyEnd: () {
+        // Re-enable only if we're still here — after a successful deletion
+        // this widget is already gone with the rest of the authenticated tree,
+        // so this only matters when the flow failed and the user can retry.
+        if (mounted) setState(() => _busy = false);
+        // Guarded so a second call can't pop a route it doesn't own.
+        if (!progressShown) return;
+        progressShown = false;
+        globalNavigatorKey.currentState?.pop();
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final red = _busy ? Colors.red.withValues(alpha: 0.4) : Colors.red;
+    return Padding(
+      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 32),
+      child: SizedBox(
+        width: double.infinity,
+        child: TextButton.icon(
+          onPressed: _busy ? null : _run,
+          icon: Icon(Icons.delete_forever_rounded, color: red, size: 20),
+          label: Text(
+            'Delete Account',
+            style: TextStyle(color: red, fontWeight: FontWeight.w600),
+          ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+      ),
     );
   }
 }

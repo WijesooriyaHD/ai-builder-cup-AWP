@@ -16,6 +16,55 @@ class ProModalUtils {
   /// only if the paywall can't be shown (e.g. offerings not configured yet).
   static Future<void> openUpgrade(BuildContext context) async {
     final rc = RevenueCatService();
+
+    // Fail loudly when the build itself can't sell anything.
+    //
+    // This happens when a release build is compiled without
+    // `--dart-define=REVENUECAT_IOS_KEY=appl_…`, so the `test_` placeholder is
+    // used and RevenueCatService skips configure() entirely. Previously that
+    // fell through to the Customer Center and surfaced as a generic
+    // "Something went wrong", which is how build 9 reached App Review and was
+    // rejected under guideline 2.1(b) — the real cause was invisible.
+    //
+    // The wording is deliberately blunt and developer-facing: this state is
+    // unreachable in a correctly built release, so it only ever appears to
+    // whoever is testing, and it should tell them exactly what to fix.
+    if (rc.isMisconfiguredRelease) {
+      debugPrint(
+          '❌ openUpgrade: build has no RevenueCat key — purchases disabled. '
+          'Rebuild with --dart-define=REVENUECAT_IOS_KEY=appl_…');
+      if (context.mounted) {
+        // A plain dialog, NOT showFeatureUpsellModal — that modal's own
+        // "Upgrade" button calls back into openUpgrade, which would bounce the
+        // user between the two forever in this state.
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.build_circle_outlined,
+                    color: Colors.orange, size: 28),
+                SizedBox(width: 12),
+                Expanded(child: Text('Purchases unavailable')),
+              ],
+            ),
+            content: const Text(
+              'This build was compiled without its store key, so purchases '
+              'are disabled.\n\n'
+              'Rebuild with:\n--dart-define=REVENUECAT_IOS_KEY=appl_…',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+      return;
+    }
+
     final result = await rc.presentPaywall();
 
     if (result == PaywallResult.purchased || result == PaywallResult.restored) {
