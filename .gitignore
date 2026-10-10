@@ -53,3 +53,4 @@ app.*.map.json
 .onesignal.env
 secrets/
 *.secret
+android/app/google-services.json

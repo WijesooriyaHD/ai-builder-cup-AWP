@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
@@ -119,11 +121,25 @@ void main() async {
     // been fetched, the backend rejects them with "App Check token is
     // invalid". Forcing a fetch here (and awaiting it) guarantees a valid
     // token is cached before the app makes its first AI request.
-    final acToken = await FirebaseAppCheck.instance
-        .getToken(true)
-        .timeout(const Duration(seconds: 5));
-    debugPrint(
-        '🔐 App Check token primed: ${acToken != null && acToken.isNotEmpty ? "OK (len=${acToken.length})" : "NULL/EMPTY"}');
+    final tokenFuture = FirebaseAppCheck.instance.getToken(true);
+    try {
+      final acToken =
+          await tokenFuture.timeout(const Duration(seconds: 5));
+      debugPrint(
+          '🔐 App Check token primed: ${acToken != null && acToken.isNotEmpty ? "OK (len=${acToken.length})" : "NULL/EMPTY"}');
+    } on TimeoutException {
+      // Play Integrity can take 15s+ on slower Android devices. Startup must
+      // not wait that long, but the fetch keeps running — log how it ends so
+      // the real App Check outcome isn't hidden behind the timeout.
+      if (defaultTargetPlatform != TargetPlatform.android) rethrow;
+      debugPrint('🔐 App Check token still pending after 5s; continuing.');
+      unawaited(tokenFuture.then(
+        (t) => debugPrint(
+            '🔐 App Check token primed late: ${t != null && t.isNotEmpty ? "OK (len=${t.length})" : "NULL/EMPTY"}'),
+        onError: (Object e) =>
+            debugPrint('🔐 App Check token fetch failed: $e'),
+      ));
+    }
   } catch (e) {
     debugPrint('Failed to activate Firebase App Check: $e');
   }

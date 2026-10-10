@@ -215,5 +215,11 @@
         </intent>
         <!-- Health Connect app (for availability check + launching settings). -->
         <package android:name="com.google.android.apps.healthdata" />
+        <!-- Speech recognition service (speech_to_text). Without this, Android
+             11+ package visibility hides the recognizer and every device
+             reports recognizerNotAvailable. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 </manifest>

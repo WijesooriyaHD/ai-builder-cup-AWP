@@ -537,7 +537,7 @@ class RevenueCatService {
   Future<void> setEmail(String email) async {
     if (!_isConfigured) return;
     try {
-      await Purchases.setEmail(email);
+      await _boundOnAndroid(Purchases.setEmail(email));
       debugPrint('✅ Set RevenueCat email: $email');
     } catch (e) {
       debugPrint('❌ Failed to set RevenueCat email: $e');
@@ -548,13 +548,23 @@ class RevenueCatService {
   Future<void> logIn(String userId) async {
     if (!_isConfigured) return;
     try {
-      final result = await Purchases.logIn(userId);
+      final result = await _boundOnAndroid(Purchases.logIn(userId));
       _cachedCustomerInfo = result.customerInfo;
       debugPrint('✅ RevenueCat: Logged in as $userId');
       _updateListener?.call(result.customerInfo);
     } catch (e) {
       debugPrint('❌ RevenueCat: Log in failed: $e');
     }
+  }
+
+  /// Sign-in awaits [logIn] and [setEmail], and on some Android devices the
+  /// native call can hang indefinitely, leaving the sign-in spinner stuck.
+  /// Cap the wait on Android so sign-in always completes; the SDK still
+  /// finishes in the background and the next launch logs in again anyway.
+  /// iOS is left unbounded, matching its existing behaviour.
+  Future<T> _boundOnAndroid<T>(Future<T> call) {
+    if (!Platform.isAndroid) return call;
+    return call.timeout(const Duration(seconds: 8));
   }
 
   /// Log out the current user and return to an anonymous ID
