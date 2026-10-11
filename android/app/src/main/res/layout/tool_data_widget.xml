@@ -1,43 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/tool_root"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="10dp">
+    android:layout_height="match_parent">
 
-    <TextView
-        android:id="@+id/data_value"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text=""
-        android:textColor="@color/widget_text"
-        android:textSize="24sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/data_title"
+    <LinearLayout
+        android:id="@+id/tool_root"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_height="match_parent"
         android:gravity="center"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:text=""
-        android:textColor="@color/widget_text"
-        android:textSize="11sp"
-        android:textStyle="bold" />
+        android:orientation="vertical"
+        android:padding="10dp">
 
-    <TextView
-        android:id="@+id/data_subtitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:gravity="center"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:text=""
-        android:textColor="@color/widget_text"
-        android:textSize="10sp" />
-</LinearLayout>
+        <TextView
+            android:id="@+id/data_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="@color/widget_text"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/data_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text=""
+            android:textColor="@color/widget_text"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/data_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text=""
+            android:textColor="@color/widget_text"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- Flip between the tool tile and its live-data face (see WidgetFlip.kt).
+         Hidden by default; only the data-capable tool widgets show it. -->
+    <ImageView
+        android:id="@+id/flip_toggle"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="2dp"
+        android:padding="4dp"
+        android:contentDescription="Flip to see today's details"
+        android:src="@drawable/ic_widget_flip"
+        android:visibility="gone" />
+
+    <!-- Per-widget light/dark toggle (see WidgetTheme.kt). Overlays the
+         tile's top-right corner; taps here don't reach tool_root's launch. -->
+    <ImageView
+        android:id="@+id/theme_toggle"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="2dp"
+        android:padding="4dp"
+        android:contentDescription="Switch light or dark theme"
+        android:src="@drawable/ic_widget_theme" />
+</FrameLayout>

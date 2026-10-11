@@ -2,29 +2,29 @@
 <resources>
     <string name="app_name">AI Wellness Pal</string>
     <string name="intention_widget_name">Wellness Intention</string>
-    <string name="intention_widget_description">Track your wellness intention tasks</string>
-    <string name="ai_wellness_widget_name">AI Wellness</string>
+    <string name="intention_widget_description">Your current wellness intention tasks and progress</string>
+    <string name="ai_wellness_widget_name">Today\'s Plan</string>
     <string name="ai_wellness_widget_description">Your daily wellness plan at a glance</string>
     <string name="habit_widget_name">Today\'s Habits</string>
     <string name="habit_widget_description">Check off today\'s habits from your home screen</string>
 
     <!-- Life-toolkit shortcut widgets (square, tap to open the tool). -->
     <string name="tool_widget_nutrition_name">Nutrition Coach</string>
-    <string name="tool_widget_nutrition_description">Open the Nutrition Coach tool</string>
+    <string name="tool_widget_nutrition_description">Tap flip to see today\'s calories and macros</string>
     <string name="tool_widget_meal_planner_name">Meal Planner</string>
-    <string name="tool_widget_meal_planner_description">Open the Meal Planner tool</string>
+    <string name="tool_widget_meal_planner_description">Tap flip to see today\'s meals, and use the arrows to browse</string>
     <string name="tool_widget_calorie_budget_name">Calorie Budget</string>
-    <string name="tool_widget_calorie_budget_description">Open the Calorie Budget tool</string>
+    <string name="tool_widget_calorie_budget_description">Tap flip to see kcal remaining today</string>
     <string name="tool_widget_hydration_name">Hydration Coach</string>
-    <string name="tool_widget_hydration_description">Open the Hydration Coach tool</string>
+    <string name="tool_widget_hydration_description">Tap flip to see today\'s water progress</string>
     <string name="tool_widget_sleep_name">Sleep Coach</string>
     <string name="tool_widget_sleep_description">Open the Sleep Coach tool</string>
     <string name="tool_widget_meditation_name">Meditation Pal</string>
     <string name="tool_widget_meditation_description">Open the Meditation Pal tool</string>
     <string name="tool_widget_period_tracker_name">Period Tracker</string>
-    <string name="tool_widget_period_tracker_description">Open the Period Tracker tool</string>
+    <string name="tool_widget_period_tracker_description">Tap flip to see your current cycle phase</string>
     <string name="tool_widget_weight_tracker_name">Body Weight</string>
-    <string name="tool_widget_weight_tracker_description">Open the Body Weight tool</string>
+    <string name="tool_widget_weight_tracker_description">Tap flip to see your current weight</string>
     <string name="tool_widget_mindful_travel_name">Mindful Travel</string>
     <string name="tool_widget_mindful_travel_description">Open the Mindful Travel tool</string>
 </resources>

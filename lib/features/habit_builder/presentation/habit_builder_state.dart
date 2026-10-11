@@ -101,7 +101,7 @@ class HabitBuilderState extends ChangeNotifier {
                 'emoji': h.tool.emoji,
                 'checked': h.isCompletedToday,
               })
-          .toList());
+          .toList(), all: _habits);
       await HomeWidget.updateWidget(
           name: 'HabitWidget', androidName: 'HabitWidget');
     } catch (e) {
@@ -120,8 +120,12 @@ class HabitBuilderState extends ChangeNotifier {
   ///
   /// [items] is an ordered list of maps with id/title/emoji/checked for the
   /// habits scheduled today.
+  ///
+  /// [all] (every habit, with its schedule) is saved as `habit_schedule_json`
+  /// alongside a `habit_date` stamp, so on a new day the widget can show that
+  /// day's habits, unchecked, before the app is opened.
   static Future<void> _writeHabitWidgetData(
-      List<Map<String, dynamic>> items) async {
+      List<Map<String, dynamic>> items, {required List<Habit> all}) async {
     // Ensure writes land in the iOS app group the widget extension reads from.
     // Safe/no-op on Android. Idempotent, so calling it here covers both the UI
     // isolate and the background toggle isolate.
@@ -139,6 +143,19 @@ class HabitBuilderState extends ChangeNotifier {
 
     final allDone = total > 0 && completed == total;
 
+    await HomeWidget.saveWidgetData<String>('habit_date', _todayKey());
+    await HomeWidget.saveWidgetData<String>(
+        'habit_schedule_json',
+        jsonEncode(all
+            .where((h) => h.isActive)
+            .map((h) => {
+                  'id': h.id,
+                  'title': h.title,
+                  'emoji': h.tool.emoji,
+                  'freq': h.frequency.name,
+                  'days': h.activeDays,
+                })
+            .toList()));
     await HomeWidget.saveWidgetData<bool>('habit_has_habits', total > 0);
     await HomeWidget.saveWidgetData<bool>('habit_all_done', allDone);
     await HomeWidget.saveWidgetData<int>('habit_count', rows.length);
@@ -176,8 +193,9 @@ class HabitBuilderState extends ChangeNotifier {
     try {
       final raw = prefs.getString(_prefsKey);
       final List<Map<String, dynamic>> items = [];
+      var habits = <Habit>[];
       if (raw != null && raw.isNotEmpty) {
-        final habits = Habit.decodeList(raw);
+        habits = Habit.decodeList(raw);
         final today = habits
             .where((h) => h.isActive && h.isScheduledToday)
             .toList();
@@ -190,7 +208,7 @@ class HabitBuilderState extends ChangeNotifier {
           });
         }
       }
-      await _writeHabitWidgetData(items);
+      await _writeHabitWidgetData(items, all: habits);
       await HomeWidget.updateWidget(
           name: 'HabitWidget', androidName: 'HabitWidget');
     } catch (e) {

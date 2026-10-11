@@ -484,7 +484,16 @@ class HydrationState extends ChangeNotifier {
   /// app-group write) and asks WidgetKit to reload. Call this immediately
   /// after any state change that should be visible on the widget.
   Future<void> syncHydrationWidget() async {
+    // The native channel only exists on iOS. Android goes straight to
+    // home_widget rather than relying on a MissingPluginException each time.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      await _syncViaHomeWidget();
+      return;
+    }
     try {
+      // Day stamp so the widget can roll consumed back to 0 after midnight.
+      await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
+      await HomeWidget.saveWidgetData<String>('hydration_date', DateTime.now().toIso8601String().substring(0, 10));
       // Push via native channel — writes synchronously to app-group
       // UserDefaults via HydrationSyncCache so the values are guaranteed
       // to be present when applicationDidEnterBackground calls
@@ -513,6 +522,11 @@ class HydrationState extends ChangeNotifier {
       await HomeWidget.saveWidgetData<int>('hydration_goal_ml', goalMl);
       await HomeWidget.saveWidgetData<int>(
           'hydration_pct', completionPercentage.clamp(0, 100));
+      // The Android widget only shows these values once this flag is set;
+      // without it the flipped face stays on its empty 0% state.
+      await HomeWidget.saveWidgetData<bool>('hydration_has_data', goalMl > 0);
+      // Day stamp so the widget can roll consumed back to 0 after midnight.
+      await HomeWidget.saveWidgetData<String>('hydration_date', DateTime.now().toIso8601String().substring(0, 10));
       await HomeWidget.updateWidget(
           name: _widgetKind, androidName: _widgetKind);
     } catch (e) {

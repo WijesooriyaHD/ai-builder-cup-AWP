@@ -31,9 +31,12 @@ class HabitWidget : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        MidnightWidgetRefresh.schedule(context)
+        // Saved data adjusted for today (rolls over at midnight; see WidgetDay).
+        val today = WidgetDay.habits(widgetData)
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.habit_widget).apply {
-                val hasHabits = widgetData.getBoolean("habit_has_habits", false)
+                val hasHabits = today.getBoolean("habit_has_habits", false)
 
                 // Only two rows are shown, matching the Wellness Intention widget.
                 val rowIds = intArrayOf(R.id.h_row1, R.id.h_row2)
@@ -48,11 +51,11 @@ class HabitWidget : HomeWidgetProvider() {
                 } else {
                     setViewVisibility(R.id.h_empty, View.GONE)
 
-                    val allDone = widgetData.getBoolean("habit_all_done", false)
-                    val count = widgetData.getInt("habit_count", 0).coerceIn(0, 2)
-                    val completed = widgetData.getInt("habit_completed", 0)
-                    val total = widgetData.getInt("habit_total", 0)
-                    val progress = widgetData.getInt("habit_progress", 0)
+                    val allDone = today.getBoolean("habit_all_done", false)
+                    val count = today.getInt("habit_count", 0).coerceIn(0, 2)
+                    val completed = today.getInt("habit_completed", 0)
+                    val total = today.getInt("habit_total", 0)
+                    val progress = today.getInt("habit_progress", 0)
 
                     if (allDone) {
                         // Celebration: single static row, no tap.
@@ -65,10 +68,10 @@ class HabitWidget : HomeWidgetProvider() {
                     for (i in 0 until 2) {
                         val n = i + 1
                         if (i < count) {
-                            val id = widgetData.getString("habit_${n}_id", "") ?: ""
-                            val text = widgetData.getString("habit_${n}_text", "") ?: ""
-                            val emoji = widgetData.getString("habit_${n}_emoji", "") ?: ""
-                            val checked = widgetData.getBoolean("habit_${n}_checked", false)
+                            val id = today.getString("habit_${n}_id", "") ?: ""
+                            val text = today.getString("habit_${n}_text", "") ?: ""
+                            val emoji = today.getString("habit_${n}_emoji", "") ?: ""
+                            val checked = today.getBoolean("habit_${n}_checked", false)
 
                             setViewVisibility(rowIds[i], View.VISIBLE)
                             setTextViewText(checkIds[i], if (checked) "\u2611" else "\u2610")
@@ -122,6 +125,16 @@ class HabitWidget : HomeWidgetProvider() {
                 setOnClickPendingIntent(R.id.h_title, launchPendingIntent)
                 setOnClickPendingIntent(R.id.h_empty, launchPendingIntent)
             }
+            // Per-widget light/dark theme (follows the phone until toggled).
+            val dark = WidgetTheme.override(widgetData, "habit")
+            WidgetTheme.background(views, R.id.widget_root, dark,
+                R.drawable.bg_todays_habits_light, R.drawable.bg_todays_habits_dark)
+            for (chip in intArrayOf(R.id.h_empty, R.id.h_row1, R.id.h_row2)) {
+                WidgetTheme.background(views, chip, dark,
+                    R.drawable.widget_chip_light, R.drawable.widget_chip_dark)
+            }
+            WidgetTheme.text(views, dark, R.id.h_empty, R.id.h_row1_text, R.id.h_row2_text, R.id.h_progress_label)
+            WidgetTheme.bindToggle(context, views, "habit", dark)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

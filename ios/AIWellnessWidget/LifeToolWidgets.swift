@@ -169,18 +169,20 @@ struct HydrationProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<HydrationEntry>) -> Void) {
         let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        completion(Timeline(entries: [load()], policy: .after(next)))
+        // Now + next midnight, so today's water resets on time.
+        let entries = WidgetDay.timelineDates().map { load(at: $0) }
+        completion(Timeline(entries: entries, policy: .after(next)))
     }
 
-    private func load() -> HydrationEntry {
-        let d = defaults
+    private func load(at date: Date = Date()) -> HydrationEntry {
+        let d = WidgetDay.hydration(at: date)
         // Default the goal to the app's standard 2000 ml when nothing has been
         // synced yet, so a freshly installed widget shows a real ring (0% of
         // 2.0L) rather than an "open app" placeholder — matching how the other
         // tool widgets render sensible defaults on first launch.
         let syncedGoal = d?.integer(forKey: "hydration_goal_ml") ?? 0
         return HydrationEntry(
-            date: Date(),
+            date: date,
             pct: d?.integer(forKey: "hydration_pct") ?? 0,
             consumedMl: d?.integer(forKey: "hydration_consumed_ml") ?? 0,
             goalMl: syncedGoal > 0 ? syncedGoal : 2000,

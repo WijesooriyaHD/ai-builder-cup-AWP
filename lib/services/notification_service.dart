@@ -70,6 +70,13 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTapped,
     );
 
+    // Habit / plan / mindfulness reminders moved to the high-importance
+    // 'scheduled_reminders' channel; drop the old default-importance one so it
+    // doesn't linger as an empty category in Android's notification settings.
+    try {
+      await _android?.deleteNotificationChannel('meditation_reminders');
+    } catch (_) {}
+
     _isInitialized = true;
     debugPrint('✅ NotificationService initialized');
   }
@@ -413,10 +420,6 @@ class NotificationService {
   // callers cancel then reschedule.
   // ---------------------------------------------------------------------------
 
-  static const String _meditationChannelId = 'meditation_reminders';
-  static const String _meditationChannelName = 'Mindfulness Reminders';
-  static const String _meditationChannelDescription =
-      'Gentle reminders to take a mindful moment';
 
   /// Base offset for meditation notification ids to avoid colliding with the
   /// check-in reminder (id 1001) or other features.
@@ -429,13 +432,18 @@ class NotificationService {
     return _meditationIdBase + (h % 1000) * 10 + weekday;
   }
 
-  static const NotificationDetails _meditationDetails = NotificationDetails(
+
+  /// Reminders the user set for a specific time (habits, Today's Plan,
+  /// meditation). High importance so Android shows a heads-up banner like iOS
+  /// does; a new channel id because an existing channel's importance can't be
+  /// raised after it's created on a device.
+  static const NotificationDetails _reminderDetails = NotificationDetails(
     android: AndroidNotificationDetails(
-      _meditationChannelId,
-      _meditationChannelName,
-      channelDescription: _meditationChannelDescription,
-      importance: Importance.defaultImportance,
-      priority: Priority.defaultPriority,
+      'scheduled_reminders',
+      'Reminders',
+      channelDescription: 'Habit, Today\'s Plan and mindfulness reminders at the time you choose',
+      importance: Importance.high,
+      priority: Priority.high,
       styleInformation: BigTextStyleInformation(''),
     ),
     iOS: DarwinNotificationDetails(
@@ -444,6 +452,42 @@ class NotificationService {
       presentSound: true,
     ),
   );
+
+  AndroidFlutterLocalNotificationsPlugin? get _android =>
+      defaultTargetPlatform == TargetPlatform.android
+          ? _plugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          : null;
+
+  /// Whether reminders can fire at their exact time. Always true off Android;
+  /// on Android 12+ it needs the "Alarms & reminders" special access.
+  Future<bool> canScheduleExactReminders() async {
+    final android = _android;
+    if (android == null) return true;
+    try {
+      return await android.canScheduleExactNotifications() ?? true;
+    } catch (e) {
+      debugPrint('⚠️ canScheduleExactNotifications failed: $e');
+      return false;
+    }
+  }
+
+  /// Opens Android's "Alarms & reminders" settings page for this app. Habit
+  /// reminders are re-armed with exact timing on the next app launch.
+  Future<void> requestExactReminders() async {
+    try {
+      await _android?.requestExactAlarmsPermission();
+    } catch (e) {
+      debugPrint('⚠️ requestExactAlarmsPermission failed: $e');
+    }
+  }
+
+  /// Exact timing when allowed, otherwise inexact (Android may then deliver
+  /// the reminder some minutes late, especially in battery-saving mode).
+  Future<AndroidScheduleMode> _reminderScheduleMode() async =>
+      await canScheduleExactReminders()
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
 
   /// Schedules (or reschedules) all weekly occurrences for a single reminder.
   ///
@@ -479,6 +523,7 @@ class NotificationService {
       return;
     }
 
+    final mode = await _reminderScheduleMode();
     for (final weekday in weekdays) {
       final scheduled = _nextWeekdayTime(weekday, hour, minute);
       await _plugin.zonedSchedule(
@@ -486,8 +531,8 @@ class NotificationService {
         '$label 🧘',
         'Take a mindful moment for yourself.',
         scheduled,
-        _meditationDetails,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        _reminderDetails,
+        androidScheduleMode: mode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         // Repeat weekly at the same weekday + time.
@@ -514,13 +559,14 @@ class NotificationService {
       return false;
     }
     final when = tz.TZDateTime.now(tz.local).add(delay);
+    final mode = await _reminderScheduleMode();
     await _plugin.zonedSchedule(
       _meditationIdBase - 1, // dedicated id for the test notification
       'Mindfulness reminder 🧘',
       'This is a test. Reminders are working.',
       when,
-      _meditationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      _reminderDetails,
+      androidScheduleMode: mode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
@@ -582,6 +628,7 @@ class NotificationService {
     }
 
     final now = tz.TZDateTime.now(tz.local);
+    final mode = await _reminderScheduleMode();
 
     for (final weekday in weekdays) {
       var scheduled = _nextWeekdayTime(weekday, hour, minute);
@@ -601,8 +648,8 @@ class NotificationService {
         '$label ⏰',
         'Time for your habit. Keep the streak going!',
         scheduled,
-        _meditationDetails,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        _reminderDetails,
+        androidScheduleMode: mode,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
@@ -682,13 +729,14 @@ class NotificationService {
         ? 'Time for your plan: ${focusLabel.trim()} 🌿'
         : 'Take a moment for today\'s wellness plan. 🌿';
 
+    final mode = await _reminderScheduleMode();
     await _plugin.zonedSchedule(
       _planReminderNotificationId,
       'Today\'s Plan reminder ⏰',
       body,
       scheduled,
-      _meditationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      _reminderDetails,
+      androidScheduleMode: mode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
       matchDateTimeComponents: null, // One-shot — never repeats.

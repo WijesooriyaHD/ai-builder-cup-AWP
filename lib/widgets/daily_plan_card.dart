@@ -346,7 +346,11 @@ class _DailyPlanCardState extends State<DailyPlanCard>
       if (mounted) setState(() => _reminder = [picked.hour, picked.minute]);
     }
 
+    // Android 12+ may deliver reminders late without "Alarms & reminders" access.
+    final exact = await notifier.canScheduleExactReminders();
+
     if (!mounted) return;
+    final offerExact = granted && scheduled != null && !exact;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -354,8 +358,13 @@ class _DailyPlanCardState extends State<DailyPlanCard>
               ? 'Reminder saved, but notifications are disabled. Enable them in Settings to be reminded.'
               : (scheduled == null
                   ? 'Couldn\'t set that reminder. Please pick a time later today.'
-                  : 'Reminder set for ${picked.format(context)} today.'),
+                  : offerExact
+                      ? 'Reminder set for ${picked.format(context)}. Allow exact timing so it isn\'t delayed.'
+                      : 'Reminder set for ${picked.format(context)} today.'),
         ),
+        action: offerExact
+            ? SnackBarAction(label: 'Allow', onPressed: notifier.requestExactReminders)
+            : null,
       ),
     );
   }

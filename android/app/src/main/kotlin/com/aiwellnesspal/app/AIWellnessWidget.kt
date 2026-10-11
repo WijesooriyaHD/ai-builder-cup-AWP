@@ -32,12 +32,15 @@ class AIWellnessWidget : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        MidnightWidgetRefresh.schedule(context)
+        // Saved data adjusted for today (rolls over at midnight; see WidgetDay).
+        val today = WidgetDay.plan(widgetData)
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.ai_wellness_widget).apply {
-                val isPlaceholder = widgetData.getBoolean("wellness_placeholder", true)
-                val planId = widgetData.getString("wellness_plan_id", null)
+                val isPlaceholder = today.getBoolean("wellness_placeholder", true)
+                val planId = today.getString("wellness_plan_id", null)
 
-                val focus = widgetData.getString("wellness_focus", "Today's Focus") ?: "Today's Focus"
+                val focus = today.getString("wellness_focus", "Today's Focus") ?: "Today's Focus"
                 setTextViewText(R.id.wellness_focus_label, focus)
 
                 if (isPlaceholder) {
@@ -49,10 +52,10 @@ class AIWellnessWidget : HomeWidgetProvider() {
                 } else {
                     setViewVisibility(R.id.placeholder_message, View.GONE)
 
-                    val allDone = widgetData.getBoolean("wellness_all_done", false)
-                    val completed = widgetData.getInt("wellness_completed", 0)
-                    val total = widgetData.getInt("wellness_total", 0)
-                    val progress = widgetData.getInt("wellness_progress", 0)
+                    val allDone = today.getBoolean("wellness_all_done", false)
+                    val completed = today.getInt("wellness_completed", 0)
+                    val total = today.getInt("wellness_total", 0)
+                    val progress = today.getInt("wellness_progress", 0)
 
                     if (allDone) {
                         setViewVisibility(R.id.w_row1, View.VISIBLE)
@@ -64,17 +67,17 @@ class AIWellnessWidget : HomeWidgetProvider() {
                             context, this, planId,
                             rowId = R.id.w_row1, checkId = R.id.w_row1_check, textId = R.id.w_row1_text,
                             requestCode = 320,
-                            text = widgetData.getString("wellness_task1_text", "") ?: "",
-                            taskId = widgetData.getString("wellness_task1_id", "") ?: "",
-                            checked = widgetData.getBoolean("wellness_task1_checked", false)
+                            text = today.getString("wellness_task1_text", "") ?: "",
+                            taskId = today.getString("wellness_task1_id", "") ?: "",
+                            checked = today.getBoolean("wellness_task1_checked", false)
                         )
                         bindTaskRow(
                             context, this, planId,
                             rowId = R.id.w_row2, checkId = R.id.w_row2_check, textId = R.id.w_row2_text,
                             requestCode = 321,
-                            text = widgetData.getString("wellness_task2_text", "") ?: "",
-                            taskId = widgetData.getString("wellness_task2_id", "") ?: "",
-                            checked = widgetData.getBoolean("wellness_task2_checked", false)
+                            text = today.getString("wellness_task2_text", "") ?: "",
+                            taskId = today.getString("wellness_task2_id", "") ?: "",
+                            checked = today.getBoolean("wellness_task2_checked", false)
                         )
                     }
 
@@ -92,6 +95,16 @@ class AIWellnessWidget : HomeWidgetProvider() {
                 setOnClickPendingIntent(R.id.wellness_focus_label, launchPendingIntent)
                 setOnClickPendingIntent(R.id.placeholder_message, launchPendingIntent)
             }
+            // Per-widget light/dark theme (follows the phone until toggled).
+            val dark = WidgetTheme.override(widgetData, "plan")
+            WidgetTheme.background(views, R.id.widget_root, dark,
+                R.drawable.bg_todays_plan_light, R.drawable.bg_todays_plan_dark)
+            for (chip in intArrayOf(R.id.placeholder_message, R.id.w_row1, R.id.w_row2)) {
+                WidgetTheme.background(views, chip, dark,
+                    R.drawable.widget_chip_light, R.drawable.widget_chip_dark)
+            }
+            WidgetTheme.text(views, dark, R.id.placeholder_message, R.id.w_row1_text, R.id.w_row2_text, R.id.w_progress_label)
+            WidgetTheme.bindToggle(context, views, "plan", dark)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

@@ -5,11 +5,11 @@
     android:layout_height="match_parent"
     android:background="@drawable/bg_todays_habits"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="12dp">
 
     <!-- Header: icon + title (no chip) -->
     <LinearLayout
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -24,7 +24,8 @@
 
         <TextView
             android:id="@+id/h_title"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"
             android:text="Today's Habits"
             android:textColor="@color/widget_primary"
@@ -32,6 +33,14 @@
             android:textStyle="bold"
             android:maxLines="1"
             android:ellipsize="end" />
+        <!-- Per-widget light/dark toggle (see WidgetTheme.kt). -->
+        <ImageView
+            android:id="@+id/theme_toggle"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:padding="4dp"
+            android:contentDescription="Switch light or dark theme"
+            android:src="@drawable/ic_widget_theme" />
     </LinearLayout>
 
     <!-- Empty state chip -->
@@ -39,7 +48,7 @@
         android:id="@+id/h_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:background="@drawable/widget_chip"
         android:paddingHorizontal="12dp"
         android:paddingVertical="10dp"
@@ -53,12 +62,12 @@
         android:id="@+id/h_row1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:background="@drawable/widget_chip"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
-        android:paddingVertical="8dp"
+        android:paddingVertical="6dp"
         android:visibility="gone">
         <TextView
             android:id="@+id/h_row1_check"
@@ -67,7 +76,7 @@
             android:paddingEnd="10dp"
             android:text="☐"
             android:textColor="@color/widget_primary"
-            android:textSize="20sp" />
+            android:textSize="18sp" />
         <TextView
             android:id="@+id/h_row1_emoji"
             android:layout_width="wrap_content"
@@ -91,12 +100,12 @@
         android:id="@+id/h_row2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="4dp"
         android:background="@drawable/widget_chip"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
-        android:paddingVertical="8dp"
+        android:paddingVertical="6dp"
         android:visibility="gone">
         <TextView
             android:id="@+id/h_row2_check"
@@ -105,7 +114,7 @@
             android:paddingEnd="10dp"
             android:text="☐"
             android:textColor="@color/widget_primary"
-            android:textSize="20sp" />
+            android:textSize="18sp" />
         <TextView
             android:id="@+id/h_row2_emoji"
             android:layout_width="wrap_content"
@@ -129,7 +138,7 @@
         android:id="@+id/h_progress_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:orientation="vertical"
         android:visibility="gone">
         <TextView

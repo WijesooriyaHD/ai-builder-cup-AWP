@@ -22,6 +22,7 @@ class MindfulTravelToolWidget : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        MidnightWidgetRefresh.schedule(context)
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.tool_widget).apply {
                 setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_mindful_travel)
@@ -35,6 +36,12 @@ class MindfulTravelToolWidget : HomeWidgetProvider() {
                 )
                 setOnClickPendingIntent(R.id.tool_root, launchPendingIntent)
             }
+            // Per-widget light/dark theme (follows the phone until toggled).
+            val dark = WidgetTheme.override(widgetData, "tool_mindful_travel")
+            WidgetTheme.background(views, R.id.tool_root, dark,
+                R.drawable.tool_bg_mindful_travel_light, R.drawable.tool_bg_mindful_travel_dark)
+            WidgetTheme.text(views, dark, R.id.tool_label)
+            WidgetTheme.bindToggle(context, views, "tool_mindful_travel", dark)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

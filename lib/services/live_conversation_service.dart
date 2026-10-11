@@ -249,6 +249,19 @@ class LiveConversationService extends ChangeNotifier {
   }
   // Ensures the soft "thinking" cue plays at most once per user turn.
   bool _thinkingCuePlayed = false;
+  // Android only: set when the user taps Interrupt mid-reply. The server is
+  // not told about a button tap, so it keeps streaming the rest of that reply;
+  // without this, the next chunk re-flags the pal as speaking, re-gates the mic
+  // and plays on. Remaining model output is dropped until the turn ends. The
+  // timer is a safety net so a lost turnComplete can't swallow later replies.
+  bool _discardInterruptedTurn = false;
+  Timer? _discardInterruptedTurnTimer;
+
+  void _clearDiscardInterruptedTurn() {
+    _discardInterruptedTurn = false;
+    _discardInterruptedTurnTimer?.cancel();
+    _discardInterruptedTurnTimer = null;
+  }
   // Timestamp of the model's most recent audio, used to add a short tail before
   // the mic resumes so the speaker's trailing audio doesn't leak in.
   DateTime _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -1376,6 +1389,9 @@ class LiveConversationService extends ChangeNotifier {
       if (message is LiveServerContent) {
         // Model asked to interrupt (user barged in) — stop current playback.
         if (message.interrupted == true) {
+          // The server cancelled the generation itself, so nothing more of
+          // a button-interrupted reply will arrive.
+          _clearDiscardInterruptedTurn();
           // Server VAD said the user is talking over the pal. Trust that only
           // when there is independent evidence the user actually spoke: either
           // a transcribed user turn arrived very recently, or user text is
@@ -1405,6 +1421,20 @@ class LiveConversationService extends ChangeNotifier {
             unawaited(audio.resumeCapture());
           } else {
             _scheduleMicResume();
+          }
+          return;
+        }
+        // Rest of a reply the user stopped with the Interrupt button: drop
+        // the pal's audio and captions, but keep the user's own captions.
+        if (_discardInterruptedTurn) {
+          final inT = message.inputTranscription?.text;
+          if (inT != null && inT.trim().isNotEmpty) {
+            _appendTranscript(LiveSpeaker.user, inT);
+            _armIdleCheckIn(newSilencePeriod: true);
+          }
+          if (message.turnComplete == true) {
+            _clearDiscardInterruptedTurn();
+            _flushTranscriptBuffers();
           }
           return;
         }
@@ -1538,6 +1568,19 @@ class LiveConversationService extends ChangeNotifier {
   /// the model may still also emit an `interrupted` server signal which we
   /// honor in [_onServerResponse].
   Future<void> interrupt() async {
+    // `_modelSpeaking` is cleared on turnComplete, so true here means the
+    // server is still streaming this reply (see [_discardInterruptedTurn]).
+    // Not during the goodbye / idle check-in: those flows need to see the
+    // reply's turnComplete to finish.
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        _modelSpeaking &&
+        !_endPending &&
+        !_awaitingIdleResponse) {
+      _discardInterruptedTurn = true;
+      _discardInterruptedTurnTimer?.cancel();
+      _discardInterruptedTurnTimer =
+          Timer(const Duration(seconds: 8), _clearDiscardInterruptedTurn);
+    }
     // User is taking over: stop playback and re-open the mic immediately.
     _setModelSpeaking(false);
     _lastModelAudioAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -1550,6 +1593,7 @@ class LiveConversationService extends ChangeNotifier {
     if (_state == LiveConversationState.idle) return;
     // Setting closing first makes the receive loop exit cleanly.
     _setState(LiveConversationState.closing);
+    _clearDiscardInterruptedTurn();
     _stopMicWatchdog();
     _stopIdleCheckIn();
     _cancelSpeakingRefresh();

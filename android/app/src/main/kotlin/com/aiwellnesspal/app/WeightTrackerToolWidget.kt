@@ -21,6 +21,7 @@ class WeightTrackerToolWidget : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        MidnightWidgetRefresh.schedule(context)
         for (appWidgetId in appWidgetIds) {
             val flipped = widgetData.getBoolean("flipped_tool_weight_tracker", false)
             val hasData = widgetData.getBoolean("weight_has_data", false)
@@ -28,11 +29,19 @@ class WeightTrackerToolWidget : HomeWidgetProvider() {
             val unit = widgetData.getString("weight_unit", "kg") ?: "kg"
             val change = widgetData.getString("weight_change", "") ?: ""
 
-            val views = if (flipped && hasData && current.isNotEmpty()) {
+            val hasLiveData = hasData && current.isNotEmpty()
+            // Flipped always shows the data face (an empty state until there's
+            // data), so the flip button visibly responds — as on iOS.
+            val showingData = flipped
+            val views = if (showingData) {
                 RemoteViews(context.packageName, R.layout.tool_data_widget).apply {
-                    setTextViewText(R.id.data_value, "$current $unit")
-                    setTextViewText(R.id.data_title, "Current weight")
-                    setTextViewText(R.id.data_subtitle, if (change.isEmpty()) "" else "$change $unit")
+                    if (hasLiveData) {
+                        setTextViewText(R.id.data_value, "$current $unit")
+                        setTextViewText(R.id.data_title, "Current weight")
+                        setTextViewText(R.id.data_subtitle, if (change.isEmpty()) "" else "$change $unit")
+                    } else {
+                        WidgetFlip.emptyFace(this, "⚖️")
+                    }
                     setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_weight_tracker)
                     setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
                 }
@@ -44,6 +53,17 @@ class WeightTrackerToolWidget : HomeWidgetProvider() {
                     setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
                 }
             }
+            // Per-widget light/dark theme (follows the phone until toggled).
+            val dark = WidgetTheme.override(widgetData, "tool_weight_tracker")
+            WidgetTheme.background(views, R.id.tool_root, dark,
+                R.drawable.tool_bg_weight_tracker_light, R.drawable.tool_bg_weight_tracker_dark)
+            if (showingData) {
+                WidgetTheme.text(views, dark, R.id.data_value, R.id.data_title, R.id.data_subtitle)
+            } else {
+                WidgetTheme.text(views, dark, R.id.tool_label)
+            }
+            WidgetTheme.bindToggle(context, views, "tool_weight_tracker", dark)
+            WidgetFlip.bindTool(context, views, "tool_weight_tracker", "WeightTrackerToolWidget", dark)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

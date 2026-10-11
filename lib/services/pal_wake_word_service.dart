@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
@@ -30,10 +31,19 @@ class PalWakeWordService extends ChangeNotifier {
   /// leading-word set is generous and the standalone "pal/pals/paul" family is
   /// also accepted. Matching runs on a normalised (lowercased, punctuation-
   /// stripped, whitespace-collapsed) copy of the transcript — see [_normalize].
+  ///
+  /// After a real greeting ("hey", "hi", "ok"…) Android in particular spells
+  /// "pal" many ways — "pall", "pail", "bail", "paul", "bal", "pool" — so any
+  /// short p/b word ending in "l" is accepted there. Vowel "i" is left out so
+  /// "hey Bill" / "hi Phil" don't trigger. "a"/"the" only pair with the narrow
+  /// set, otherwise everyday phrases like "the pool" or "a ball" would fire.
+  /// "paypal"/"heypal" are how the recognizer writes "hey pal" run together.
   static final RegExp _wakePattern = RegExp(
-    r'\b(?:hey|hay|heya|ok(?:ay)?|hi|hello|yo|a|the)\s+'
-    r'(?:pal|pals|palo|pao|pow|powl|pah|paul|paw|pao|val|bao)\b'
-    r'|\b(?:pal|pals|paul|powl)\b',
+    r'\b(?:hey|hay|heya|hei|ok(?:ay)?|hi|hello|yo)\s+'
+    r'(?:[pb](?:a|aa|ai|au|aw|e|ee|o|oo|ou|ow|u)ll?'
+    r'|pals|palo|pao|pow|pah|paw|val|bao)\b'
+    r'|\b(?:a|the)\s+(?:pal|pals|pao|paul)\b'
+    r'|\b(?:pal|pals|pall|paul|powl|paypal|heypal|haypal)\b',
     caseSensitive: false,
   );
 
@@ -68,6 +78,14 @@ class PalWakeWordService extends ChangeNotifier {
   // simply-quiet room is never mistaken for a wedged session and needlessly
   // recycled (recycling introduces a warm-up gap where a "Hey Pal" is missed).
   static const Duration _stallTimeout = Duration(seconds: 30);
+
+  // Android's SpeechRecognizer service needs a beat to free itself after a
+  // session ends or errors. Re-calling listen() too soon gets error_busy, and
+  // retrying every 120ms on that error loops forever. These track a backoff
+  // that both the error handler and the watchdog respect.
+  static bool get _isAndroid => defaultTargetPlatform == TargetPlatform.android;
+  int _consecutiveErrors = 0;
+  DateTime _retryNotBefore = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// True while the recognizer is actively listening for the wake phrase.
   bool get isListening => _running;
@@ -167,12 +185,7 @@ class PalWakeWordService extends ChangeNotifier {
     try {
       _initialized = await _speech.initialize(
         onStatus: _onStatus,
-        onError: (error) {
-          if (kDebugMode) {
-            debugPrint('PalWakeWordService: STT error — $error');
-          }
-          _scheduleRestart();
-        },
+        onError: _onError,
         debugLogging: false,
       );
     } catch (e) {
@@ -182,6 +195,37 @@ class PalWakeWordService extends ChangeNotifier {
       if (!_initialized) _initFuture = null;
     }
     return _initialized;
+  }
+
+  void _onError(SpeechRecognitionError error) {
+    final msg = error.errorMsg;
+    // A quiet room ends Android sessions with no_match / speech_timeout every
+    // few seconds. That's normal: restart promptly, but not so fast that the
+    // next listen() lands while the service is still releasing (error_busy).
+    final benign = msg == 'error_no_match' || msg == 'error_speech_timeout';
+    final Duration backoff;
+    if (benign) {
+      backoff = Duration(milliseconds: _isAndroid ? 400 : 120);
+    } else {
+      // Real errors (busy, client, network…): exponential backoff, 0.5s → 8s.
+      _consecutiveErrors++;
+      final ms = 500 * (1 << (_consecutiveErrors - 1).clamp(0, 4));
+      backoff = Duration(milliseconds: ms);
+    }
+    _retryNotBefore = DateTime.now().add(backoff);
+    if (kDebugMode &&
+        (!benign &&
+            (_consecutiveErrors <= 3 || _consecutiveErrors % 10 == 0))) {
+      debugPrint('PalWakeWordService: STT error — $msg '
+          '(#$_consecutiveErrors, retrying in ${backoff.inMilliseconds}ms)');
+    }
+    // A restart may already be queued by the status callback or watchdog with
+    // the short delay; replace it so the backoff actually applies.
+    if (_restartScheduled) {
+      _restartTimer?.cancel();
+      _restartScheduled = false;
+    }
+    _scheduleRestart();
   }
 
   void _onStatus(String status) {
@@ -213,7 +257,11 @@ class PalWakeWordService extends ChangeNotifier {
           // Prefer on-device recognition when available: lower latency, no
           // network dependency, and it doesn't get throttled/ended by the
           // server the way cloud dictation can.
-          onDevice: true,
+          // Not on Android: there it selects the on-device recognizer or
+          // EXTRA_PREFER_OFFLINE, which errors on every session when the
+          // phone lacks the offline language pack, so the wake word never
+          // fires. Android's default recognizer is the reliable path.
+          onDevice: defaultTargetPlatform != TargetPlatform.android,
           autoPunctuation: false,
           // Keep ONE session alive as long as iOS allows and DON'T end it on
           // silence: pauseFor == listenFor so a quiet room never ends the
@@ -238,8 +286,12 @@ class PalWakeWordService extends ChangeNotifier {
     // consecutive wake sessions on one recognizer (it reuses its own input
     // node), NOT the wake→Live handoff, so it can be short. A long gap here is
     // exactly what made users repeat "Hey Pal": a spoken phrase landing in the
-    // dead window between sessions was never heard. Keep it minimal.
-    _restartTimer = Timer(const Duration(milliseconds: 120), () async {
+    // dead window between sessions was never heard. Keep it minimal — except
+    // that Android needs a little longer, and any error backoff wins.
+    var delay = Duration(milliseconds: _isAndroid ? 300 : 120);
+    final untilAllowed = _retryNotBefore.difference(DateTime.now());
+    if (untilAllowed > delay) delay = untilAllowed;
+    _restartTimer = Timer(delay, () async {
       _restartScheduled = false;
       if (!_running || _tearingDown) return;
       await _beginSession();
@@ -272,9 +324,28 @@ class PalWakeWordService extends ChangeNotifier {
     if (!_running || _tearingDown || _wakeFired) return;
     // Any result (even a non-matching partial) proves the session is alive.
     _lastActivityAt = DateTime.now();
-    final text = _normalize(result.recognizedWords);
-    if (text.isEmpty) return;
-    if (!_wakePattern.hasMatch(text)) return;
+    _consecutiveErrors = 0;
+    // Check every alternate transcript, not just the top guess: Android returns
+    // up to 10, and "hey pal" is often the 2nd or 3rd when the 1st is "paypal"
+    // or "hey bail".
+    final top = _normalize(result.recognizedWords);
+    final candidates = <String>[
+      top,
+      for (final alt in result.alternates) _normalize(alt.recognizedWords),
+    ].where((t) => t.isNotEmpty);
+    if (candidates.isEmpty) return;
+    final text = candidates.firstWhere(_wakePattern.hasMatch, orElse: () => '');
+    if (text.isEmpty) {
+      // Debug builds only: shows what the recognizer actually heard, so a
+      // missed "Hey Pal" can be traced to a mishearing the pattern lacks.
+      if (kDebugMode) {
+        final alts =
+            candidates.where((t) => t != top).toSet().take(3).join('" / "');
+        debugPrint('PalWakeWordService: heard "$top" (no wake match)'
+            '${alts.isEmpty ? '' : ' — alternates: "$alts"'}');
+      }
+      return;
+    }
 
     final now = DateTime.now();
     if (now.difference(_lastWakeAt) < const Duration(milliseconds: 1200)) {

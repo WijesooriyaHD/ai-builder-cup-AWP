@@ -21,19 +21,29 @@ class PeriodTrackerToolWidget : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        MidnightWidgetRefresh.schedule(context)
+        // Saved data adjusted for today (rolls over at midnight; see WidgetDay).
+        val today = WidgetDay.period(widgetData)
         for (appWidgetId in appWidgetIds) {
-            val flipped = widgetData.getBoolean("flipped_tool_period_tracker", false)
-            val hasData = widgetData.getBoolean("period_has_data", false)
-            val phase = widgetData.getString("period_phase", "") ?: ""
-            val emoji = widgetData.getString("period_emoji", "🌸") ?: "🌸"
-            val day = widgetData.getInt("period_cycle_day", 0)
-            val daysUntil = widgetData.getInt("period_days_until_next", -999)
+            val flipped = today.getBoolean("flipped_tool_period_tracker", false)
+            val hasData = today.getBoolean("period_has_data", false)
+            val phase = today.getString("period_phase", "") ?: ""
+            val emoji = today.getString("period_emoji", "🌸") ?: "🌸"
+            val day = today.getInt("period_cycle_day", 0)
+            val daysUntil = today.getInt("period_days_until_next", -999)
 
-            val views = if (flipped && hasData) {
+            // Flipped always shows the data face (an empty state until there's
+            // data), so the flip button visibly responds — as on iOS.
+            val showingData = flipped
+            val views = if (showingData) {
                 RemoteViews(context.packageName, R.layout.tool_data_widget).apply {
-                    setTextViewText(R.id.data_value, emoji)
-                    setTextViewText(R.id.data_title, "$phase · Day $day")
-                    setTextViewText(R.id.data_subtitle, nextText(daysUntil))
+                    if (hasData) {
+                        setTextViewText(R.id.data_value, emoji)
+                        setTextViewText(R.id.data_title, "$phase · Day $day")
+                        setTextViewText(R.id.data_subtitle, nextText(daysUntil))
+                    } else {
+                        WidgetFlip.emptyFace(this, "🌸")
+                    }
                     setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_period_tracker)
                     setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
                 }
@@ -45,6 +55,17 @@ class PeriodTrackerToolWidget : HomeWidgetProvider() {
                     setOnClickPendingIntent(R.id.tool_root, launchIntent(context))
                 }
             }
+            // Per-widget light/dark theme (follows the phone until toggled).
+            val dark = WidgetTheme.override(widgetData, "tool_period_tracker")
+            WidgetTheme.background(views, R.id.tool_root, dark,
+                R.drawable.tool_bg_period_tracker_light, R.drawable.tool_bg_period_tracker_dark)
+            if (showingData) {
+                WidgetTheme.text(views, dark, R.id.data_value, R.id.data_title, R.id.data_subtitle)
+            } else {
+                WidgetTheme.text(views, dark, R.id.tool_label)
+            }
+            WidgetTheme.bindToggle(context, views, "tool_period_tracker", dark)
+            WidgetFlip.bindTool(context, views, "tool_period_tracker", "PeriodTrackerToolWidget", dark)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

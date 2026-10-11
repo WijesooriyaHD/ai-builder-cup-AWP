@@ -110,6 +110,8 @@ class CalorieBudgetState extends ChangeNotifier {
     try {
       await HomeWidget.setAppGroupId('group.com.aiwellnesspal.app');
       final s = summary;
+      // Day stamp so the widget can reset eaten/burned after midnight.
+      await HomeWidget.saveWidgetData<String>('calorie_date', DateTime.now().toIso8601String().substring(0, 10));
       await HomeWidget.saveWidgetData<int>('calorie_budget', s.dailyBudget);
       await HomeWidget.saveWidgetData<int>('calorie_consumed', s.consumed);
       await HomeWidget.saveWidgetData<int>('calorie_burned', s.burned);

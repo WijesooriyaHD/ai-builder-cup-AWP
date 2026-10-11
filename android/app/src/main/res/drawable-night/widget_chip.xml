@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Night variant of the widget line "chip". widget_text turns white in dark
+     mode, so the chip must turn dark too — the light (white) chip left the
+     text white-on-white and invisible. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#D91E252E" />
+    <corners android:radius="12dp" />
+</shape>

@@ -49,16 +49,17 @@ struct HabitTimelineProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<HabitEntry>) -> Void) {
-        let entry = loadEntry()
+        // Now + next midnight, so ticks clear and the new day's habits show on time.
+        let entries = WidgetDay.timelineDates().map { loadEntry(at: $0) }
         let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
+        completion(Timeline(entries: entries, policy: .after(nextRefresh)))
     }
 
-    private func loadEntry() -> HabitEntry {
-        guard let d = sharedDefaults else { return emptyEntry() }
+    private func loadEntry(at date: Date = Date()) -> HabitEntry {
+        guard let d = WidgetDay.habits(at: date) else { return emptyEntry(date) }
         let hasHabits = d.bool(forKey: "habit_has_habits")
         if !hasHabits {
-            return emptyEntry()
+            return emptyEntry(date)
         }
         // Read exactly two fixed slots, mirroring the Wellness Intention
         // widget. This never depends on `habit_count`, so a stale/old value
@@ -76,7 +77,7 @@ struct HabitTimelineProvider: TimelineProvider {
         let completed = d.integer(forKey: "habit_completed")
         let allDone = d.bool(forKey: "habit_all_done")
         return HabitEntry(
-            date: Date(),
+            date: date,
             rows: rows,
             completed: completed,
             total: total,
@@ -86,9 +87,9 @@ struct HabitTimelineProvider: TimelineProvider {
         )
     }
 
-    private func emptyEntry() -> HabitEntry {
+    private func emptyEntry(_ date: Date = Date()) -> HabitEntry {
         HabitEntry(
-            date: Date(), rows: [], completed: 0, total: 0, progress: 0,
+            date: date, rows: [], completed: 0, total: 0, progress: 0,
             hasHabits: false, allDone: false)
     }
 }

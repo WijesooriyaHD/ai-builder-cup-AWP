@@ -22,6 +22,7 @@ class MeditationToolWidget : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        MidnightWidgetRefresh.schedule(context)
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.tool_widget).apply {
                 setInt(R.id.tool_root, "setBackgroundResource", R.drawable.tool_bg_meditation)
@@ -35,6 +36,12 @@ class MeditationToolWidget : HomeWidgetProvider() {
                 )
                 setOnClickPendingIntent(R.id.tool_root, launchPendingIntent)
             }
+            // Per-widget light/dark theme (follows the phone until toggled).
+            val dark = WidgetTheme.override(widgetData, "tool_meditation")
+            WidgetTheme.background(views, R.id.tool_root, dark,
+                R.drawable.tool_bg_meditation_light, R.drawable.tool_bg_meditation_dark)
+            WidgetTheme.text(views, dark, R.id.tool_label)
+            WidgetTheme.bindToggle(context, views, "tool_meditation", dark)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

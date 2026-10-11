@@ -60,7 +60,8 @@
             android:name="flutterEmbedding"
             android:value="2" />
         
-        <receiver android:name=".IntentionWidget" android:exported="true">
+        <receiver android:name=".IntentionWidget" android:exported="true"
+            android:label="@string/intention_widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -68,7 +69,8 @@
                 android:resource="@xml/intention_widget_info" />
         </receiver>
 
-        <receiver android:name=".AIWellnessWidget" android:exported="true">
+        <receiver android:name=".AIWellnessWidget" android:exported="true"
+            android:label="@string/ai_wellness_widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -76,7 +78,8 @@
                 android:resource="@xml/ai_wellness_widget_info" />
         </receiver>
 
-        <receiver android:name=".HabitWidget" android:exported="true">
+        <receiver android:name=".HabitWidget" android:exported="true"
+            android:label="@string/habit_widget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -85,68 +88,89 @@
         </receiver>
 
         <!-- Life-toolkit shortcut widgets (square, tap to open the tool). -->
-        <receiver android:name=".NutritionToolWidget" android:exported="true">
+        <receiver android:name=".NutritionToolWidget" android:exported="true"
+            android:label="@string/tool_widget_nutrition_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/nutrition_tool_widget_info" />
         </receiver>
-        <receiver android:name=".MealPlannerToolWidget" android:exported="true">
+        <receiver android:name=".MealPlannerToolWidget" android:exported="true"
+            android:label="@string/tool_widget_meal_planner_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/meal_planner_tool_widget_info" />
         </receiver>
-        <receiver android:name=".CalorieBudgetToolWidget" android:exported="true">
+        <receiver android:name=".CalorieBudgetToolWidget" android:exported="true"
+            android:label="@string/tool_widget_calorie_budget_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/calorie_budget_tool_widget_info" />
         </receiver>
-        <receiver android:name=".HydrationToolWidget" android:exported="true">
+        <receiver android:name=".HydrationToolWidget" android:exported="true"
+            android:label="@string/tool_widget_hydration_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/hydration_tool_widget_info" />
         </receiver>
-        <receiver android:name=".SleepToolWidget" android:exported="true">
+        <receiver android:name=".SleepToolWidget" android:exported="true"
+            android:label="@string/tool_widget_sleep_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/sleep_tool_widget_info" />
         </receiver>
-        <receiver android:name=".MeditationToolWidget" android:exported="true">
+        <receiver android:name=".MeditationToolWidget" android:exported="true"
+            android:label="@string/tool_widget_meditation_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/meditation_tool_widget_info" />
         </receiver>
-        <receiver android:name=".PeriodTrackerToolWidget" android:exported="true">
+        <receiver android:name=".PeriodTrackerToolWidget" android:exported="true"
+            android:label="@string/tool_widget_period_tracker_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/period_tracker_tool_widget_info" />
         </receiver>
-        <receiver android:name=".WeightTrackerToolWidget" android:exported="true">
+        <receiver android:name=".WeightTrackerToolWidget" android:exported="true"
+            android:label="@string/tool_widget_weight_tracker_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/weight_tracker_tool_widget_info" />
         </receiver>
-        <receiver android:name=".MindfulTravelToolWidget" android:exported="true">
+        <receiver android:name=".MindfulTravelToolWidget" android:exported="true"
+            android:label="@string/tool_widget_mindful_travel_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider"
                 android:resource="@xml/mindful_travel_tool_widget_info" />
+        </receiver>
+
+        <!-- Re-renders widgets just after midnight and on clock/timezone
+             changes, boot and app updates (see MidnightWidgetRefresh.kt). -->
+        <receiver android:name=".MidnightWidgetRefresh" android:exported="false">
+            <intent-filter>
+                <action android:name="com.aiwellnesspal.app.WIDGET_MIDNIGHT" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
         </receiver>
 
         <!-- flutter_local_notifications scheduling receivers.
@@ -188,6 +212,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets habit / Today's Plan reminders fire at the exact time chosen
+         (Android 12+; the user can grant it under "Alarms & reminders").
+         Without it reminders fall back to inexact timing and can arrive late.
+         USE_EXACT_ALARM is deliberately not used: Play restricts it to alarm
+         and calendar apps. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- Lets flutter_local_notifications reschedule pending reminders after a
          reboot. Without it every scheduled notification is dropped on restart. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />

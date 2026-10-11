@@ -1133,8 +1133,12 @@ class _VoiceAssistantSheetState extends State<VoiceAssistantSheet>
       case LiveConversationState.active:
         // Only shown until the first words arrive; once the pal replies the
         // real captions take over.
-        return isPalSpeaking
-            ? 'Your pal is speaking…'
+        if (isPalSpeaking) return 'Your pal is speaking…';
+        // Android has no hardware echo cancellation, so the mic is muted
+        // while the pal talks and voice barge-in isn't possible there.
+        return defaultTargetPlatform == TargetPlatform.android
+            ? 'Listening… just start talking. Tap Interrupt to jump in '
+                'while your pal is speaking.'
             : 'Listening… just start talking. You can talk over your pal '
                 'any time.';
       default:

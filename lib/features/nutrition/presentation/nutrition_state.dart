@@ -73,6 +73,8 @@ class NutritionState extends ChangeNotifier {
       final pct = _goals.calories <= 0
           ? 0
           : ((t.calories / _goals.calories) * 100).round().clamp(0, 100);
+      // Day stamp so the widget can reset today's totals after midnight.
+      await HomeWidget.saveWidgetData<String>('nutrition_date', DateTime.now().toIso8601String().substring(0, 10));
       await HomeWidget.saveWidgetData<int>('nutrition_calories', t.calories);
       await HomeWidget.saveWidgetData<int>(
           'nutrition_calorie_goal', _goals.calories);

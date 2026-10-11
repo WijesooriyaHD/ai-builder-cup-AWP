@@ -13,5 +13,5 @@
     android:initialLayout="@layout/tool_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:previewLayout="@layout/tool_widget"
+    android:previewImage="@drawable/widget_preview_meal_planner"
     android:description="@string/tool_widget_meal_planner_description" />

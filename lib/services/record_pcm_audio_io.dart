@@ -33,10 +33,29 @@ class RecordPcmAudioIO implements LiveAudioIO {
 
   // Playback-progress tracking so the service can tell when audio is still
   // audibly playing even if no new chunk has arrived recently (playback lags
-  // receive). We accumulate the total audio *duration* fed to the player and
-  // mark when playback started; `playbackRemaining` = fed - elapsed.
-  Duration _fedAudio = Duration.zero;
-  DateTime? _playbackStartedAt;
+  // receive). Each fed chunk pushes `_playbackEndsAt` forward by its duration,
+  // starting from "now" whenever the player had already drained. Measuring
+  // from a single start time instead would count the silence between replies
+  // as played audio, so from the second reply on `playbackRemaining` hit zero
+  // mid-sentence: the UI said "Listening" and the half-duplex gate reopened
+  // the mic, letting the pal hear (and answer) its own voice.
+  DateTime? _playbackEndsAt;
+
+  // Rough Android AudioTrack output latency: audio fed from idle is heard a
+  // little after it is written, so start the clock slightly in the future.
+  static const Duration _outputLatency = Duration(milliseconds: 150);
+
+  void _advancePlaybackClock(int byteLength) {
+    // 24 kHz mono PCM16 → 2 bytes/sample.
+    final chunk = Duration(
+        microseconds: (byteLength / (_outputSampleRate * 2) * 1e6).round());
+    final now = DateTime.now();
+    final endsAt = _playbackEndsAt;
+    final base = endsAt != null && endsAt.isAfter(now)
+        ? endsAt
+        : now.add(_outputLatency);
+    _playbackEndsAt = base.add(chunk);
+  }
 
   @override
   Future<bool> requestPermission() async {
@@ -157,15 +176,8 @@ class RecordPcmAudioIO implements LiveAudioIO {
       if (!_playbackStarted) {
         pcm.FlutterPcmSound.start();
         _playbackStarted = true;
-        _playbackStartedAt = DateTime.now();
-        _fedAudio = Duration.zero;
       }
-      // Track how much audio time we've fed so `playbackRemaining` can report
-      // whether the player is still speaking. 24 kHz mono PCM16 → 2 bytes/
-      // sample, so seconds = bytes / (sampleRate * 2).
-      final micros =
-          (bytes.lengthInBytes / (_outputSampleRate * 2) * 1e6).round();
-      _fedAudio += Duration(microseconds: micros);
+      _advancePlaybackClock(bytes.lengthInBytes);
     } catch (e) {
       debugPrint('RecordPcmAudioIO: playChunk failed: $e');
     }
@@ -173,10 +185,9 @@ class RecordPcmAudioIO implements LiveAudioIO {
 
   @override
   Duration get playbackRemaining {
-    final startedAt = _playbackStartedAt;
-    if (!_playbackStarted || startedAt == null) return Duration.zero;
-    final elapsed = DateTime.now().difference(startedAt);
-    final remaining = _fedAudio - elapsed;
+    final endsAt = _playbackEndsAt;
+    if (!_playbackStarted || endsAt == null) return Duration.zero;
+    final remaining = endsAt.difference(DateTime.now());
     return remaining > Duration.zero ? remaining : Duration.zero;
   }
 
@@ -191,11 +202,14 @@ class RecordPcmAudioIO implements LiveAudioIO {
       // Feed a short, soft two-note "thinking" blip through the same engine
       // that plays the model's voice — so it shares the audio session and
       // speaker routing (no separate player, no session conflict).
-      await pcm.FlutterPcmSound.feed(pcm.PcmArrayInt16(bytes: _thinkingTone()));
+      final tone = _thinkingTone();
+      await pcm.FlutterPcmSound.feed(pcm.PcmArrayInt16(bytes: tone));
       if (!_playbackStarted) {
         pcm.FlutterPcmSound.start();
         _playbackStarted = true;
       }
+      // The cue is audible too, so the mic gate must wait for it.
+      _advancePlaybackClock(tone.lengthInBytes);
     } catch (e) {
       debugPrint('RecordPcmAudioIO: playThinkingCue failed: $e');
     } finally {
@@ -248,8 +262,7 @@ class RecordPcmAudioIO implements LiveAudioIO {
         await pcm.FlutterPcmSound.release();
         _playbackReady = false;
         _playbackStarted = false;
-        _playbackStartedAt = null;
-        _fedAudio = Duration.zero;
+        _playbackEndsAt = null;
       }
     } catch (e) {
       debugPrint('RecordPcmAudioIO: stopPlayback failed: $e');

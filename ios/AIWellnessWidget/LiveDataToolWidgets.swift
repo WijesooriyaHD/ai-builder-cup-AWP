@@ -188,12 +188,15 @@ struct NutritionProvider: TimelineProvider {
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<NutritionEntry>) -> Void) {
         let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        completion(Timeline(entries: [load()], policy: .after(next)))
+        // Now + next midnight, so the new day's values show on time.
+        let entries = WidgetDay.timelineDates().map { load(at: $0) }
+        completion(Timeline(entries: entries, policy: .after(next)))
     }
 
-    private func load(flippedOverride: Bool? = nil) -> NutritionEntry {
-        NutritionEntry(
-            date: Date(),
+    private func load(at date: Date = Date(), flippedOverride: Bool? = nil) -> NutritionEntry {
+        let d = WidgetDay.nutrition(at: date)
+        return NutritionEntry(
+            date: date,
             calories: d?.integer(forKey: "nutrition_calories") ?? 0,
             goal: d?.integer(forKey: "nutrition_calorie_goal") ?? 0,
             pct: d?.integer(forKey: "nutrition_pct") ?? 0,
@@ -457,12 +460,15 @@ struct CalorieProvider: TimelineProvider {
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalorieEntry>) -> Void) {
         let next = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        completion(Timeline(entries: [load()], policy: .after(next)))
+        // Now + next midnight, so the new day's values show on time.
+        let entries = WidgetDay.timelineDates().map { load(at: $0) }
+        completion(Timeline(entries: entries, policy: .after(next)))
     }
 
-    private func load(flippedOverride: Bool? = nil) -> CalorieEntry {
-        CalorieEntry(
-            date: Date(),
+    private func load(at date: Date = Date(), flippedOverride: Bool? = nil) -> CalorieEntry {
+        let d = WidgetDay.calorieBudget(at: date)
+        return CalorieEntry(
+            date: date,
             budget: d?.integer(forKey: "calorie_budget") ?? 0,
             consumed: d?.integer(forKey: "calorie_consumed") ?? 0,
             burned: d?.integer(forKey: "calorie_burned") ?? 0,
@@ -562,12 +568,15 @@ struct PeriodProvider: TimelineProvider {
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<PeriodEntry>) -> Void) {
         let next = Calendar.current.date(byAdding: .minute, value: 60, to: Date()) ?? Date()
-        completion(Timeline(entries: [load()], policy: .after(next)))
+        // Now + next midnight, so the new day's values show on time.
+        let entries = WidgetDay.timelineDates().map { load(at: $0) }
+        completion(Timeline(entries: entries, policy: .after(next)))
     }
 
-    private func load(flippedOverride: Bool? = nil) -> PeriodEntry {
-        PeriodEntry(
-            date: Date(),
+    private func load(at date: Date = Date(), flippedOverride: Bool? = nil) -> PeriodEntry {
+        let d = WidgetDay.period(at: date)
+        return PeriodEntry(
+            date: date,
             hasData: d?.bool(forKey: "period_has_data") ?? false,
             phase: d?.string(forKey: "period_phase") ?? "",
             emoji: d?.string(forKey: "period_emoji") ?? "🌸",

@@ -14,6 +14,139 @@ private let kAppGroup = "group.com.aiwellnesspal.app"
 /// helpers below are usable from every widget file in this extension.
 let kWidgetAppGroup = "group.com.aiwellnesspal.app"
 
+// MARK: - Day rollover
+
+/// Swift twin of Android's WidgetDay.kt. The app stamps each date-scoped
+/// snapshot with the day it was written (`<tool>_date`, yyyy-MM-dd); when an
+/// entry is for a later day, these overlay what the app would show that day:
+/// totals reset (hydration, nutrition, calories), period cycle recomputed,
+/// yesterday's plan → placeholder, today's habits unchecked. Snapshots without
+/// a stamp (older app builds) are shown as-is. Each timeline also carries an
+/// entry dated next midnight (see `timelineDates`) so the roll-over happens on
+/// time without the app running.
+struct WidgetDayDefaults {
+    let base: UserDefaults
+    let over: [String: Any]
+    func integer(forKey k: String) -> Int { over.keys.contains(k) ? (over[k] as? Int ?? 0) : base.integer(forKey: k) }
+    func string(forKey k: String) -> String? { over.keys.contains(k) ? over[k] as? String : base.string(forKey: k) }
+    func bool(forKey k: String) -> Bool { over.keys.contains(k) ? (over[k] as? Bool ?? false) : base.bool(forKey: k) }
+}
+
+enum WidgetDay {
+    private static let fmt: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+    private static var defaults: UserDefaults? { UserDefaults(suiteName: kWidgetAppGroup) }
+
+    /// Now, plus the start of tomorrow — one timeline entry for each.
+    static func timelineDates(from now: Date = Date()) -> [Date] {
+        let cal = Calendar.current
+        let midnight = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now)) ?? now
+        return [now, midnight]
+    }
+
+    private static func parse(_ s: String?) -> Date? {
+        guard let s, !s.isEmpty, let d = fmt.date(from: s) else { return nil }
+        return Calendar.current.startOfDay(for: d)
+    }
+
+    private static func isStale(_ d: UserDefaults, _ key: String, at date: Date) -> Bool {
+        guard let stamp = parse(d.string(forKey: key)) else { return false }
+        return stamp < Calendar.current.startOfDay(for: date)
+    }
+
+    private static func view(_ over: (UserDefaults) -> [String: Any]) -> WidgetDayDefaults? {
+        guard let d = defaults else { return nil }
+        return WidgetDayDefaults(base: d, over: over(d))
+    }
+
+    static func hydration(at date: Date) -> WidgetDayDefaults? {
+        view { d in isStale(d, "hydration_date", at: date)
+            ? ["hydration_consumed_ml": 0, "hydration_pct": 0] : [:] }
+    }
+
+    static func nutrition(at date: Date) -> WidgetDayDefaults? {
+        view { d in isStale(d, "nutrition_date", at: date)
+            ? ["nutrition_calories": 0, "nutrition_pct": 0, "nutrition_protein": 0,
+               "nutrition_carbs": 0, "nutrition_fat": 0, "nutrition_meal_count": 0] : [:] }
+    }
+
+    static func calorieBudget(at date: Date) -> WidgetDayDefaults? {
+        view { d in isStale(d, "calorie_date", at: date)
+            ? ["calorie_consumed": 0, "calorie_burned": 0, "calorie_pct": 0,
+               "calorie_remaining": d.integer(forKey: "calorie_budget")] : [:] }
+    }
+
+    static func plan(at date: Date) -> WidgetDayDefaults? {
+        view { d in isStale(d, "wellness_plan_date", at: date) ? ["wellness_placeholder": true] : [:] }
+    }
+
+    /// Period values for [date], mirroring PeriodData's getters exactly.
+    static func period(at date: Date) -> WidgetDayDefaults? {
+        view { d in
+            guard let last = parse(d.string(forKey: "period_last_start")) else { return [:] }
+            let cal = Calendar.current
+            let rawLen = d.integer(forKey: "period_cycle_length")
+            let len = max(1, rawLen > 0 ? rawLen : 28)
+            let rawPeriod = d.integer(forKey: "period_length")
+            let periodLength = rawPeriod > 0 ? rawPeriod : 5
+            let today = cal.startOfDay(for: date)
+            let diff = cal.dateComponents([.day], from: last, to: today).day ?? 0
+            let day = ((diff % len) + len) % len + 1
+            let next = cal.date(byAdding: .day, value: len, to: last) ?? last
+            let daysUntil = cal.dateComponents([.day], from: today, to: next).day ?? 0
+            let ovDay = len - 14
+            let (label, emoji): (String, String)
+            if day <= periodLength { (label, emoji) = ("Menstrual", "🌸") }
+            else if abs(day - ovDay) <= 1 { (label, emoji) = ("Ovulation", "🌼") }
+            else if day < ovDay { (label, emoji) = ("Follicular", "🌱") }
+            else { (label, emoji) = ("Luteal", "🌙") }
+            return ["period_has_data": true, "period_cycle_day": day,
+                    "period_days_until_next": daysUntil, "period_phase": label, "period_emoji": emoji]
+        }
+    }
+
+    /// On a new day: that day's scheduled habits (from `habit_schedule_json`),
+    /// none completed — the same first-two rows the app writes.
+    static func habits(at date: Date) -> WidgetDayDefaults? {
+        view { d in
+            guard isStale(d, "habit_date", at: date),
+                  let json = d.string(forKey: "habit_schedule_json")?.data(using: .utf8),
+                  let list = try? JSONSerialization.jsonObject(with: json) as? [[String: Any]]
+            else { return [:] }
+            // Calendar weekday is Sun=1…Sat=7; the app uses Mon=1…Sun=7.
+            let weekday = (Calendar.current.component(.weekday, from: date) + 5) % 7 + 1
+            let scheduled = list.filter { h in
+                let days = h["days"] as? [Int] ?? []
+                switch h["freq"] as? String {
+                case "daily": return true
+                case "weekdays": return weekday <= 5
+                case "weekends": return weekday >= 6
+                case "custom": return days.contains(weekday)
+                default: return false
+                }
+            }
+            var over: [String: Any] = [
+                "habit_has_habits": !scheduled.isEmpty, "habit_all_done": false,
+                "habit_count": min(2, scheduled.count), "habit_completed": 0,
+                "habit_total": scheduled.count, "habit_progress": 0,
+            ]
+            for i in 0..<2 {
+                let h = i < scheduled.count ? scheduled[i] : nil
+                over["habit_\(i + 1)_id"] = h?["id"] as? String ?? ""
+                over["habit_\(i + 1)_text"] = h?["title"] as? String ?? ""
+                over["habit_\(i + 1)_emoji"] = h?["emoji"] as? String ?? ""
+                over["habit_\(i + 1)_checked"] = false
+            }
+            return over
+        }
+    }
+}
+
 /// Whether a specific widget should render in its dark theme. Each widget owns
 /// its own theme, stored in the shared app group under
 /// `widget_theme_dark_<widgetId>` and flipped independently from Dart's
@@ -237,28 +370,29 @@ struct WellnessTimelineProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WellnessEntry>) -> Void) {
-        let entry = loadEntry()
+        // Now + next midnight, so yesterday's plan clears on time.
+        let entries = WidgetDay.timelineDates().map { loadEntry(at: $0) }
         // Refresh every 30 minutes (matches the Dart-side 30-min cap).
         let nextRefresh = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date()
-        let timeline = Timeline(entries: [entry], policy: .after(nextRefresh))
+        let timeline = Timeline(entries: entries, policy: .after(nextRefresh))
         completion(timeline)
     }
 
-    private func loadEntry() -> WellnessEntry {
-        guard let defaults = sharedDefaults else {
-            return placeholderEntry()
+    private func loadEntry(at date: Date = Date()) -> WellnessEntry {
+        guard let defaults = WidgetDay.plan(at: date) else {
+            return placeholderEntry(date)
         }
 
         let isPlaceholder = defaults.bool(forKey: "wellness_placeholder")
         if isPlaceholder {
-            return placeholderEntry()
+            return placeholderEntry(date)
         }
 
         let planId = defaults.string(forKey: "wellness_plan_id") ?? ""
         let focus = defaults.string(forKey: "wellness_focus") ?? "Today's Focus"
 
         return WellnessEntry(
-            date: Date(),
+            date: date,
             planId: planId,
             focus: focus,
             task1: WellnessTaskRow(
@@ -278,9 +412,9 @@ struct WellnessTimelineProvider: TimelineProvider {
         )
     }
 
-    private func placeholderEntry() -> WellnessEntry {
+    private func placeholderEntry(_ date: Date = Date()) -> WellnessEntry {
         WellnessEntry(
-            date: Date(),
+            date: date,
             planId: "",
             focus: "",
             task1: WellnessTaskRow(text: "", id: "", checked: false),

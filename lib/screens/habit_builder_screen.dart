@@ -630,13 +630,20 @@ class _HabitManageTile extends StatelessWidget {
         : await notifier.requestPermission();
 
     await state.setReminder(habit.id, picked.hour, picked.minute);
+    // Android 12+ may deliver reminders late without "Alarms & reminders" access.
+    final exact = await notifier.canScheduleExactReminders();
 
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(granted
-              ? 'Reminder set for ${habit.title} at ${picked.format(context)}'
-              : 'Reminder saved, but notifications are disabled. Enable them in Settings to be reminded.'),
+          content: Text(!granted
+              ? 'Reminder saved, but notifications are disabled. Enable them in Settings to be reminded.'
+              : exact
+                  ? 'Reminder set for ${habit.title} at ${picked.format(context)}'
+                  : 'Reminder set for ${picked.format(context)}. Allow exact timing so it isn\'t delayed.'),
+          action: granted && !exact
+              ? SnackBarAction(label: 'Allow', onPressed: notifier.requestExactReminders)
+              : null,
         ),
       );
     }

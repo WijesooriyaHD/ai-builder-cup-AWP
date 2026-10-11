@@ -32,6 +32,7 @@ class IntentionWidget : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: android.content.SharedPreferences
     ) {
+        MidnightWidgetRefresh.schedule(context)
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.intention_widget).apply {
                 val hasIntention = widgetData.getBoolean("intention_has_intention", false)
@@ -96,6 +97,16 @@ class IntentionWidget : HomeWidgetProvider() {
                 setOnClickPendingIntent(R.id.widget_title, launchPendingIntent)
                 setOnClickPendingIntent(R.id.widget_empty, launchPendingIntent)
             }
+            // Per-widget light/dark theme (follows the phone until toggled).
+            val dark = WidgetTheme.override(widgetData, "intention")
+            WidgetTheme.background(views, R.id.widget_root, dark,
+                R.drawable.bg_wellness_intention_light, R.drawable.bg_wellness_intention_dark)
+            for (chip in intArrayOf(R.id.widget_empty, R.id.row1, R.id.row2)) {
+                WidgetTheme.background(views, chip, dark,
+                    R.drawable.widget_chip_light, R.drawable.widget_chip_dark)
+            }
+            WidgetTheme.text(views, dark, R.id.widget_empty, R.id.row1_text, R.id.row2_text, R.id.progress_label)
+            WidgetTheme.bindToggle(context, views, "intention", dark)
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }

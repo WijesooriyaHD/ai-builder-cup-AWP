@@ -41,7 +41,6 @@ dependencies:
   google_fonts: ^8.0.0
   confetti: ^0.8.0
   flutter_animate: ^4.5.2
-  mapbox_maps_flutter: ^2.18.0
   flutter_staggered_grid_view: ^0.7.0
   flutter_svg: ^2.2.3
   share_plus: ^12.0.1
@@ -85,7 +84,7 @@ dependencies:
   onesignal_flutter: 5.5.2
 
 # Force a newer objective_c than the transitive 9.2.4 pulled in by
-# path_provider_foundation / mapbox. 9.2.4 fails to load its native dylib
+# path_provider_foundation. 9.2.4 fails to load its native dylib
 # (DOBJC_initializeApi) on recent iOS simulators; 9.5.0 resolves it.
 dependency_overrides:
   objective_c: ^9.5.0

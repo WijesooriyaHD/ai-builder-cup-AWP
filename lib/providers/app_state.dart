@@ -340,6 +340,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           'period_cycle_length', p.effectiveCycleLength);
       await HomeWidget.saveWidgetData<int>(
           'period_days_until_next', p.daysUntilNextPeriod ?? -999);
+      // Inputs the widgets use to recompute cycle day / phase each day
+      // without the app (ports of PeriodData's getters).
+      final last = p.lastPeriodStart;
+      await HomeWidget.saveWidgetData<String>('period_last_start',
+          last == null ? '' : last.toIso8601String().substring(0, 10));
+      await HomeWidget.saveWidgetData<int>('period_length', p.periodLength);
       await HomeWidget.updateWidget(
           name: 'PeriodTrackerToolWidget',
           androidName: 'PeriodTrackerToolWidget');
@@ -1322,7 +1328,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         // even after a fresh install or if SharedPreferences ever drifts.
         final bool current =
             (await HomeWidget.getWidgetData<bool>(key)) ?? false;
-        final bool next = !current;
+        // Android widgets follow the phone's dark mode until first toggled,
+        // which this isolate can't see, so they send the target theme as
+        // `&dark=`. iOS sends no `dark` and keeps the plain flip.
+        final String? target = uri?.queryParameters['dark'];
+        final bool next = target != null ? target == 'true' : !current;
         await HomeWidget.saveWidgetData<bool>(key, next);
         debugPrint('Background Widget Theme Toggle [$wid] -> dark=$next');
         final String kind = _widgetKindForThemeId(wid);
