@@ -1,115 +1,157 @@
 # AI Wellness Pal
 
-A personal wellness companion built with Flutter and Firebase. AI Wellness Pal helps users build sustainable wellness habits through daily check-ins, personalized plans, guided reflections, and interactive wellness activities.
+**Your personal AI wellness companion — talk it through, plan your day and build habits that last.**
 
-## Built during the hackathon
+[![Watch the demo](https://img.shields.io/badge/Demo-YouTube-red?logo=youtube)](https://www.youtube.com/watch?v=PYkPL-Q_1uw)
+[![Website](https://img.shields.io/badge/Website-aiwelnesspal.com-2ea44f)](https://aiwelnesspal.com/)
+[![Download on the App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?logo=apple)](https://apps.apple.com/us/app/ai-wellness-pal/id6816496839)
+[![Get it on Google Play](https://img.shields.io/badge/Google_Play-Download-34A853?logo=googleplay)](https://play.google.com/store/apps/details?id=com.aiwellnesspal.app)
 
-This repository starts from an existing app: the first commit, **"Existing app
-foundation (pre-hackathon)"**, is the app as it stood before the hackathon
-(check-ins, AI daily plans, Studio and Library, journaling, intentions, habit
-builder, life-toolkit tools, themes, subscriptions and two home-screen widgets).
-Everything after it was built during the hackathon, commit by commit:
+| | |
+|---|---|
+| 🎬 **Demo video** | https://www.youtube.com/watch?v=PYkPL-Q_1uw |
+| 🌐 **Website** | https://aiwelnesspal.com/ |
+| 🍎 **App Store (iOS)** | https://apps.apple.com/us/app/ai-wellness-pal/id6816496839 |
+| ▶️ **Google Play (Android)** | https://play.google.com/store/apps/details?id=com.aiwellnesspal.app |
 
-- **Live voice pal (Gemini Live)** — real-time spoken conversations with the
-  wellness pal: streaming audio, on-screen captions, "thinking" cue, graceful
-  goodbyes, selectable AI voices, personalised greetings and conversation memory.
-  Uses a native echo-cancelling audio pipeline on iOS and half-duplex mic gating
-  with an Interrupt control on Android.
-- **"Hey Pal" wake word** — hands-free activation while the app is open, with
-  sound effects and an "Always listen for pal" setting.
-- **The pal can act inside the app** — voice navigation, creating and scheduling
-  habits by voice, adding and removing home cards, and context from the user's
-  tools so answers are personal.
-- **Home-screen widgets** (iOS WidgetKit + Android) — Today's Habits plus nine
-  life-tool widgets (nutrition, meal planner, calorie budget, hydration, sleep,
-  meditation, period, weight, travel) with live data, a per-widget light/dark
-  toggle, and flip-to-details faces on iOS.
-- **Customisable home** — tool cards on the home screen, pin to top, reorder,
-  weight history card, and a toolkit customise sheet.
-- **Wellness Reads narration** — narrated reading with offline support.
-- **Habits and plans** — preferred wellness methods, AI explanations for plan
-  actions, and reminders for Today's Plan that switch off once a task is done.
-- **Reflections and achievements** — reflections saved to Firestore with a
-  chat-style flow, and an expanded achievements system.
-- **Push notifications** — OneSignal integration with notification categories,
-  preferences and deep links.
-- **Safety and access** — AI response safety filtering, a wellness chat guard,
-  chat quotas, Premium access via RevenueCat, and in-app account deletion.
-- **Release and hardening** — shipped to TestFlight (iOS) and Google Play,
-  Firebase App Check on AI calls, Android-specific fixes, removal of the unused
-  Mapbox dependency, and locked-down Cloud Functions.
+---
 
-The full list of hackathon commits is in the history after the foundation commit
-(`git log`).
+## What it is
+
+AI Wellness Pal is a mobile wellness companion for iOS and Android. At its heart
+is **the Pal** — an AI companion you can chat with or simply talk to out loud. It
+knows your goals, habits and recent check-ins, so its suggestions are personal
+rather than generic, and it can act inside the app for you: plan your day, create
+a habit, open a tool or log progress, just by asking.
+
+Around the Pal sits a complete wellness toolkit — daily plans, habits, journaling,
+guided activities and focused tools for nutrition, hydration, sleep and more — all
+in one calm, private place, and reachable straight from your home screen.
+
+## How it helps you
+
+- **Start each day with a plan that fits you.** A quick check-in on energy, mood
+  and recovery turns into a short, realistic plan — with the reasoning behind
+  each suggestion.
+- **Talk instead of tapping.** Have a natural spoken conversation with your Pal
+  when you want to think something through, or just say "Hey Pal" to get help
+  hands-free.
+- **Build habits that stick.** Small daily habits with gentle reminders, streaks
+  and achievements keep you consistent without pressure.
+- **Understand yourself better.** AI-guided journaling and reflections help you
+  notice patterns and process your day.
+- **Keep everything in one place.** Nutrition, meals, calories, water, sleep,
+  meditation, cycle, weight and mindful travel live together, so you don't need a
+  separate app for each.
+- **Stay on track at a glance.** Home-screen widgets show today's habits, plan
+  and tool progress without opening the app.
 
 ## Features
 
-- **Daily Check-Ins** — Track energy, mood, and recovery each day. After 14+ check-ins, the app pre-fills values based on your patterns (Premium).
-- **Personalized Daily Plans** — AI-generated wellness actions tailored to your check-in data and intentions.
-- **Wellness Studio** — Short interactive challenges: breathing exercises, mindfulness sessions, wellness quizzes, pilates knowledge cards, and more.
-- **Wellness Library** — Content across recovery, stress management, sleep, pilates, and women's wellness in short reads, audio sessions, and guided reflections.
-- **AI Wellness Reflection (Journal)** — AI-guided journaling with personalized prompts and supportive responses.
-- **Wellness Intentions** — Set and track long-term wellness goals with progress tracking.
-- **Home Screen Widget** — Native widget showing today's focus and actions with deep-link check-in.
-- **Themes** — 5 glassmorphism-inspired wellness themes (2 free, 3 Premium).
-- **Push Notifications** — Gentle daily reminder if you haven't checked in.
+### The Pal
+- **Chat and live voice conversations** powered by Gemini, with on-screen
+  captions and a choice of AI voices.
+- **"Hey Pal" wake word** for hands-free help while the app is open.
+- **Takes actions for you** — navigates the app, creates and schedules habits,
+  manages your home cards and draws on your tools' data for personal answers.
+- **Personal and safe** — greets you by name, remembers the conversation, and
+  filters responses to stay supportive and non-clinical.
 
-## Tech Stack
+### Daily wellness
+- **Daily check-ins** for energy, mood and recovery.
+- **Today's Plan** — AI-generated wellness actions with explanations, and
+  reminders that stop once you're done.
+- **Habit Builder** — daily habits with reminders, progress and achievements.
+- **Wellness Intentions** — longer-term goals broken into trackable steps.
 
-- **Frontend**: Flutter (Dart)
-- **Backend**: Firebase (Auth, Firestore, Cloud Functions, Storage)
-- **AI**: Gemini via Firebase AI Logic (App Check enforced), Gemini Live for voice conversations, and a Cloud Function for journal insights
-- **Payments**: RevenueCat for Premium subscription management
+### Reflect and learn
+- **AI journal and reflections** with personalised prompts and supportive
+  insights you can discuss further.
+- **Wellness Studio** — short breathing, mindfulness and movement sessions.
+- **Wellness Reads** — short articles across recovery, stress, sleep, pilates and
+  women's wellness, with narration.
 
-## Getting Started
+### Life toolkit
+Nutrition Coach · AI Meal Planner · Calorie Budget · Hydration Coach · Sleep Coach
+· Meditation · Period Tracker · Weight Tracker · Mindful Travel
+
+### Made for everyday use
+- **Customisable home** — pin and reorder the tools and cards you use most.
+- **Home-screen widgets** on iOS and Android for habits, plans, intentions and
+  every toolkit tool, each with its own light/dark switch.
+- **Gentle notifications** you control by category.
+- **Themes** and a calm, glass-style design.
+- **Premium** subscription for unlimited Pal conversations and advanced features.
+- **Privacy first** — your data is private to your account, and you can delete
+  your account from inside the app at any time.
+
+## Tech stack
+
+- **App:** Flutter (Dart), with native iOS (WidgetKit, Swift) and Android
+  (Kotlin) home-screen widgets
+- **AI:** Gemini via Firebase AI Logic, Gemini Live for real-time voice
+- **Backend:** Firebase — Authentication, Cloud Firestore, Cloud Functions,
+  Storage and App Check
+- **Subscriptions:** RevenueCat
+- **Notifications:** OneSignal
+
+## Getting started
 
 ### Prerequisites
 
-- Flutter SDK (3.10.7+)
-- Firebase project with Firestore, Auth, Storage, and Cloud Functions enabled
-- RevenueCat account (for Premium features)
+- Flutter SDK with Dart 3.10.7+
+- A Firebase project with Authentication, Firestore, Cloud Functions, Storage,
+  App Check and Firebase AI Logic enabled
+- A RevenueCat account (for subscriptions)
 
 ### Setup
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/viraj-dhanushka/ai-wellness-pal.git
-   cd ai-wellness-pal
-   ```
-
-2. Install dependencies:
+1. Install dependencies:
    ```bash
    flutter pub get
    ```
 
-3. Configure Firebase:
-   - Add your `google-services.json` (Android) and `GoogleService-Info.plist` (iOS)
-   - Deploy Cloud Functions:
-     ```bash
-     cd functions && npm run deploy
-     ```
+2. Add your Firebase configuration files: `android/app/google-services.json`
+   (Android) and `ios/Runner/GoogleService-Info.plist` (iOS).
 
-4. Run the app:
+3. Deploy the Cloud Functions:
    ```bash
-   flutter run
+   cd functions && npm install && npm run deploy
    ```
 
-For local testing without the AI backend, the app uses fallback plans from `assets/data/fallback_plans.json` automatically when Cloud Functions are unavailable.
+4. Run the app. Debug builds use the App Check debug provider, so register the
+   debug token the app prints under Firebase Console → App Check:
+   ```bash
+   flutter run --dart-define=LIVE_CONVERSATION=true
+   ```
 
-## Project Structure
+For release builds, pass your RevenueCat public SDK keys with
+`--dart-define=REVENUECAT_IOS_KEY=...` and `--dart-define=REVENUECAT_ANDROID_KEY=...`.
+
+## Project structure
 
 ```
 lib/
+├── config/         # Feature flags
 ├── data/           # Static data and templates
+├── features/       # Life-toolkit tools (nutrition, hydration, sleep, …)
 ├── models/         # Data models (check-ins, plans, journals, etc.)
 ├── providers/      # State management (Provider)
-├── screens/        # All app screens
-├── services/       # Business logic and API services
-├── theme/          # App themes and styling
+├── screens/        # App screens
+├── services/       # AI, voice, notifications, subscriptions and more
+├── theme/          # Themes and styling
 ├── utils/          # Utilities and helpers
 └── widgets/        # Reusable UI components
+functions/          # Firebase Cloud Functions (TypeScript)
+android/, ios/      # Native code, including home-screen widgets
 ```
 
-## License
+## Privacy and support
 
-This project is private and not published to pub.dev.
+- Privacy policy: https://aiwelnesspal.com/privacy.html
+- Terms of use: https://aiwelnesspal.com/terms.html
+- Delete your account: https://aiwelnesspal.com/delete-account.html
+
+AI Wellness Pal supports general wellbeing and is not a medical service. It does
+not diagnose or treat any condition; please consult a healthcare professional for
+medical advice.
