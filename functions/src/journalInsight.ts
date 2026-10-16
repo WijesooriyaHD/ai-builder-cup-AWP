@@ -138,8 +138,19 @@ export const journalInsight = onCall<
     region: "us-central1",
     memory: "256MiB",
     timeoutSeconds: 30,
+    // Each call costs a Gemini request, so only the real app may call this:
+    // App Check rejects requests without a valid attestation token (the
+    // Flutter cloud_functions plugin attaches one automatically), and
+    // maxInstances caps the bill if a signed-in client is abused.
+    enforceAppCheck: true,
+    maxInstances: 10,
   },
   async (request): Promise<JournalInsightResponse> => {
+    // The journal lives under users/{uid}, so every legitimate caller is
+    // signed in.
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in to get journal insights.");
+    }
     const { text, isDiscussion } = validateRequest(request.data);
 
     const raw = await callLLM(text, isDiscussion);

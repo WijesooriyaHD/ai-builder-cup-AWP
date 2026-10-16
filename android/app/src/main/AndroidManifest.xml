@@ -193,7 +193,10 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver" android:exported="true">
+        <!-- Not exported: only our own widgets' PendingIntents (which name
+             this receiver explicitly) may trigger it, so other apps can't
+             toggle a user's habits/intentions or widget theme. -->
+        <receiver android:name="es.antonborri.home_widget.HomeWidgetBackgroundReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="es.antonborri.home_widget.action.BACKGROUND" />
             </intent-filter>
